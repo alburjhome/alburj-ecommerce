@@ -5,8 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductCard } from '@/features/store/components/product-card';
-import { SafeImage } from '@/components/ui/safe-image';
-import { PLACEHOLDER_CATEGORY, safeImageSrc } from '@/lib/image-utils';
 import type { Category, ProductWithDetails, StoreSettings, Subcategory } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -114,61 +112,61 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   }
 
   const { category, subcategories, products, selectedSubcategory } = data;
-  const imageSrc = safeImageSrc(category.image_url, PLACEHOLDER_CATEGORY);
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <main>
+        {/* Clean Hero - No large image */}
         <section className="border-b bg-muted/30">
-          <div className="container mx-auto grid gap-6 px-4 py-8 md:grid-cols-[160px_1fr] md:items-center">
-            <div className="relative aspect-square overflow-hidden rounded-lg border bg-background">
-              <SafeImage
-                src={imageSrc}
-                fallbackSrc={PLACEHOLDER_CATEGORY}
-                alt={category.name}
-                fill
-                priority
-                className="object-cover"
-                sizes="160px"
-              />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">قسم</p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight">{category.name}</h1>
-              {category.description && (
-                <p className="mt-3 max-w-3xl leading-7 text-muted-foreground">{category.description}</p>
-              )}
-            </div>
+          <div className="container mx-auto px-4 py-6 md:py-8">
+            {/* Breadcrumb */}
+            <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+              <Link href="/" className="hover:text-foreground transition-colors">الرئيسية</Link>
+              <span>/</span>
+              <Link href="/categories" className="hover:text-foreground transition-colors">الأقسام</Link>
+              <span>/</span>
+              <span className="text-foreground font-medium">{category.name}</span>
+            </nav>
+            {/* Title & Description */}
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{category.name}</h1>
+            {category.description && (
+              <p className="mt-2 max-w-2xl text-muted-foreground text-sm md:text-base">{category.description}</p>
+            )}
           </div>
         </section>
 
-        <section className="container mx-auto px-4 py-8">
+        <section className="container mx-auto px-4 py-6 md:py-8">
+          {/* Filter Chips - Professional Horizontal Scroll on Mobile */}
           {subcategories.length > 0 && (
-            <div className="mb-8 flex flex-wrap gap-2">
-              <Link
-                href={`/category/${category.slug}`}
-                className={
-                  !selectedSubcategory
-                    ? 'rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground'
-                    : 'rounded-full border px-4 py-2 text-sm font-medium hover:bg-muted'
-                }
-              >
-                الكل
-              </Link>
-              {subcategories.map((subcategory) => (
+            <div className="mb-6 md:mb-8">
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {/* All Button - Sticky/Pinned at start */}
                 <Link
-                  key={subcategory.id}
-                  href={`/category/${category.slug}?subcategory=${subcategory.slug}`}
+                  href={`/category/${category.slug}`}
                   className={
-                    selectedSubcategory?.id === subcategory.id
-                      ? 'rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground'
-                      : 'rounded-full border px-4 py-2 text-sm font-medium hover:bg-muted'
+                    !selectedSubcategory
+                      ? 'shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm'
+                      : 'shrink-0 rounded-full border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors'
                   }
                 >
-                  {subcategory.name}
+                  الكل
                 </Link>
-              ))}
+                {/* Subcategory Chips */}
+                {subcategories.map((subcategory) => (
+                  <Link
+                    key={subcategory.id}
+                    href={`/category/${category.slug}?subcategory=${subcategory.slug}`}
+                    className={
+                      selectedSubcategory?.id === subcategory.id
+                        ? 'shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm'
+                        : 'shrink-0 rounded-full border bg-background px-4 py-2 text-sm font-medium hover:bg-muted transition-colors'
+                    }
+                  >
+                    {subcategory.name}
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
 

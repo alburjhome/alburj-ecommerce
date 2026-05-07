@@ -83,17 +83,26 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
           )}
         </div>
 
+        {/* Stock Status - Unified Logic */}
         <div className="mt-2 text-xs">
-          {product.stock_quantity > 0 ? (
-            <span className="in-stock">متوفر</span>
-          ) : (
-            <span className="out-of-stock">نفدت الكمية</span>
-          )}
+          {(() => {
+            // Handle undefined/null stock_quantity
+            const stockQty = product.stock_quantity ?? 0;
+            // If track_stock is false, always show available
+            const isAvailable = !product.track_stock || stockQty > 0;
+            
+            return isAvailable ? (
+              <span className="in-stock">متوفر</span>
+            ) : (
+              <span className="out-of-stock">نفدت الكمية</span>
+            );
+          })()}
         </div>
 
+        {/* Add to Cart Button - Only disabled when truly out of stock */}
         <Button
           onClick={handleAddToCart}
-          disabled={product.stock_quantity <= 0}
+          disabled={product.track_stock && (product.stock_quantity ?? 0) <= 0}
           className="w-full mt-3 md:hidden"
           size="sm"
         >
