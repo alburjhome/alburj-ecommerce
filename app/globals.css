@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Arabic RTL specific styles */
+[dir="rtl"] {
+  text-align: right;
+}
+
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Product card hover effect */
+.product-card {
+  @apply transition-all duration-300;
+}
+
+.product-card:hover {
+  @apply shadow-lg;
+  transform: translateY(-4px);
+}
+
+/* Loading skeleton */
+.skeleton {
+  @apply animate-pulse bg-muted;
+}
+
+/* Price styling */
+.price-current {
+  @apply font-bold text-primary;
+}
+
+.price-compare {
+  @apply text-sm text-muted-foreground line-through;
+}
+
+/* Discount badge */
+.discount-badge {
+  @apply absolute top-2 right-2 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-1 rounded;
+}
+
+/* Stock status */
+.in-stock {
+  @apply text-green-600 text-sm;
+}
+
+.out-of-stock {
+  @apply text-red-600 text-sm;
+}
+
+/* Category navigation */
+.category-nav-item {
+  @apply relative;
+}
+
+.category-nav-item::after {
+  content: '';
+  @apply absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300;
+}
+
+.category-nav-item:hover::after {
+  @apply w-full;
+}
+
+/* Hero banner */
+.hero-banner {
+  @apply relative overflow-hidden;
+}
+
+.hero-banner::before {
+  content: '';
+  @apply absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-10;
+}
+
+/* Image zoom effect */
+.image-zoom {
+  @apply overflow-hidden;
+}
+
+.image-zoom img {
+  @apply transition-transform duration-500;
+}
+
+.image-zoom:hover img {
+  @apply scale-110;
+}

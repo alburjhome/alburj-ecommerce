@@ -1,0 +1,63 @@
+import { z } from 'zod';
+
+const optionalNumber = z.preprocess(
+  (value) => (value === '' || value === null || value === undefined ? null : Number(value)),
+  z.number().min(0, 'القيمة لا يمكن أن تكون أقل من صفر').nullable()
+);
+
+export const productSchema = z.object({
+  name: z.string().trim().min(1, 'اسم المنتج مطلوب'),
+  slug: z
+    .string()
+    .trim()
+    .min(1, 'الرابط المختصر مطلوب')
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'استخدم أحرفًا إنجليزية صغيرة وأرقامًا وشرطات فقط'),
+  description: z.string().trim().nullable(),
+  short_description: z.string().trim().nullable(),
+  price: z.coerce.number().min(0, 'السعر لا يمكن أن يكون أقل من صفر'),
+  compare_price: optionalNumber,
+  sku: z.string().trim().nullable(),
+  barcode: z.string().trim().nullable(),
+  stock_quantity: z.coerce.number().int().min(0, 'المخزون لا يمكن أن يكون أقل من صفر'),
+  track_stock: z.boolean(),
+  allow_backorders: z.boolean(),
+  category_id: z.string().uuid('القسم مطلوب'),
+  subcategory_id: z.string().uuid().nullable(),
+  brand: z.string().trim().nullable(),
+  tags: z.array(z.string().trim().min(1)).default([]),
+  weight: optionalNumber,
+  dimensions: z
+    .object({
+      length: optionalNumber,
+      width: optionalNumber,
+      height: optionalNumber,
+    })
+    .nullable(),
+  is_active: z.boolean(),
+  is_featured: z.boolean(),
+  meta_title: z.string().trim().nullable(),
+  meta_description: z.string().trim().nullable(),
+});
+
+export type ProductFormInput = z.infer<typeof productSchema>;
+
+export function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\u0600-\u06ff]+/g, '-')
+    .replace(/[\u0600-\u06ff]/g, '')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
+}
+
+export function parseTags(value: string) {
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+export function tagsToString(tags: string[] | null | undefined) {
+  return tags?.join(', ') || '';
+}

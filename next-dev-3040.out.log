@@ -1,0 +1,15 @@
+
+> alburj-ecommerce@1.0.0 dev
+> next dev -p 3040
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3040
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 3s
+ ○ Compiling / ...
+ ✓ Compiled / in 6.4s (1087 modules)
+ GET / 200 in 6928ms
+ ✓ Compiled in 588ms (470 modules)
+[?25h

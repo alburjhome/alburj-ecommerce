@@ -1,0 +1,124 @@
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: EPERM: operation not permitted, rename 'C:\burj\.next\cache\webpack\client-development\7.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\7.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\client-development\2.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\2.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\client-development\0.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\0.pack.gz'
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\client-development\2.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\2.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\client-development\1.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\1.pack.gz'
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⨯ upstream image response failed for https://images.unsplash.com/photo-1607082348824-92a7e5275b60?w=1200 404
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: EPERM: operation not permitted, rename 'C:\burj\.next\cache\webpack\client-development\0.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\0.pack.gz'
+ ⨯ TypeError: __webpack_require__.C is not a function
+    at C:\burj\.next\server\app\_not-found\page.js:210:21
+    at Object.<anonymous> (C:\burj\.next\server\app\_not-found\page.js:215:3)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1481:32)
+    at Module._load (node:internal/modules/cjs/loader:1300:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1504:12)
+    at mod.require (C:\burj\node_modules\next\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at requirePage (C:\burj\node_modules\next\dist\server\require.js:109:84)
+    at C:\burj\node_modules\next\dist\server\load-components.js:103:84
+    at async loadComponentsImpl (C:\burj\node_modules\next\dist\server\load-components.js:103:26)
+    at async DevServer.findPageComponentsImpl (C:\burj\node_modules\next\dist\server\next-server.js:714:36)
+    at async DevServer.findPageComponents (C:\burj\node_modules\next\dist\server\dev\next-dev-server.js:577:20)
+    at async DevServer.renderErrorToResponseImpl (C:\burj\node_modules\next\dist\server\base-server.js:2090:30)
+    at async pipe.req.req (C:\burj\node_modules\next\dist\server\base-server.js:2056:30)
+    at async DevServer.pipeImpl (C:\burj\node_modules\next\dist\server\base-server.js:922:25)
+    at async C:\burj\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\burj\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\burj\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\burj\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\burj\node_modules\next\dist\server\lib\router-server.js:374:24)
+    at async requestHandlerImpl (C:\burj\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\burj\node_modules\next\dist\server\lib\start-server.js:141:13)
+ ⨯ TypeError: __webpack_require__.C is not a function
+    at C:\burj\.next\server\app\_not-found\page.js:210:21
+    at Object.<anonymous> (C:\burj\.next\server\app\_not-found\page.js:215:3)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1481:32)
+    at Module._load (node:internal/modules/cjs/loader:1300:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1504:12)
+    at mod.require (C:\burj\node_modules\next\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at requirePage (C:\burj\node_modules\next\dist\server\require.js:109:84)
+    at C:\burj\node_modules\next\dist\server\load-components.js:103:84
+    at async loadComponentsImpl (C:\burj\node_modules\next\dist\server\load-components.js:103:26)
+    at async DevServer.findPageComponentsImpl (C:\burj\node_modules\next\dist\server\next-server.js:714:36)
+    at async DevServer.findPageComponents (C:\burj\node_modules\next\dist\server\dev\next-dev-server.js:577:20)
+    at async DevServer.renderErrorToResponseImpl (C:\burj\node_modules\next\dist\server\base-server.js:2090:30)
+    at async DevServer.pipeImpl (C:\burj\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\burj\node_modules\next\dist\server\next-server.js:231:21)
+    at async DevServer.handleRequestImpl (C:\burj\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\burj\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\burj\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\burj\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\burj\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\burj\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\burj\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\burj\node_modules\next\dist\server\lib\start-server.js:141:13)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\client-development-fallback\0.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development-fallback\0.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, lstat 'C:\burj\.next\server\vendor-chunks'
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving './vendor-chunks/clsx' in C:\burj\.next\server for build dependencies doesn't lead to expected result 'C:\burj\.next\server\vendor-chunks\clsx.js', but to 'Error: Can't resolve './vendor-chunks/clsx' in 'C:\burj\.next\server'' instead. Resolving dependencies are ignored for this path.
+<w>  at resolve commonjs file ./vendor-chunks/clsx (expected C:\burj\.next\server\vendor-chunks\clsx.js)
+<w>  at file dependencies C:\burj\.next\server\webpack-runtime.js
+<w>  at file C:\burj\.next\server\webpack-runtime.js
+<w>  at file dependencies C:\burj\.next\server\app\_not-found\page.js
+<w>  at file C:\burj\.next\server\app\_not-found\page.js
+<w>  at file dependencies C:\burj\node_modules\next\dist\server\require.js
+<w>  at file C:\burj\node_modules\next\dist\server\require.js
+<w>  at file dependencies C:\burj\node_modules\next\dist\server\load-components.js
+<w>  at file C:\burj\node_modules\next\dist\server\load-components.js
+<w>  at file dependencies C:\burj\node_modules\next\dist\build\utils.js
+<w>  at file C:\burj\node_modules\next\dist\build\utils.js
+<w>  at file dependencies C:\burj\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at file C:\burj\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at resolve commonjs C:\burj\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving './vendor-chunks/class-variance-authority' in C:\burj\.next\server for build dependencies doesn't lead to expected result 'C:\burj\.next\server\vendor-chunks\class-variance-authority.js', but to 'Error: Can't resolve './vendor-chunks/class-variance-authority' in 'C:\burj\.next\server'' instead. Resolving dependencies are ignored for this path.
+<w>  at resolve commonjs file ./vendor-chunks/class-variance-authority (expected C:\burj\.next\server\vendor-chunks\class-variance-authority.js)
+<w>  at file dependencies C:\burj\.next\server\webpack-runtime.js
+<w>  at file C:\burj\.next\server\webpack-runtime.js
+<w>  at file dependencies C:\burj\.next\server\app\_not-found\page.js
+<w>  at file C:\burj\.next\server\app\_not-found\page.js
+<w>  at file dependencies C:\burj\node_modules\next\dist\server\require.js
+<w>  at file C:\burj\node_modules\next\dist\server\require.js
+<w>  at file dependencies C:\burj\node_modules\next\dist\server\load-components.js
+<w>  at file C:\burj\node_modules\next\dist\server\load-components.js
+<w>  at file dependencies C:\burj\node_modules\next\dist\build\utils.js
+<w>  at file C:\burj\node_modules\next\dist\build\utils.js
+<w>  at file dependencies C:\burj\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at file C:\burj\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at resolve commonjs C:\burj\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\client-development\4.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\4.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\client-development\3.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\3.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: EPERM: operation not permitted, rename 'C:\burj\.next\cache\webpack\client-development\0.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\0.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\client-development\5.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\5.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: invalid code lengths set
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\server-development\0.pack.gz_' -> 'C:\burj\.next\cache\webpack\server-development\0.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: invalid code lengths set
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: invalid block type
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\burj\.next\cache\webpack\client-development\4.pack.gz_' -> 'C:\burj\.next\cache\webpack\client-development\4.pack.gz'

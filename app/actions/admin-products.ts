@@ -1,0 +1,382 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { createAdminActionClient } from '@/lib/admin-auth';
+import { ProductFormInput, productSchema } from '@/lib/product-validation';
+import type { Json } from '@/types/supabase';
+
+export interface ActionResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  fieldErrors?: Record<string, string[] | undefined>;
+}
+
+export interface ProductListFilters {
+  page?: number;
+  search?: string;
+  category?: string;
+  status?: 'all' | 'active' | 'inactive';
+  featured?: 'all' | 'featured' | 'not_featured';
+}
+
+const PAGE_SIZE = 10;
+
+export interface CategoryOption {
+  id: string;
+  name: string;
+}
+
+export interface SubcategoryOption {
+  id: string;
+  name: string;
+  category_id: string;
+}
+
+export interface ProductImageOption {
+  id: string;
+  url: string;
+  alt_text: string | null;
+  is_primary: boolean;
+  sort_order: number;
+}
+
+export interface ProductListRow {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  compare_price: number | null;
+  sku: string | null;
+  stock_quantity: number;
+  track_stock: boolean;
+  is_active: boolean;
+  is_featured: boolean;
+  category_id: string | null;
+  created_at: string;
+  category: CategoryOption | null;
+  images: ProductImageOption[];
+}
+
+export interface ProductFormRecord {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  short_description: string | null;
+  price: number;
+  compare_price: number | null;
+  sku: string | null;
+  barcode: string | null;
+  stock_quantity: number;
+  track_stock: boolean;
+  allow_backorders: boolean;
+  category_id: string | null;
+  subcategory_id: string | null;
+  brand: string | null;
+  tags: string[] | null;
+  weight: number | null;
+  dimensions: Json | null;
+  is_active: boolean;
+  is_featured: boolean;
+  meta_title: string | null;
+  meta_description: string | null;
+}
+
+export interface ProductListResult {
+  products: ProductListRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface ProductFormDataResult {
+  categories: CategoryOption[];
+  subcategories: SubcategoryOption[];
+  product: ProductFormRecord | null;
+}
+
+function normalizeNullable(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeProductInput(input: ProductFormInput) {
+  const dimensions = input.dimensions;
+  const hasDimensions =
+    dimensions?.length !== null || dimensions?.width !== null || dimensions?.height !== null;
+
+  return {
+    name: input.name.trim(),
+    slug: input.slug.trim(),
+    description: normalizeNullable(input.description),
+    short_description: normalizeNullable(input.short_description),
+    price: input.price,
+    compare_price: input.compare_price,
+    sku: normalizeNullable(input.sku),
+    barcode: normalizeNullable(input.barcode),
+    stock_quantity: input.stock_quantity,
+    track_stock: input.track_stock,
+    allow_backorders: input.allow_backorders,
+    category_id: input.category_id,
+    subcategory_id: input.subcategory_id,
+    brand: normalizeNullable(input.brand),
+    tags: input.tags.length ? input.tags : null,
+    weight: input.weight,
+    dimensions: hasDimensions ? dimensions : null,
+    is_active: input.is_active,
+    is_featured: input.is_featured,
+    meta_title: normalizeNullable(input.meta_title),
+    meta_description: normalizeNullable(input.meta_description),
+  };
+}
+
+function friendlyError(error: unknown) {
+  if (error instanceof Error) {
+    if (error.message === 'UNAUTHORIZED') return 'يجب تسجيل الدخول أولًا';
+    if (error.message === 'FORBIDDEN') return 'ليس لديك صلاحية تنفيذ هذه العملية';
+    if (error.message.includes('duplicate key') || error.message.includes('unique')) {
+      return 'يوجد منتج بنفس الرابط المختصر أو SKU';
+    }
+    return error.message;
+  }
+
+  return 'حدث خطأ غير متوقع';
+}
+
+function logAdminActionError(action: string, error: unknown) {
+  if (process.env.NODE_ENV !== 'development') return;
+
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[admin-products:${action}] ${message}`);
+}
+
+async function assertUniqueProductFields(
+  slug: string,
+  sku: string | null,
+  currentProductId: string | undefined,
+  accessToken: string | null | undefined
+) {
+  const adminClient = await createAdminActionClient(accessToken);
+  let query = adminClient.from('products').select('id, slug, sku').or(`slug.eq.${slug}${sku ? `,sku.eq.${sku}` : ''}`);
+
+  if (currentProductId) {
+    query = query.neq('id', currentProductId);
+  }
+
+  const { data, error } = await query.limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  if (data && data.length > 0) {
+    throw new Error('يوجد منتج بنفس الرابط المختصر أو SKU');
+  }
+}
+
+export async function getAdminProducts(
+  accessToken: string | null,
+  filters: ProductListFilters = {}
+): Promise<ActionResult<ProductListResult>> {
+  try {
+    const adminClient = await createAdminActionClient(accessToken);
+    const page = Math.max(1, filters.page || 1);
+    const from = (page - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    let query = (adminClient.from('products') as any)
+      .select('*, category:categories(id, name), images:product_images(id, url, alt_text, is_primary, sort_order)', {
+        count: 'exact',
+      })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    const search = filters.search?.trim();
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,sku.ilike.%${search}%`);
+    }
+
+    if (filters.category && filters.category !== 'all') {
+      query = query.eq('category_id', filters.category);
+    }
+
+    if (filters.status === 'active') {
+      query = query.eq('is_active', true);
+    } else if (filters.status === 'inactive') {
+      query = query.eq('is_active', false);
+    }
+
+    if (filters.featured === 'featured') {
+      query = query.eq('is_featured', true);
+    } else if (filters.featured === 'not_featured') {
+      query = query.eq('is_featured', false);
+    }
+
+    const { data, count, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      success: true,
+      data: {
+        products: (data || []) as ProductListRow[],
+        page,
+        pageSize: PAGE_SIZE,
+        total: count || 0,
+        totalPages: Math.max(1, Math.ceil((count || 0) / PAGE_SIZE)),
+      },
+    };
+  } catch (error) {
+    logAdminActionError('getAdminProducts', error);
+    return { success: false, error: friendlyError(error) };
+  }
+}
+
+export async function getAdminProductFormData(
+  accessToken: string | null,
+  productId?: string
+): Promise<ActionResult<ProductFormDataResult>> {
+  try {
+    const adminClient = await createAdminActionClient(accessToken);
+
+    const [categoriesResult, subcategoriesResult, productResult] = await Promise.all([
+      (adminClient.from('categories') as any).select('id, name').order('sort_order', { ascending: true }),
+      (adminClient.from('subcategories') as any)
+        .select('id, name, category_id')
+        .order('sort_order', { ascending: true }),
+      productId
+        ? (adminClient.from('products') as any).select('*').eq('id', productId).single()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    if (categoriesResult.error) throw categoriesResult.error;
+    if (subcategoriesResult.error) throw subcategoriesResult.error;
+    if (productResult.error) throw productResult.error;
+
+    return {
+      success: true,
+      data: {
+        categories: (categoriesResult.data || []) as CategoryOption[],
+        subcategories: (subcategoriesResult.data || []) as SubcategoryOption[],
+        product: productResult.data as ProductFormRecord | null,
+      },
+    };
+  } catch (error) {
+    logAdminActionError('getAdminProductFormData', error);
+    return { success: false, error: friendlyError(error) };
+  }
+}
+
+export async function createAdminProduct(
+  accessToken: string | null,
+  input: ProductFormInput
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const adminClient = await createAdminActionClient(accessToken);
+    const parsed = productSchema.safeParse(input);
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: 'تحقق من الحقول المطلوبة',
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    const payload = normalizeProductInput(parsed.data);
+    await assertUniqueProductFields(payload.slug, payload.sku, undefined, accessToken);
+
+    const { data, error } = await (adminClient.from('products') as any)
+      .insert(payload)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    revalidatePath('/admin/products');
+    return { success: true, data: data ? ({ id: data.id } as { id: string }) : undefined };
+  } catch (error) {
+    logAdminActionError('createAdminProduct', error);
+    return { success: false, error: friendlyError(error) };
+  }
+}
+
+export async function updateAdminProduct(
+  accessToken: string | null,
+  productId: string,
+  input: ProductFormInput
+): Promise<ActionResult> {
+  try {
+    const adminClient = await createAdminActionClient(accessToken);
+    const parsed = productSchema.safeParse(input);
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: 'تحقق من الحقول المطلوبة',
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    const payload = normalizeProductInput(parsed.data);
+    await assertUniqueProductFields(payload.slug, payload.sku, productId, accessToken);
+
+    const { error } = await (adminClient.from('products') as any)
+      .update(payload)
+      .eq('id', productId);
+
+    if (error) throw error;
+
+    revalidatePath('/admin/products');
+    revalidatePath(`/admin/products/${productId}/edit`);
+    return { success: true };
+  } catch (error) {
+    logAdminActionError('updateAdminProduct', error);
+    return { success: false, error: friendlyError(error) };
+  }
+}
+
+export async function toggleAdminProductActive(
+  accessToken: string | null,
+  productId: string,
+  isActive: boolean
+): Promise<ActionResult> {
+  try {
+    const adminClient = await createAdminActionClient(accessToken);
+    const { error } = await (adminClient.from('products') as any)
+      .update({ is_active: isActive })
+      .eq('id', productId);
+
+    if (error) throw error;
+
+    revalidatePath('/admin/products');
+    return { success: true };
+  } catch (error) {
+    logAdminActionError('toggleAdminProductActive', error);
+    return { success: false, error: friendlyError(error) };
+  }
+}
+
+export async function deleteAdminProduct(
+  accessToken: string | null,
+  productId: string
+): Promise<ActionResult> {
+  try {
+    const adminClient = await createAdminActionClient(accessToken);
+    const { error } = await (adminClient.from('products') as any)
+      .delete()
+      .eq('id', productId);
+
+    if (error) throw error;
+
+    revalidatePath('/admin/products');
+    return { success: true };
+  } catch (error) {
+    logAdminActionError('deleteAdminProduct', error);
+    return { success: false, error: friendlyError(error) };
+  }
+}
