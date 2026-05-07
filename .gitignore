@@ -38,3 +38,12 @@ coverage
 # Temporary files
 *.tmp
 *.temp
+
+# Logs
+*.log
+*.out.log
+*.err.log
+
+# TypeScript build info
+*.tsbuildinfo
+tsconfig.tsbuildinfo
