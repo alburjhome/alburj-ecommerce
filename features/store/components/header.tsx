@@ -26,15 +26,15 @@ export function Header() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      window.location.href = '/#featured-products';
+      window.location.href = `/products?search=${encodeURIComponent(searchQuery)}`;
     }
   };
 
   const navLinks = [
     { href: '/', label: 'الرئيسية' },
-    { href: '/#featured-products', label: 'المنتجات' },
-    { href: '/#categories', label: 'الأقسام' },
-    { href: '/#featured-products', label: 'العروض' },
+    { href: '/products', label: 'المنتجات' },
+    { href: '/categories', label: 'الأقسام' },
+    { href: '/products', label: 'العروض' },
     { href: '/#contact', label: 'تواصل معنا' },
   ];
 

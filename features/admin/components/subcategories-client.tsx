@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { AdminImageUploadField } from '@/features/admin/components/admin-image-upload-field';
 import {
   createAdminSubcategory,
   deleteAdminSubcategory,
@@ -290,13 +291,16 @@ export function SubcategoriesClient() {
               onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
             />
           </div>
-          <div>
-            <Label htmlFor="subcategory-image">رابط الصورة</Label>
-            <Input
-              id="subcategory-image"
-              dir="ltr"
-              value={form.image_url || ''}
-              onChange={(event) => setForm((current) => ({ ...current, image_url: event.target.value }))}
+          <div className="md:col-span-2">
+            <AdminImageUploadField
+              bucket="categories"
+              label="صورة الفئة"
+              description="ارفع صورة من جهازك وسيتم حفظ الرابط تلقائياً في الفئة."
+              folder={`subcategories/${form.slug || 'draft'}`}
+              value={form.image_url}
+              onChange={(url) => setForm((current) => ({ ...current, image_url: url }))}
+              disabled={isSubmitting}
+              maxSizeMb={5}
             />
           </div>
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm">

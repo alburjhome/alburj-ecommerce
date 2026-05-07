@@ -13,14 +13,14 @@ interface HeroBannerProps {
 function normalizeBannerLink(value: string | null | undefined) {
   const href = value?.trim();
   if (!href) return null;
-  if (href === '/products' || href.startsWith('/products?') || href.startsWith('/products/')) {
-    return '/#featured-products';
+  if (href.startsWith('/products/')) {
+    return href.replace('/products/', '/product/');
   }
-  if (href === '/categories' || href.startsWith('/categories/')) {
-    return '/#categories';
+  if (href.startsWith('/categories/')) {
+    return href.replace('/categories/', '/category/');
   }
   if (href === '/offers') {
-    return '/#featured-products';
+    return '/products';
   }
   if (href.startsWith('/') || href.startsWith('#') || href.startsWith('https://')) {
     return href;
@@ -40,7 +40,7 @@ export function HeroBanner({ banners }: HeroBannerProps) {
             <p className="text-lg md:text-xl text-muted-foreground mb-6">
               وجهتك الأولى للمنتجات البلاستيكية، الأدوات المنزلية، والأجهزة الكهربائية في الأردن
             </p>
-            <Link href="/#featured-products">
+            <Link href="/products">
               <Button size="lg">تسوق الآن</Button>
             </Link>
           </div>

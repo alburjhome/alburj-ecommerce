@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { AdminImageUploadField } from '@/features/admin/components/admin-image-upload-field';
 import {
   createAdminCategory,
   deleteAdminCategory,
@@ -249,13 +250,16 @@ export function CategoriesClient() {
               onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
             />
           </div>
-          <div>
-            <Label htmlFor="category-image">رابط الصورة</Label>
-            <Input
-              id="category-image"
-              dir="ltr"
-              value={form.image_url || ''}
-              onChange={(event) => setForm((current) => ({ ...current, image_url: event.target.value }))}
+          <div className="md:col-span-2">
+            <AdminImageUploadField
+              bucket="categories"
+              label="صورة القسم"
+              description="ارفع صورة من جهازك وسيتم حفظ الرابط تلقائياً في القسم."
+              folder={`categories/${form.slug || 'draft'}`}
+              value={form.image_url}
+              onChange={(url) => setForm((current) => ({ ...current, image_url: url }))}
+              disabled={isSubmitting}
+              maxSizeMb={5}
             />
           </div>
           <div>

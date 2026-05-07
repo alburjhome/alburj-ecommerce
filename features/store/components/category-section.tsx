@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Category } from '@/types';
 import { SafeImage } from '@/components/ui/safe-image';
 import { PLACEHOLDER_CATEGORY, safeImageSrc } from '@/lib/image-utils';
@@ -15,8 +16,9 @@ export function CategorySection({ categories }: CategorySectionProps) {
         <h2 className="text-2xl md:text-3xl font-bold mb-8 text-center">تسوق حسب القسم</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
           {categories.map((category, index) => (
-            <div
+            <Link
               key={category.id}
+              href={`/category/${category.slug}`}
               className="group relative aspect-square rounded-lg overflow-hidden image-zoom"
             >
               <SafeImage
@@ -34,7 +36,7 @@ export function CategorySection({ categories }: CategorySectionProps) {
                   <p className="text-white/80 text-sm line-clamp-1">{category.description}</p>
                 )}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

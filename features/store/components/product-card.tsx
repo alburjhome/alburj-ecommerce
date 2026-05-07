@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { ShoppingCart } from 'lucide-react';
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -44,7 +45,7 @@ export function ProductCard({ product }: ProductCardProps) {
       {hasDiscount && <span className="discount-badge">-{discountPercentage}%</span>}
 
       <div className="relative aspect-square overflow-hidden">
-        <div className="relative block h-full w-full image-zoom">
+        <Link href={`/product/${product.slug}`} className="relative block h-full w-full image-zoom">
           <SafeImage
             src={imageSrc}
             fallbackSrc={PLACEHOLDER_PRODUCT}
@@ -53,7 +54,7 @@ export function ProductCard({ product }: ProductCardProps) {
             className="object-cover"
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
           />
-        </div>
+        </Link>
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
           <Button
             variant="secondary"
@@ -67,7 +68,11 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
 
       <div className="p-4">
-        <h3 className="font-medium text-sm line-clamp-2">{product.name}</h3>
+        <Link href={`/product/${product.slug}`}>
+          <h3 className="font-medium text-sm line-clamp-2 hover:text-primary transition-colors">
+            {product.name}
+          </h3>
+        </Link>
 
         <div className="mt-2 flex items-center gap-2">
           <span className="price-current">{formatPrice(product.price)}</span>

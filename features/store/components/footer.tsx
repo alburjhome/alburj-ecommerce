@@ -34,9 +34,9 @@ export function Footer({ settings }: FooterProps) {
 
   const footerLinks = {
     shop: [
-      { href: '/#featured-products', label: 'جميع المنتجات' },
-      { href: '/#categories', label: 'الأقسام' },
-      { href: '/#featured-products', label: 'العروض الخاصة' },
+      { href: '/products', label: 'جميع المنتجات' },
+      { href: '/categories', label: 'الأقسام' },
+      { href: '/products', label: 'العروض الخاصة' },
     ],
     support: [
       { href: '/#contact', label: 'تواصل معنا' },

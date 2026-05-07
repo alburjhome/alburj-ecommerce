@@ -1,12 +1,14 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from 'react';
-import { Edit, EyeOff, ImageIcon, Plus, RefreshCw, Save, Trash2, Upload, X } from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { Edit, EyeOff, ImageIcon, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SafeImage } from '@/components/ui/safe-image';
 import { useToast } from '@/hooks/use-toast';
+import { AdminImageUploadField } from '@/features/admin/components/admin-image-upload-field';
 import {
   createAdminBanner,
   deleteAdminBanner,
@@ -49,8 +51,6 @@ const positionOptions: Array<{ value: BannerPosition; label: string }> = [
   { value: 'category_page', label: 'صفحة القسم' },
 ];
 
-const MAX_BANNER_IMAGE_SIZE = 10 * 1024 * 1024;
-
 async function getAccessToken() {
   const {
     data: { session },
@@ -81,19 +81,7 @@ function formFromBanner(banner: BannerRecord): BannerFormState {
   };
 }
 
-function validateBannerFile(file: File) {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    return 'اختر صورة JPG أو PNG أو WEBP فقط';
-  }
-
-  if (file.size > MAX_BANNER_IMAGE_SIZE) {
-    return 'حجم صورة البانر يجب ألا يتجاوز 10MB';
-  }
-
-  return null;
-}
-
-function appendFormData(form: BannerFormState, file: File | null) {
+function appendFormData(form: BannerFormState) {
   const formData = new FormData();
   formData.append('title', form.title);
   formData.append('subtitle', form.subtitle);
@@ -104,10 +92,6 @@ function appendFormData(form: BannerFormState, file: File | null) {
   formData.append('sort_order', form.sort_order);
   formData.append('start_date', form.start_date);
   formData.append('end_date', form.end_date);
-  if (file) {
-    formData.append('image_file', file);
-  }
-
   return formData;
 }
 
@@ -116,8 +100,6 @@ export function BannersClient() {
   const [banners, setBanners] = useState<BannerRecord[]>([]);
   const [form, setForm] = useState<BannerFormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [fileInputKey, setFileInputKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
@@ -151,37 +133,11 @@ export function BannersClient() {
   function resetForm() {
     setForm(emptyForm);
     setEditingId(null);
-    setImageFile(null);
-    setFileInputKey((key) => key + 1);
   }
 
   function startEdit(banner: BannerRecord) {
     setEditingId(banner.id);
     setForm(formFromBanner(banner));
-    setImageFile(null);
-    setFileInputKey((key) => key + 1);
-  }
-
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] || null;
-    if (!file) {
-      setImageFile(null);
-      return;
-    }
-
-    const validationError = validateBannerFile(file);
-    if (validationError) {
-      toast({
-        title: 'ملف غير صالح',
-        description: validationError,
-        variant: 'destructive',
-      });
-      setImageFile(null);
-      setFileInputKey((key) => key + 1);
-      return;
-    }
-
-    setImageFile(file);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -190,7 +146,7 @@ export function BannersClient() {
 
     try {
       const token = await getAccessToken();
-      const formData = appendFormData(form, imageFile);
+      const formData = appendFormData(form);
       const result = editingId
         ? await updateAdminBanner(token, editingId, formData)
         : await createAdminBanner(token, formData);
@@ -244,7 +200,7 @@ export function BannersClient() {
 
   async function handleDelete(banner: BannerRecord) {
     const confirmed = window.confirm(
-      `حذف البانر "${banner.title}" نهائيًا؟\n\nسيتم حذف سجل البانر ومحاولة حذف صورته من Storage إذا كانت مرفوعة في bucket banners. هذا الإجراء لا يمكن التراجع عنه.`
+      `حذف البانر "${banner.title}" نهائياً؟\n\nسيتم حذف السجل ومحاولة حذف الصورة من Storage إذا كانت مرفوعة في bucket banners. لا يمكن التراجع عن هذا الإجراء.`
     );
 
     if (!confirmed) return;
@@ -315,24 +271,16 @@ export function BannersClient() {
               onChange={(event) => setForm((current) => ({ ...current, subtitle: event.target.value }))}
             />
           </div>
-          <div>
-            <Label htmlFor="banner-image-url">رابط الصورة</Label>
-            <Input
-              id="banner-image-url"
-              dir="ltr"
-              value={form.image_url}
-              onChange={(event) => setForm((current) => ({ ...current, image_url: event.target.value }))}
-              placeholder="https://..."
-            />
-          </div>
-          <div>
-            <Label htmlFor="banner-image-file">رفع صورة</Label>
-            <Input
-              key={fileInputKey}
-              id="banner-image-file"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handleFileChange}
+          <div className="md:col-span-2">
+            <AdminImageUploadField
+              bucket="banners"
+              label="صورة البانر"
+              description="ارفع صورة من جهازك وسيتم حفظ الرابط تلقائياً في البانر."
+              folder={`banners/${form.position}/${form.title || 'draft'}`}
+              value={form.image_url || null}
+              onChange={(url) => setForm((current) => ({ ...current, image_url: url || '' }))}
+              disabled={isSubmitting}
+              maxSizeMb={10}
             />
           </div>
           <div>
@@ -342,7 +290,7 @@ export function BannersClient() {
               dir="ltr"
               value={form.link_url}
               onChange={(event) => setForm((current) => ({ ...current, link_url: event.target.value }))}
-              placeholder="/products"
+              placeholder="/category/electronics"
             />
           </div>
           <div>
@@ -405,7 +353,7 @@ export function BannersClient() {
 
         <div className="mt-4 flex justify-end">
           <Button type="submit" disabled={isSubmitting}>
-            {imageFile ? <Upload className="ml-2 h-4 w-4" /> : <Save className="ml-2 h-4 w-4" />}
+            <Save className="ml-2 h-4 w-4" />
             {isSubmitting ? 'جاري الحفظ...' : 'حفظ البانر'}
           </Button>
         </div>
@@ -448,14 +396,16 @@ export function BannersClient() {
                 banners.map((banner) => (
                   <tr key={banner.id} className="border-b last:border-0">
                     <td className="px-4 py-3">
-                      <img
-                        src={safeImageSrc(banner.image_url, PLACEHOLDER_BANNER)}
-                        alt={banner.title}
-                        className="h-14 w-24 rounded-md border object-cover"
-                        onError={(event) => {
-                          event.currentTarget.src = PLACEHOLDER_BANNER;
-                        }}
-                      />
+                      <div className="relative h-14 w-24 overflow-hidden rounded-md border bg-muted">
+                        <SafeImage
+                          src={safeImageSrc(banner.image_url, PLACEHOLDER_BANNER)}
+                          fallbackSrc={PLACEHOLDER_BANNER}
+                          alt={banner.title}
+                          fill
+                          className="object-cover"
+                          sizes="96px"
+                        />
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium">{banner.title}</div>
