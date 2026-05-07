@@ -7,6 +7,8 @@ import { SafeImage } from '@/components/ui/safe-image';
 import { PLACEHOLDER_CATEGORY, safeImageSrc } from '@/lib/image-utils';
 import type { Category, StoreSettings } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'الأقسام',
   description: 'تصفح أقسام متجر مؤسسة البرج.',
@@ -50,7 +52,7 @@ export default async function CategoriesPage() {
 
         {categories.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-            {categories.map((category) => (
+            {categories.map((category, index) => (
               <Link
                 key={category.id}
                 href={`/category/${category.slug}`}
@@ -64,6 +66,7 @@ export default async function CategoriesPage() {
                     fill
                     className="object-cover transition-transform group-hover:scale-105"
                     sizes="(max-width: 768px) 50vw, 25vw"
+                    priority={index < 4}
                   />
                 </div>
                 <div className="p-4">

@@ -5,6 +5,8 @@ import { Footer } from '@/features/store/components/footer';
 import { ProductCard } from '@/features/store/components/product-card';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 interface ProductsPageProps {
   searchParams?: { search?: string };
 }
@@ -64,8 +66,8 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
 
         {products.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
+            {products.map((product, index) => (
+              <ProductCard key={product.id} product={product} priority={index < 4} />
             ))}
           </div>
         ) : (

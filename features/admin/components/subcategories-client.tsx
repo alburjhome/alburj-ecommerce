@@ -17,6 +17,7 @@ import {
 } from '@/app/actions/admin-taxonomy';
 import type { CategoryRecord, SubcategoryInput, SubcategoryRecord } from '@/app/actions/admin-taxonomy';
 import { PLACEHOLDER_CATEGORY, safeImageSrc } from '@/lib/image-utils';
+import { normalizeSlug } from '@/lib/slug';
 import { slugify } from '@/lib/product-validation';
 import { supabase } from '@/lib/supabase';
 
@@ -24,6 +25,7 @@ const emptyForm: SubcategoryInput = {
   category_id: '',
   name: '',
   slug: '',
+  slug_was_manual: false,
   description: null,
   image_url: null,
   is_active: true,
@@ -108,6 +110,7 @@ export function SubcategoriesClient() {
       category_id: subcategory.category_id,
       name: subcategory.name,
       slug: subcategory.slug,
+      slug_was_manual: true,
       description: subcategory.description,
       image_url: subcategory.image_url,
       is_active: subcategory.is_active,
@@ -123,6 +126,7 @@ export function SubcategoriesClient() {
       const token = await getAccessToken();
       const payload: SubcategoryInput = {
         ...form,
+        slug_was_manual: Boolean(editingId) || slugTouched,
         description: form.description?.trim() || null,
         image_url: form.image_url?.trim() || null,
         sort_order: Number(form.sort_order),
@@ -262,27 +266,46 @@ export function SubcategoriesClient() {
           </div>
           <div>
             <Label htmlFor="subcategory-slug">Slug *</Label>
-            <Input
-              id="subcategory-slug"
-              dir="ltr"
-              value={form.slug}
-              onChange={(event) => {
-                setSlugTouched(true);
-                setForm((current) => ({ ...current, slug: event.target.value }));
-              }}
-              required
-            />
+            <div className="flex gap-2">
+              <Input
+                id="subcategory-slug"
+                dir="ltr"
+                value={form.slug}
+                onChange={(event) => {
+                  setSlugTouched(true);
+                  setForm((current) => ({ ...current, slug: normalizeSlug(event.target.value) }));
+                }}
+                required
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSlugTouched(true);
+                  setForm((current) => ({ ...current, slug: slugify(current.name) }));
+                }}
+              >
+                إعادة توليد
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
+              /category/category-slug?subcategory={form.slug || 'subcategory-slug'}
+            </p>
           </div>
-          <div>
-            <Label htmlFor="subcategory-order">الترتيب</Label>
-            <Input
-              id="subcategory-order"
-              type="number"
-              min="0"
-              value={form.sort_order}
-              onChange={(event) => setForm((current) => ({ ...current, sort_order: Number(event.target.value) }))}
-            />
-          </div>
+          <details className="rounded-md border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">خيارات متقدمة</summary>
+            <div className="mt-3">
+              <Label htmlFor="subcategory-order">الترتيب</Label>
+              <Input
+                id="subcategory-order"
+                type="number"
+                min="0"
+                value={form.sort_order}
+                onChange={(event) => setForm((current) => ({ ...current, sort_order: Number(event.target.value) }))}
+              />
+              {!editingId && <p className="mt-1 text-xs text-muted-foreground">يُحسب تلقائيًا داخل القسم: آخر ترتيب + 10.</p>}
+            </div>
+          </details>
           <div className="md:col-span-2">
             <Label htmlFor="subcategory-description">الوصف</Label>
             <Input
@@ -295,7 +318,7 @@ export function SubcategoriesClient() {
             <AdminImageUploadField
               bucket="categories"
               label="صورة الفئة"
-              description="ارفع صورة من جهازك وسيتم حفظ الرابط تلقائياً في الفئة."
+              description="يفضل صورة مربعة 800×800 بصيغة JPG/PNG/WebP، بخلفية واضحة والعنصر في المنتصف. الحد الأقصى 5MB."
               folder={`subcategories/${form.slug || 'draft'}`}
               value={form.image_url}
               onChange={(url) => setForm((current) => ({ ...current, image_url: url }))}

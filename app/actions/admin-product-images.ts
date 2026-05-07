@@ -48,7 +48,7 @@ function normalizeNullable(value: FormDataEntryValue | null) {
 }
 
 function normalizeSortOrder(value: FormDataEntryValue | null) {
-  if (typeof value !== 'string' || value.trim() === '') return 0;
+  if (typeof value !== 'string' || value.trim() === '') return null;
   const order = Number(value);
   if (!Number.isInteger(order) || order < 0) {
     throw new Error('ترتيب الصورة يجب أن يكون رقماً صحيحاً لا يقل عن صفر');
@@ -125,6 +125,21 @@ async function normalizePrimaryImage(
   if (primaryError) throw primaryError;
 }
 
+async function getNextProductImageSortOrder(
+  adminClient: Awaited<ReturnType<typeof createAdminActionClient>>,
+  productId: string
+) {
+  const { data, error } = await (adminClient
+    .from('product_images') as any)
+    .select('sort_order')
+    .eq('product_id', productId)
+    .order('sort_order', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return Number(data?.[0]?.sort_order || 0) + 10;
+}
+
 export async function getAdminProductImages(
   accessToken: string | null,
   productId: string
@@ -172,7 +187,7 @@ export async function uploadAdminProductImage(
     }
 
     const altText = normalizeNullable(formData.get('alt_text'));
-    const sortOrder = normalizeSortOrder(formData.get('sort_order'));
+    const manualSortOrder = normalizeSortOrder(formData.get('sort_order'));
     const { data: existingImages, error: existingError } = await (adminClient
       .from('product_images') as any)
       .select('id')
@@ -200,7 +215,7 @@ export async function uploadAdminProductImage(
         product_id: productId,
         url: publicUrlData.publicUrl,
         alt_text: altText,
-        sort_order: sortOrder,
+        sort_order: manualSortOrder ?? await getNextProductImageSortOrder(adminClient, productId),
         is_primary: isPrimary,
       })
       .select('*')

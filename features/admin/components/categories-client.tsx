@@ -16,12 +16,14 @@ import {
 } from '@/app/actions/admin-taxonomy';
 import type { CategoryInput, CategoryRecord } from '@/app/actions/admin-taxonomy';
 import { PLACEHOLDER_CATEGORY, safeImageSrc } from '@/lib/image-utils';
+import { normalizeSlug } from '@/lib/slug';
 import { slugify } from '@/lib/product-validation';
 import { supabase } from '@/lib/supabase';
 
 const emptyForm: CategoryInput = {
   name: '',
   slug: '',
+  slug_was_manual: false,
   description: null,
   image_url: null,
   is_active: true,
@@ -95,6 +97,7 @@ export function CategoriesClient() {
     setForm({
       name: category.name,
       slug: category.slug,
+      slug_was_manual: true,
       description: category.description,
       image_url: category.image_url,
       is_active: category.is_active,
@@ -110,6 +113,7 @@ export function CategoriesClient() {
       const token = await getAccessToken();
       const payload: CategoryInput = {
         ...form,
+        slug_was_manual: Boolean(editingId) || slugTouched,
         description: form.description?.trim() || null,
         image_url: form.image_url?.trim() || null,
         sort_order: Number(form.sort_order),
@@ -231,16 +235,31 @@ export function CategoriesClient() {
           </div>
           <div>
             <Label htmlFor="category-slug">Slug *</Label>
-            <Input
-              id="category-slug"
-              dir="ltr"
-              value={form.slug}
-              onChange={(event) => {
-                setSlugTouched(true);
-                setForm((current) => ({ ...current, slug: event.target.value }));
-              }}
-              required
-            />
+            <div className="flex gap-2">
+              <Input
+                id="category-slug"
+                dir="ltr"
+                value={form.slug}
+                onChange={(event) => {
+                  setSlugTouched(true);
+                  setForm((current) => ({ ...current, slug: normalizeSlug(event.target.value) }));
+                }}
+                required
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSlugTouched(true);
+                  setForm((current) => ({ ...current, slug: slugify(current.name) }));
+                }}
+              >
+                إعادة توليد
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
+              /category/{form.slug || 'category-slug'}
+            </p>
           </div>
           <div className="md:col-span-2">
             <Label htmlFor="category-description">الوصف</Label>
@@ -254,7 +273,7 @@ export function CategoriesClient() {
             <AdminImageUploadField
               bucket="categories"
               label="صورة القسم"
-              description="ارفع صورة من جهازك وسيتم حفظ الرابط تلقائياً في القسم."
+              description="يفضل صورة مربعة 800×800 بصيغة JPG/PNG/WebP، بخلفية واضحة والعنصر في المنتصف. الحد الأقصى 5MB."
               folder={`categories/${form.slug || 'draft'}`}
               value={form.image_url}
               onChange={(url) => setForm((current) => ({ ...current, image_url: url }))}
@@ -262,16 +281,20 @@ export function CategoriesClient() {
               maxSizeMb={5}
             />
           </div>
-          <div>
-            <Label htmlFor="category-order">الترتيب</Label>
-            <Input
-              id="category-order"
-              type="number"
-              min="0"
-              value={form.sort_order}
-              onChange={(event) => setForm((current) => ({ ...current, sort_order: Number(event.target.value) }))}
-            />
-          </div>
+          <details className="rounded-md border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">خيارات متقدمة</summary>
+            <div className="mt-3">
+              <Label htmlFor="category-order">الترتيب</Label>
+              <Input
+                id="category-order"
+                type="number"
+                min="0"
+                value={form.sort_order}
+                onChange={(event) => setForm((current) => ({ ...current, sort_order: Number(event.target.value) }))}
+              />
+              {!editingId && <p className="mt-1 text-xs text-muted-foreground">يُحسب تلقائيًا: آخر ترتيب + 10.</p>}
+            </div>
+          </details>
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
             <input
               type="checkbox"

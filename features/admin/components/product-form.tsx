@@ -18,6 +18,7 @@ import {
 } from '@/app/actions/admin-products';
 import type { ProductFormDataResult, ProductFormRecord } from '@/app/actions/admin-products';
 import { supabase } from '@/lib/supabase';
+import { normalizeSlug } from '@/lib/slug';
 import { ProductFormInput, parseTags, productSchema, slugify, tagsToString } from '@/lib/product-validation';
 
 interface ProductFormProps {
@@ -28,6 +29,7 @@ interface ProductFormProps {
 const emptyProduct: ProductFormInput = {
   name: '',
   slug: '',
+  slug_was_manual: false,
   description: null,
   short_description: null,
   price: 0,
@@ -72,6 +74,7 @@ function asFormValue(product: ProductFormRecord | null): ProductFormInput {
   return {
     name: product.name,
     slug: product.slug,
+    slug_was_manual: true,
     description: product.description,
     short_description: product.short_description,
     price: Number(product.price),
@@ -191,6 +194,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       const token = await getAccessToken();
       const payload: ProductFormInput = {
         ...values,
+        slug_was_manual: slugTouched,
         description: values.description || null,
         short_description: values.short_description || null,
         compare_price: values.compare_price ?? null,
@@ -275,15 +279,30 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
 
           <div>
             <Label htmlFor="slug">Slug *</Label>
-            <Input
-              id="slug"
-              dir="ltr"
-              value={currentSlug}
-              onChange={(event) => {
-                setSlugTouched(true);
-                setValue('slug', event.target.value, { shouldDirty: true, shouldValidate: true });
-              }}
-            />
+            <div className="flex gap-2">
+              <Input
+                id="slug"
+                dir="ltr"
+                value={currentSlug}
+                onChange={(event) => {
+                  setSlugTouched(true);
+                  setValue('slug', normalizeSlug(event.target.value), { shouldDirty: true, shouldValidate: true });
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSlugTouched(true);
+                  setValue('slug', slugify(name), { shouldDirty: true, shouldValidate: true });
+                }}
+              >
+                إعادة توليد
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
+              /product/{currentSlug || 'product-slug'}
+            </p>
             <FieldError message={errors.slug?.message} />
           </div>
 

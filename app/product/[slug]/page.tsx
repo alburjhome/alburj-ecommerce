@@ -1,10 +1,12 @@
 import { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductDetail } from '@/features/store/components/product-detail';
 import type { ProductWithDetails, StoreSettings } from '@/types';
+
+export const dynamic = 'force-dynamic';
 
 interface ProductPageProps {
   params: { slug: string };
@@ -39,6 +41,19 @@ async function getProduct(slug: string) {
   } as ProductWithDetails;
 }
 
+async function getLegacyProductHref(slug: string) {
+  if (slug !== '1') return null;
+
+  const { data } = await (supabase.from('products') as any)
+    .select('slug')
+    .eq('is_active', true)
+    .ilike('name', '%بلص فايف%')
+    .limit(1)
+    .maybeSingle();
+
+  return data?.slug ? `/product/${data.slug}` : null;
+}
+
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const product = await getProduct(params.slug);
   if (!product) {
@@ -55,6 +70,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const [product, settings] = await Promise.all([getProduct(params.slug), getSettings()]);
 
   if (!product) {
+    const legacyHref = await getLegacyProductHref(params.slug);
+    if (legacyHref) {
+      redirect(legacyHref);
+    }
+
     notFound();
   }
 

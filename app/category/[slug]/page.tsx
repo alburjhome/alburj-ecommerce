@@ -9,6 +9,8 @@ import { SafeImage } from '@/components/ui/safe-image';
 import { PLACEHOLDER_CATEGORY, safeImageSrc } from '@/lib/image-utils';
 import type { Category, ProductWithDetails, StoreSettings, Subcategory } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 interface CategoryPageProps {
   params: { slug: string };
   searchParams?: { subcategory?: string };
@@ -172,8 +174,8 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
           {products.length > 0 ? (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-              {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
+              {products.map((product, index) => (
+                <ProductCard key={product.id} product={product} priority={index < 4} />
               ))}
             </div>
           ) : (

@@ -1,17 +1,25 @@
 import { z } from 'zod';
+import { createReadableSlug } from '@/lib/slug';
 
 const optionalNumber = z.preprocess(
   (value) => (value === '' || value === null || value === undefined ? null : Number(value)),
   z.number().min(0, 'القيمة لا يمكن أن تكون أقل من صفر').nullable()
 );
 
+const optionalSlug = z
+  .string()
+  .trim()
+  .optional()
+  .default('')
+  .refine(
+    (value) => !value || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value),
+    'استخدم أحرفًا إنجليزية صغيرة وأرقامًا وشرطات فقط'
+  );
+
 export const productSchema = z.object({
   name: z.string().trim().min(1, 'اسم المنتج مطلوب'),
-  slug: z
-    .string()
-    .trim()
-    .min(1, 'الرابط المختصر مطلوب')
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'استخدم أحرفًا إنجليزية صغيرة وأرقامًا وشرطات فقط'),
+  slug: optionalSlug,
+  slug_was_manual: z.boolean().optional().default(false),
   description: z.string().trim().nullable(),
   short_description: z.string().trim().nullable(),
   price: z.coerce.number().min(0, 'السعر لا يمكن أن يكون أقل من صفر'),
@@ -42,13 +50,7 @@ export const productSchema = z.object({
 export type ProductFormInput = z.infer<typeof productSchema>;
 
 export function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\u0600-\u06ff]+/g, '-')
-    .replace(/[\u0600-\u06ff]/g, '')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
+  return createReadableSlug(value, '');
 }
 
 export function parseTags(value: string) {

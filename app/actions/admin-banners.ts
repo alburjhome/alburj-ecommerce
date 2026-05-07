@@ -165,6 +165,20 @@ function bannerPayloadFromForm(formData: FormData, imageUrl: string) {
   return { success: true as const, data: parsed.data };
 }
 
+async function getNextBannerSortOrder(
+  adminClient: Awaited<ReturnType<typeof createAdminActionClient>>,
+  position: BannerPosition
+) {
+  const { data, error } = await (adminClient.from('banners') as any)
+    .select('sort_order')
+    .eq('position', position)
+    .order('sort_order', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return Number(data?.[0]?.sort_order || 0) + 10;
+}
+
 export async function getAdminBanners(accessToken: string | null): Promise<ActionResult<BannerRecord[]>> {
   try {
     const adminClient = await createAdminActionClient(accessToken);
@@ -210,6 +224,10 @@ export async function createAdminBanner(
         error: 'تحقق من حقول البانر المطلوبة',
         fieldErrors: parsed.fieldErrors,
       };
+    }
+
+    if (parsed.data.sort_order <= 0) {
+      parsed.data.sort_order = await getNextBannerSortOrder(adminClient, parsed.data.position);
     }
 
     const { data, error } = await (adminClient.from('banners') as any)

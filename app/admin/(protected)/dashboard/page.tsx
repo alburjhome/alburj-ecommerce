@@ -93,7 +93,7 @@ export default async function AdminDashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">لوحة التحكم</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -106,21 +106,21 @@ export default async function AdminDashboardPage() {
           const Icon = item.icon;
 
           return (
-            <Link key={item.label} href={item.href} className="rounded-lg border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{item.label}</p>
+            <Link key={item.label} href={item.href} className="min-w-0 rounded-lg border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30">
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <p className="min-w-0 text-sm text-muted-foreground">{item.label}</p>
                 <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
                   <Icon className="h-5 w-5" />
                 </span>
               </div>
-              <p className="mt-4 text-2xl font-bold">{item.value}</p>
+              <p className="mt-4 break-words text-2xl font-bold">{item.value}</p>
             </Link>
           );
         })}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
-        <section className="rounded-lg border bg-card p-5 shadow-sm">
+        <section className="min-w-0 rounded-lg border bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">آخر 5 طلبات</h2>
@@ -161,7 +161,7 @@ export default async function AdminDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-lg border bg-card p-5 shadow-sm">
+        <section className="min-w-0 rounded-lg border bg-card p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-md bg-amber-100 text-amber-700">
               <Warehouse className="h-5 w-5" />

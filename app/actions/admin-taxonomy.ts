@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createAdminActionClient } from '@/lib/admin-auth';
+import { createReadableSlug, isValidSlug, normalizeSlug } from '@/lib/slug';
 
 export interface ActionResult<T = unknown> {
   success: boolean;
@@ -50,13 +51,17 @@ const nullableText = z.preprocess(
   z.string().trim().nullable()
 );
 
+const optionalSlug = z
+  .string()
+  .trim()
+  .optional()
+  .default('')
+  .refine((value) => !value || isValidSlug(value), 'استخدم أحرفًا إنجليزية صغيرة وأرقامًا وشرطات فقط');
+
 const taxonomyBaseSchema = z.object({
   name: z.string().trim().min(1, 'الاسم مطلوب'),
-  slug: z
-    .string()
-    .trim()
-    .min(1, 'الرابط المختصر مطلوب')
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'استخدم أحرفاً إنجليزية صغيرة وأرقاماً وشرطات فقط'),
+  slug: optionalSlug,
+  slug_was_manual: z.boolean().optional().default(false),
   description: nullableText,
   image_url: nullableText,
   is_active: z.boolean(),
@@ -71,9 +76,11 @@ const subcategorySchema = taxonomyBaseSchema.extend({
 export type CategoryInput = z.infer<typeof categorySchema>;
 export type SubcategoryInput = z.infer<typeof subcategorySchema>;
 
+type AdminClient = Awaited<ReturnType<typeof createAdminActionClient>>;
+
 function friendlyError(error: unknown) {
   if (error instanceof Error) {
-    if (error.message === 'UNAUTHORIZED') return 'يجب تسجيل الدخول أولاً';
+    if (error.message === 'UNAUTHORIZED') return 'يجب تسجيل الدخول أولًا';
     if (error.message === 'FORBIDDEN') return 'ليس لديك صلاحية تنفيذ هذه العملية';
     if (error.message.includes('duplicate key') || error.message.includes('unique')) {
       return 'يوجد عنصر بنفس الرابط المختصر';
@@ -91,61 +98,128 @@ function logTaxonomyError(action: string, error: unknown) {
   console.error(`[admin-taxonomy:${action}] ${message}`);
 }
 
-function normalizeCategoryInput(input: CategoryInput) {
+function normalizeCategoryInput(input: CategoryInput, slug: string, sortOrder: number) {
   return {
     name: input.name.trim(),
-    slug: input.slug.trim(),
+    slug,
     description: input.description?.trim() || null,
     image_url: input.image_url?.trim() || null,
     is_active: input.is_active,
-    sort_order: input.sort_order,
+    sort_order: sortOrder,
   };
 }
 
-function normalizeSubcategoryInput(input: SubcategoryInput) {
+function normalizeSubcategoryInput(input: SubcategoryInput, slug: string, sortOrder: number) {
   return {
-    ...normalizeCategoryInput(input),
+    ...normalizeCategoryInput(input, slug, sortOrder),
     category_id: input.category_id,
   };
 }
 
-async function assertUniqueCategorySlug(
-  accessToken: string | null | undefined,
-  slug: string,
-  currentId?: string
+async function getNextSortOrder(
+  adminClient: AdminClient,
+  table: 'categories' | 'subcategories',
+  filters: Record<string, string> = {}
 ) {
-  const adminClient = await createAdminActionClient(accessToken);
+  let query = (adminClient.from(table) as any)
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1);
+
+  for (const [column, value] of Object.entries(filters)) {
+    query = query.eq(column, value);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return Number(data?.[0]?.sort_order || 0) + 10;
+}
+
+async function categorySlugExists(adminClient: AdminClient, slug: string, currentId?: string) {
   let query = (adminClient.from('categories') as any).select('id').eq('slug', slug);
 
-  if (currentId) {
-    query = query.neq('id', currentId);
-  }
+  if (currentId) query = query.neq('id', currentId);
 
   const { data, error } = await query.limit(1);
   if (error) throw error;
-  if (data?.length) throw new Error('يوجد قسم بنفس الرابط المختصر');
+  return Boolean(data?.length);
 }
 
-async function assertUniqueSubcategorySlug(
-  accessToken: string | null | undefined,
+async function subcategorySlugExists(
+  adminClient: AdminClient,
   categoryId: string,
   slug: string,
   currentId?: string
 ) {
-  const adminClient = await createAdminActionClient(accessToken);
-  let query = (adminClient
-    .from('subcategories') as any)
+  let query = (adminClient.from('subcategories') as any)
     .select('id')
     .eq('category_id', categoryId)
     .eq('slug', slug);
 
-  if (currentId) {
-    query = query.neq('id', currentId);
-  }
+  if (currentId) query = query.neq('id', currentId);
 
   const { data, error } = await query.limit(1);
   if (error) throw error;
-  if (data?.length) throw new Error('يوجد فئة بنفس الرابط المختصر داخل هذا القسم');
+  return Boolean(data?.length);
+}
+
+async function uniqueCategorySlug(adminClient: AdminClient, baseSlug: string) {
+  const base = normalizeSlug(baseSlug) || 'category';
+  let candidate = base;
+  let suffix = 2;
+
+  while (await categorySlugExists(adminClient, candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+async function uniqueSubcategorySlug(adminClient: AdminClient, categoryId: string, baseSlug: string) {
+  const base = normalizeSlug(baseSlug) || 'subcategory';
+  let candidate = base;
+  let suffix = 2;
+
+  while (await subcategorySlugExists(adminClient, categoryId, candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+async function resolveCategorySlug(adminClient: AdminClient, input: CategoryInput, currentId?: string) {
+  const providedSlug = normalizeSlug(input.slug || '');
+
+  if (currentId || input.slug_was_manual) {
+    if (!providedSlug || !isValidSlug(providedSlug)) {
+      throw new Error('الرابط المختصر غير صالح');
+    }
+    if (await categorySlugExists(adminClient, providedSlug, currentId)) {
+      throw new Error('يوجد قسم بنفس الرابط المختصر');
+    }
+    return providedSlug;
+  }
+
+  return uniqueCategorySlug(adminClient, providedSlug || createReadableSlug(input.name, 'category'));
+}
+
+async function resolveSubcategorySlug(adminClient: AdminClient, input: SubcategoryInput, currentId?: string) {
+  const providedSlug = normalizeSlug(input.slug || '');
+
+  if (currentId || input.slug_was_manual) {
+    if (!providedSlug || !isValidSlug(providedSlug)) {
+      throw new Error('الرابط المختصر غير صالح');
+    }
+    if (await subcategorySlugExists(adminClient, input.category_id, providedSlug, currentId)) {
+      throw new Error('يوجد فئة بنفس الرابط المختصر داخل هذا القسم');
+    }
+    return providedSlug;
+  }
+
+  return uniqueSubcategorySlug(adminClient, input.category_id, providedSlug || createReadableSlug(input.name, 'subcategory'));
 }
 
 export async function getAdminCategories(
@@ -154,8 +228,7 @@ export async function getAdminCategories(
 ): Promise<ActionResult<CategoryRecord[]>> {
   try {
     const adminClient = await createAdminActionClient(accessToken);
-    let query = (adminClient
-      .from('categories') as any)
+    let query = (adminClient.from('categories') as any)
       .select('*')
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false });
@@ -191,12 +264,15 @@ export async function createAdminCategory(
       };
     }
 
-    const payload = normalizeCategoryInput(parsed.data);
-    await assertUniqueCategorySlug(accessToken, payload.slug);
+    const slug = await resolveCategorySlug(adminClient, parsed.data);
+    const sortOrder = parsed.data.sort_order > 0 ? parsed.data.sort_order : await getNextSortOrder(adminClient, 'categories');
+    const payload = normalizeCategoryInput(parsed.data, slug, sortOrder);
 
     const { data, error } = await (adminClient.from('categories') as any).insert(payload).select('id').single();
     if (error) throw error;
 
+    revalidatePath('/');
+    revalidatePath('/categories');
     revalidatePath('/admin/categories');
     revalidatePath('/admin/products');
     return { success: true, data: data ? { id: data.id } : undefined };
@@ -223,12 +299,14 @@ export async function updateAdminCategory(
       };
     }
 
-    const payload = normalizeCategoryInput(parsed.data);
-    await assertUniqueCategorySlug(accessToken, payload.slug, categoryId);
+    const slug = await resolveCategorySlug(adminClient, parsed.data, categoryId);
+    const payload = normalizeCategoryInput(parsed.data, slug, parsed.data.sort_order);
 
     const { error } = await (adminClient.from('categories') as any).update(payload).eq('id', categoryId);
     if (error) throw error;
 
+    revalidatePath('/');
+    revalidatePath('/categories');
     revalidatePath('/admin/categories');
     revalidatePath('/admin/subcategories');
     revalidatePath('/admin/products');
@@ -249,6 +327,8 @@ export async function toggleAdminCategoryActive(
     const { error } = await (adminClient.from('categories') as any).update({ is_active: isActive }).eq('id', categoryId);
     if (error) throw error;
 
+    revalidatePath('/');
+    revalidatePath('/categories');
     revalidatePath('/admin/categories');
     revalidatePath('/admin/subcategories');
     return { success: true };
@@ -264,6 +344,8 @@ export async function deleteAdminCategory(accessToken: string | null, categoryId
     const { error } = await (adminClient.from('categories') as any).delete().eq('id', categoryId);
     if (error) throw error;
 
+    revalidatePath('/');
+    revalidatePath('/categories');
     revalidatePath('/admin/categories');
     revalidatePath('/admin/subcategories');
     revalidatePath('/admin/products');
@@ -281,8 +363,7 @@ export async function getAdminSubcategories(
   try {
     const adminClient = await createAdminActionClient(accessToken);
     const [categoriesResult, subcategoriesResult] = await Promise.all([
-      (adminClient
-        .from('categories') as any)
+      (adminClient.from('categories') as any)
         .select('*')
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false }),
@@ -339,8 +420,12 @@ export async function createAdminSubcategory(
       };
     }
 
-    const payload = normalizeSubcategoryInput(parsed.data);
-    await assertUniqueSubcategorySlug(accessToken, payload.category_id, payload.slug);
+    const slug = await resolveSubcategorySlug(adminClient, parsed.data);
+    const sortOrder =
+      parsed.data.sort_order > 0
+        ? parsed.data.sort_order
+        : await getNextSortOrder(adminClient, 'subcategories', { category_id: parsed.data.category_id });
+    const payload = normalizeSubcategoryInput(parsed.data, slug, sortOrder);
 
     const { data, error } = await (adminClient.from('subcategories') as any).insert(payload).select('id').single();
     if (error) throw error;
@@ -371,8 +456,8 @@ export async function updateAdminSubcategory(
       };
     }
 
-    const payload = normalizeSubcategoryInput(parsed.data);
-    await assertUniqueSubcategorySlug(accessToken, payload.category_id, payload.slug, subcategoryId);
+    const slug = await resolveSubcategorySlug(adminClient, parsed.data, subcategoryId);
+    const payload = normalizeSubcategoryInput(parsed.data, slug, parsed.data.sort_order);
 
     const { error } = await (adminClient.from('subcategories') as any).update(payload).eq('id', subcategoryId);
     if (error) throw error;

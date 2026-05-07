@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, useId, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useId, useMemo, useState } from 'react';
 import { ImageIcon, Loader2, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +40,7 @@ function fallbackForBucket(bucket: AdminImageBucket) {
 
 function validateImageFile(file: File, maxSizeMb: number) {
   if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-    return 'اختر ملف صورة فقط بصيغة JPG أو PNG أو WEBP أو GIF';
+    return 'اختر ملف صورة فقط بصيغة JPG أو PNG أو WebP أو GIF';
   }
 
   if (file.size > maxSizeMb * 1024 * 1024) {
@@ -65,9 +65,18 @@ export function AdminImageUploadField({
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedPreviewUrl, setSelectedPreviewUrl] = useState<string | null>(null);
   const fallback = fallbackForBucket(bucket);
   const previewSrc = useMemo(() => safeImageSrc(value, fallback), [fallback, value]);
+  const displayPreviewSrc = selectedPreviewUrl || previewSrc;
   const limit = maxSizeMb || (bucket === 'banners' ? 10 : 5);
+
+  useEffect(() => {
+    return () => {
+      if (selectedPreviewUrl) URL.revokeObjectURL(selectedPreviewUrl);
+    };
+  }, [selectedPreviewUrl]);
 
   async function removeCurrentImage(showToast = true) {
     if (!value) {
@@ -100,7 +109,7 @@ export function AdminImageUploadField({
     }
   }
 
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] || null;
     if (!file) return;
 
@@ -115,11 +124,26 @@ export function AdminImageUploadField({
       return;
     }
 
+    if (selectedPreviewUrl) URL.revokeObjectURL(selectedPreviewUrl);
+    setSelectedFile(file);
+    setSelectedPreviewUrl(URL.createObjectURL(file));
+  }
+
+  async function handleUploadSelected() {
+    if (!selectedFile) {
+      toast({
+        title: 'اختر صورة أولاً',
+        description: 'اختر صورة من جهازك لمعاينتها قبل الرفع.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsUploading(true);
     try {
       const token = await getAccessToken();
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', selectedFile);
       const result = await uploadAdminImageField(token, { bucket, folder }, formData);
 
       if (!result.success || !result.data) {
@@ -129,6 +153,11 @@ export function AdminImageUploadField({
       const previousValue = value;
       onChange(result.data.url);
       setFileInputKey((key) => key + 1);
+      setSelectedFile(null);
+      if (selectedPreviewUrl) {
+        URL.revokeObjectURL(selectedPreviewUrl);
+        setSelectedPreviewUrl(null);
+      }
 
       if (previousValue) {
         await deleteAdminImageField(token, { bucket, url: previousValue });
@@ -136,7 +165,7 @@ export function AdminImageUploadField({
 
       toast({
         title: 'تم رفع الصورة',
-        description: file.name,
+        description: selectedFile.name,
       });
     } catch (error) {
       toast({
@@ -155,14 +184,17 @@ export function AdminImageUploadField({
     <div className="space-y-3">
       <div>
         <Label>{label}</Label>
-        {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
+        {description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>}
       </div>
 
       <div className="grid gap-3 rounded-md border bg-muted/20 p-3 sm:grid-cols-[112px_1fr]">
         <div className="relative aspect-square overflow-hidden rounded-md border bg-background">
-          {value ? (
+          {selectedPreviewUrl ? (
+            // Local blob previews cannot be rendered through next/image.
+            <img src={selectedPreviewUrl} alt={label} className="h-full w-full object-cover" />
+          ) : value ? (
             <SafeImage
-              src={previewSrc}
+              src={displayPreviewSrc}
               fallbackSrc={fallback}
               alt={label}
               fill
@@ -187,8 +219,11 @@ export function AdminImageUploadField({
               onChange={handleFileChange}
             />
             <p className="mt-2 truncate text-xs text-muted-foreground" dir="ltr">
-              {value || 'لم يتم اختيار صورة'}
+              {selectedFile ? selectedFile.name : value || 'لم يتم اختيار صورة'}
             </p>
+            {selectedFile && (
+              <p className="mt-1 text-xs text-muted-foreground">تمت المعاينة. اضغط رفع الصورة لحفظها.</p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -200,9 +235,13 @@ export function AdminImageUploadField({
                   : 'inline-flex h-9 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground'
               }
             >
-              {isUploading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Upload className="ml-2 h-4 w-4" />}
-              اختر وارفع
+              <ImageIcon className="ml-2 h-4 w-4" />
+              اختيار صورة
             </Label>
+            <Button type="button" size="sm" disabled={busy || !selectedFile} onClick={handleUploadSelected}>
+              {isUploading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Upload className="ml-2 h-4 w-4" />}
+              رفع الصورة
+            </Button>
             <Button
               type="button"
               variant="destructive"

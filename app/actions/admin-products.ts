@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createAdminActionClient } from '@/lib/admin-auth';
 import { ProductFormInput, productSchema } from '@/lib/product-validation';
+import { createReadableSlug, isValidSlug, normalizeSlug } from '@/lib/slug';
 import type { Json } from '@/types/supabase';
 
 export interface ActionResult<T = unknown> {
@@ -176,6 +177,56 @@ async function assertUniqueProductFields(
   }
 }
 
+async function productSlugExists(
+  slug: string,
+  currentProductId: string | undefined,
+  accessToken: string | null | undefined
+) {
+  const adminClient = await createAdminActionClient(accessToken);
+  let query = adminClient.from('products').select('id').eq('slug', slug);
+
+  if (currentProductId) {
+    query = query.neq('id', currentProductId);
+  }
+
+  const { data, error } = await query.limit(1);
+  if (error) throw error;
+  return Boolean(data?.length);
+}
+
+async function uniqueProductSlug(baseSlug: string, accessToken: string | null | undefined) {
+  const base = normalizeSlug(baseSlug) || 'product';
+  let candidate = base;
+  let suffix = 2;
+
+  while (await productSlugExists(candidate, undefined, accessToken)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+async function resolveProductSlug(
+  input: ProductFormInput,
+  currentProductId: string | undefined,
+  accessToken: string | null | undefined
+) {
+  const providedSlug = normalizeSlug(input.slug || '');
+
+  if (currentProductId || input.slug_was_manual) {
+    if (!providedSlug || !isValidSlug(providedSlug)) {
+      throw new Error('الرابط المختصر غير صالح');
+    }
+    if (await productSlugExists(providedSlug, currentProductId, accessToken)) {
+      throw new Error('يوجد منتج بنفس الرابط المختصر');
+    }
+    return providedSlug;
+  }
+
+  return uniqueProductSlug(providedSlug || createReadableSlug(input.name, 'product'), accessToken);
+}
+
 export async function getAdminProducts(
   accessToken: string | null,
   filters: ProductListFilters = {}
@@ -287,7 +338,8 @@ export async function createAdminProduct(
       };
     }
 
-    const payload = normalizeProductInput(parsed.data);
+    const slug = await resolveProductSlug(parsed.data, undefined, accessToken);
+    const payload = normalizeProductInput({ ...parsed.data, slug });
     await assertUniqueProductFields(payload.slug, payload.sku, undefined, accessToken);
 
     const { data, error } = await (adminClient.from('products') as any)
@@ -322,7 +374,8 @@ export async function updateAdminProduct(
       };
     }
 
-    const payload = normalizeProductInput(parsed.data);
+    const slug = await resolveProductSlug(parsed.data, productId, accessToken);
+    const payload = normalizeProductInput({ ...parsed.data, slug });
     await assertUniqueProductFields(payload.slug, payload.sku, productId, accessToken);
 
     const { error } = await (adminClient.from('products') as any)

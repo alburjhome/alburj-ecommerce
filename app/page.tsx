@@ -7,6 +7,8 @@ import { TrustSection } from '@/features/store/components/trust-section';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'الرئيسية',
   description: 'مؤسسة البرج - وجهتك الأولى للمنتجات البلاستيكية، الأدوات المنزلية، والأجهزة الكهربائية في الأردن',

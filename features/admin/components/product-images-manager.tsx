@@ -66,13 +66,14 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
   const [uploadAltText, setUploadAltText] = useState('');
   const [uploadSortOrder, setUploadSortOrder] = useState('');
   const [fileInputKey, setFileInputKey] = useState(0);
 
   const nextSortOrder = useMemo(() => {
-    if (!images.length) return 0;
-    return Math.max(...images.map((image) => image.sort_order)) + 1;
+    if (!images.length) return 10;
+    return Math.max(...images.map((image) => image.sort_order)) + 10;
   }, [images]);
 
   const loadImages = useCallback(async () => {
@@ -87,7 +88,7 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
 
       setImages(result.data);
       setDrafts(buildDrafts(result.data));
-      setUploadSortOrder(String(result.data.length ? Math.max(...result.data.map((image) => image.sort_order)) + 1 : 0));
+      setUploadSortOrder('');
     } catch (error) {
       toast({
         title: 'تعذر تحميل صور المنتج',
@@ -102,6 +103,12 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
   useEffect(() => {
     loadImages();
   }, [loadImages]);
+
+  useEffect(() => {
+    return () => {
+      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+    };
+  }, [uploadPreviewUrl]);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] || null;
@@ -122,7 +129,9 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
       return;
     }
 
+    if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
     setUploadFile(file);
+    setUploadPreviewUrl(URL.createObjectURL(file));
   }
 
   async function handleUpload() {
@@ -151,7 +160,9 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
       const formData = new FormData();
       formData.append('file', uploadFile);
       formData.append('alt_text', uploadAltText);
-      formData.append('sort_order', uploadSortOrder || String(nextSortOrder));
+      if (uploadSortOrder.trim()) {
+        formData.append('sort_order', uploadSortOrder);
+      }
 
       const result = await uploadAdminProductImage(token, productId, formData);
       if (!result.success) {
@@ -164,6 +175,10 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
       });
       setUploadFile(null);
       setUploadAltText('');
+      if (uploadPreviewUrl) {
+        URL.revokeObjectURL(uploadPreviewUrl);
+        setUploadPreviewUrl(null);
+      }
       setFileInputKey((key) => key + 1);
       await loadImages();
     } catch (error) {
@@ -275,7 +290,7 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
         <div>
           <h2 className="text-lg font-semibold">صور المنتج</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            إدارة صور المنتج، ترتيبها، والنص البديل. رفع الصور محدود بـ 5MB.
+            يفضل صور مربعة 1000×1000 أو 1200×1200، بخلفية نظيفة والمنتج يملأ 70–85% من الصورة. رفع الصور محدود بـ 5MB.
           </p>
         </div>
         <Button type="button" variant="outline" onClick={loadImages} disabled={isLoading}>
@@ -285,7 +300,17 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
       </div>
 
       <div className="mb-5 rounded-md border bg-muted/30 p-4">
-        <div className="grid gap-3 md:grid-cols-[1.5fr_1fr_160px_auto] md:items-end">
+        <div className="grid gap-4 lg:grid-cols-[128px_1.5fr_1fr_auto] lg:items-end">
+          <div className="relative aspect-square overflow-hidden rounded-md border bg-background">
+            {uploadPreviewUrl ? (
+              // Local blob previews cannot be rendered through next/image.
+              <img src={uploadPreviewUrl} alt="معاينة الصورة" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                <ImageIcon className="h-8 w-8" />
+              </div>
+            )}
+          </div>
           <div>
             <Label htmlFor="product-image-file">صورة جديدة</Label>
             <Input
@@ -295,6 +320,9 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
               accept="image/jpeg,image/png,image/webp,image/gif"
               onChange={handleFileChange}
             />
+            <p className="mt-2 text-xs text-muted-foreground">
+              {uploadFile ? 'تمت المعاينة. اضغط رفع لحفظ الصورة.' : 'اختر صورة لمعاينتها قبل الرفع.'}
+            </p>
           </div>
           <div>
             <Label htmlFor="product-image-alt">Alt text</Label>
@@ -305,17 +333,21 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
               placeholder="وصف الصورة"
             />
           </div>
-          <div>
-            <Label htmlFor="product-image-order">الترتيب</Label>
-            <Input
-              id="product-image-order"
-              type="number"
-              min="0"
-              value={uploadSortOrder}
-              onChange={(event) => setUploadSortOrder(event.target.value)}
-              placeholder={String(nextSortOrder)}
-            />
-          </div>
+          <details className="rounded-md border bg-background p-3 text-sm">
+            <summary className="cursor-pointer font-medium">خيارات متقدمة</summary>
+            <div className="mt-3">
+              <Label htmlFor="product-image-order">الترتيب</Label>
+              <Input
+                id="product-image-order"
+                type="number"
+                min="0"
+                value={uploadSortOrder}
+                onChange={(event) => setUploadSortOrder(event.target.value)}
+                placeholder={String(nextSortOrder)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">يُحسب تلقائياً: آخر ترتيب + 10.</p>
+            </div>
+          </details>
           <Button type="button" onClick={handleUpload} disabled={mutatingId === 'upload'}>
             <Upload className="ml-2 h-4 w-4" />
             {mutatingId === 'upload' ? 'جاري الرفع...' : 'رفع'}

@@ -61,6 +61,7 @@ export function HeroBanner({ banners }: HeroBannerProps) {
         alt={banner.title}
         fill
         className="object-cover"
+        sizes="100vw"
         priority
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent z-10" />

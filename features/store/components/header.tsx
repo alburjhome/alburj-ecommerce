@@ -63,7 +63,7 @@ export function Header() {
               <nav className="flex flex-col gap-4 mt-8">
                 {navLinks.map((link) => (
                   <Link
-                    key={link.href}
+                    key={`${link.href}-${link.label}`}
                     href={link.href}
                     className="text-lg font-medium hover:text-primary transition-colors"
                   >
@@ -81,7 +81,7 @@ export function Header() {
           <nav className="hidden lg:flex items-center gap-6">
             {navLinks.map((link) => (
               <Link
-                key={link.href}
+                key={`${link.href}-${link.label}`}
                 href={link.href}
                 className="text-sm font-medium hover:text-primary transition-colors category-nav-item"
               >

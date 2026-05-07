@@ -119,7 +119,7 @@ export function AdminShell({
         </div>
       )}
 
-      <div className="md:pr-72">
+      <div className="min-w-0 md:pr-72">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur md:px-6">
           <div className="flex items-center gap-3">
             <Button
@@ -149,7 +149,7 @@ export function AdminShell({
           </div>
         </header>
 
-        <main className="p-4 md:p-6">{children}</main>
+        <main className="min-w-0 overflow-x-hidden p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

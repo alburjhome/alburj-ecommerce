@@ -11,9 +11,10 @@ import useCartStore from '@/stores/cart';
 
 interface ProductCardProps {
   product: ProductWithDetails;
+  priority?: boolean;
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, priority = false }: ProductCardProps) {
   const { addItem, openCart } = useCartStore();
 
   const primaryImage =
@@ -53,6 +54,7 @@ export function ProductCard({ product }: ProductCardProps) {
             fill
             className="object-cover"
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+            priority={priority}
           />
         </Link>
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">

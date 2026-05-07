@@ -275,7 +275,7 @@ export function BannersClient() {
             <AdminImageUploadField
               bucket="banners"
               label="صورة البانر"
-              description="ارفع صورة من جهازك وسيتم حفظ الرابط تلقائياً في البانر."
+              description="Hero desktop: 1920×700 أو 1600×600. اجعل النص والعنصر المهم في وسط الصورة للموبايل. النسبة المناسبة 16:6 تقريباً. الحد الأقصى 10MB."
               folder={`banners/${form.position}/${form.title || 'draft'}`}
               value={form.image_url || null}
               onChange={(url) => setForm((current) => ({ ...current, image_url: url || '' }))}
@@ -290,7 +290,7 @@ export function BannersClient() {
               dir="ltr"
               value={form.link_url}
               onChange={(event) => setForm((current) => ({ ...current, link_url: event.target.value }))}
-              placeholder="/category/electronics"
+              placeholder="/category/electrical-appliances"
             />
           </div>
           <div>
@@ -313,16 +313,20 @@ export function BannersClient() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label htmlFor="banner-order">الترتيب</Label>
-            <Input
-              id="banner-order"
-              type="number"
-              min="0"
-              value={form.sort_order}
-              onChange={(event) => setForm((current) => ({ ...current, sort_order: event.target.value }))}
-            />
-          </div>
+          <details className="rounded-md border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">خيارات متقدمة</summary>
+            <div className="mt-3">
+              <Label htmlFor="banner-order">الترتيب</Label>
+              <Input
+                id="banner-order"
+                type="number"
+                min="0"
+                value={form.sort_order}
+                onChange={(event) => setForm((current) => ({ ...current, sort_order: event.target.value }))}
+              />
+              {!editingId && <p className="mt-1 text-xs text-muted-foreground">يُحسب تلقائياً حسب مكان الظهور: آخر ترتيب + 10.</p>}
+            </div>
+          </details>
           <div>
             <Label htmlFor="banner-start">تاريخ البداية</Label>
             <Input
