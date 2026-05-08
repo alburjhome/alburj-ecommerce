@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductCard } from '@/features/store/components/product-card';
+import { getWhatsAppLink } from '@/lib/store-settings';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -19,14 +20,26 @@ export const metadata: Metadata = {
 async function getSettings() {
   const { data } = await supabase
     .from('store_settings')
-    .select('store_name, store_description, whatsapp_number, contact_email, contact_phone, address')
+    .select(
+      'store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url'
+    )
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
   return data as Pick<
     StoreSettings,
-    'store_name' | 'store_description' | 'whatsapp_number' | 'contact_email' | 'contact_phone' | 'address'
+    | 'store_name'
+    | 'store_description'
+    | 'whatsapp_number'
+    | 'contact_email'
+    | 'contact_phone'
+    | 'address'
+    | 'facebook_url'
+    | 'instagram_url'
+    | 'tiktok_url'
+    | 'snapchat_url'
+    | 'youtube_url'
   > | null;
 }
 
@@ -51,10 +64,11 @@ async function getProducts(search?: string) {
 
 export default async function ProductsPage({ searchParams }: ProductsPageProps) {
   const [products, settings] = await Promise.all([getProducts(searchParams?.search), getSettings()]);
+  const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Header whatsappUrl={whatsappUrl} />
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <p className="text-sm text-muted-foreground">الكتالوج</p>

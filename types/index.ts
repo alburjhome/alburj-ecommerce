@@ -238,6 +238,11 @@ export interface StoreSettings {
   contact_email: string | null;
   contact_phone: string | null;
   address: string | null;
+  facebook_url: string | null;
+  instagram_url: string | null;
+  tiktok_url: string | null;
+  snapchat_url: string | null;
+  youtube_url: string | null;
   currency: string;
   currency_symbol: string;
   tax_rate: number;

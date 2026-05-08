@@ -19,6 +19,11 @@ export interface StoreSettingsRecord {
   contact_email: string | null;
   contact_phone: string | null;
   address: string | null;
+  facebook_url: string | null;
+  instagram_url: string | null;
+  tiktok_url: string | null;
+  snapchat_url: string | null;
+  youtube_url: string | null;
   currency: string;
   currency_symbol: string;
   free_shipping_threshold: number | null;
@@ -38,6 +43,17 @@ const nullableNumber = z.preprocess(
   z.coerce.number().min(0, 'القيمة يجب ألا تقل عن صفر').nullable()
 );
 
+const nullableUrl = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
+  z
+    .string()
+    .trim()
+    .refine((val) => val === null || val.startsWith('http://') || val.startsWith('https://'), {
+      message: 'يجب أن يبدأ الرابط بـ http:// أو https://',
+    })
+    .nullable()
+);
+
 const settingsSchema = z.object({
   store_name: z.string().trim().min(1, 'اسم المتجر مطلوب'),
   store_description: nullableText,
@@ -48,6 +64,11 @@ const settingsSchema = z.object({
   ),
   contact_phone: nullableText,
   address: nullableText,
+  facebook_url: nullableUrl,
+  instagram_url: nullableUrl,
+  tiktok_url: nullableUrl,
+  snapchat_url: nullableUrl,
+  youtube_url: nullableUrl,
   currency: z.string().trim().min(1, 'العملة مطلوبة'),
   currency_symbol: z.string().trim().min(1, 'رمز العملة مطلوب'),
   free_shipping_threshold: nullableNumber,
@@ -81,7 +102,7 @@ export async function getAdminStoreSettings(
     const adminClient = await createAdminActionClient(accessToken);
     const { data, error } = await (adminClient.from('store_settings') as any)
       .select(
-        'id, store_name, store_description, whatsapp_number, contact_email, contact_phone, address, currency, currency_symbol, free_shipping_threshold, min_order_amount, maintenance_mode, created_at, updated_at'
+        'id, store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url, currency, currency_symbol, free_shipping_threshold, min_order_amount, maintenance_mode, created_at, updated_at'
       )
       .order('created_at', { ascending: true })
       .limit(1)
@@ -120,6 +141,9 @@ export async function updateAdminStoreSettings(
     if (error) throw error;
 
     revalidatePath('/');
+    revalidatePath('/products');
+    revalidatePath('/categories');
+    revalidatePath('/category/[slug]');
     revalidatePath('/admin/settings');
     return { success: true };
   } catch (error) {

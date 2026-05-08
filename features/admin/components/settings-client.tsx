@@ -20,6 +20,11 @@ interface SettingsFormState {
   contact_email: string | null;
   contact_phone: string | null;
   address: string | null;
+  facebook_url: string | null;
+  instagram_url: string | null;
+  tiktok_url: string | null;
+  snapchat_url: string | null;
+  youtube_url: string | null;
   currency: string;
   currency_symbol: string;
   free_shipping_threshold: string;
@@ -34,6 +39,11 @@ const emptyForm: SettingsFormState = {
   contact_email: null,
   contact_phone: null,
   address: null,
+  facebook_url: null,
+  instagram_url: null,
+  tiktok_url: null,
+  snapchat_url: null,
+  youtube_url: null,
   currency: 'JOD',
   currency_symbol: 'د.أ',
   free_shipping_threshold: '',
@@ -57,6 +67,11 @@ function formFromSettings(settings: StoreSettingsRecord): SettingsFormState {
     contact_email: settings.contact_email,
     contact_phone: settings.contact_phone,
     address: settings.address,
+    facebook_url: settings.facebook_url,
+    instagram_url: settings.instagram_url,
+    tiktok_url: settings.tiktok_url,
+    snapchat_url: settings.snapchat_url,
+    youtube_url: settings.youtube_url,
     currency: settings.currency,
     currency_symbol: settings.currency_symbol,
     free_shipping_threshold:
@@ -125,6 +140,11 @@ export function SettingsClient() {
         contact_email: textOrNull(form.contact_email),
         contact_phone: textOrNull(form.contact_phone),
         address: textOrNull(form.address),
+        facebook_url: textOrNull(form.facebook_url),
+        instagram_url: textOrNull(form.instagram_url),
+        tiktok_url: textOrNull(form.tiktok_url),
+        snapchat_url: textOrNull(form.snapchat_url),
+        youtube_url: textOrNull(form.youtube_url),
         currency: form.currency,
         currency_symbol: form.currency_symbol,
         free_shipping_threshold: numberOrNull(form.free_shipping_threshold),
@@ -243,6 +263,64 @@ export function SettingsClient() {
                 onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
               />
             </div>
+
+            <div className="md:col-span-2 pt-3 border-t">
+              <h3 className="text-base font-semibold mb-1">روابط التواصل الاجتماعي</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                اترك الحقل فارغًا إذا لا تريد إظهاره في الموقع.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="facebook-url">رابط فيسبوك</Label>
+              <Input
+                id="facebook-url"
+                dir="ltr"
+                value={form.facebook_url || ''}
+                onChange={(event) => setForm((current) => ({ ...current, facebook_url: event.target.value }))}
+                placeholder="https://facebook.com/..."
+              />
+            </div>
+            <div>
+              <Label htmlFor="instagram-url">رابط إنستغرام</Label>
+              <Input
+                id="instagram-url"
+                dir="ltr"
+                value={form.instagram_url || ''}
+                onChange={(event) => setForm((current) => ({ ...current, instagram_url: event.target.value }))}
+                placeholder="https://instagram.com/..."
+              />
+            </div>
+            <div>
+              <Label htmlFor="tiktok-url">رابط تيك توك</Label>
+              <Input
+                id="tiktok-url"
+                dir="ltr"
+                value={form.tiktok_url || ''}
+                onChange={(event) => setForm((current) => ({ ...current, tiktok_url: event.target.value }))}
+                placeholder="https://tiktok.com/@..."
+              />
+            </div>
+            <div>
+              <Label htmlFor="snapchat-url">رابط سناب شات</Label>
+              <Input
+                id="snapchat-url"
+                dir="ltr"
+                value={form.snapchat_url || ''}
+                onChange={(event) => setForm((current) => ({ ...current, snapchat_url: event.target.value }))}
+                placeholder="https://snapchat.com/..."
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label htmlFor="youtube-url">رابط يوتيوب</Label>
+              <Input
+                id="youtube-url"
+                dir="ltr"
+                value={form.youtube_url || ''}
+                onChange={(event) => setForm((current) => ({ ...current, youtube_url: event.target.value }))}
+                placeholder="https://youtube.com/..."
+              />
+            </div>
+
             <div>
               <Label htmlFor="currency">العملة</Label>
               <Input

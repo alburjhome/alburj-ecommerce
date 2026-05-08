@@ -5,6 +5,7 @@ import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { SafeImage } from '@/components/ui/safe-image';
 import { PLACEHOLDER_CATEGORY, safeImageSrc } from '@/lib/image-utils';
+import { getWhatsAppLink } from '@/lib/store-settings';
 import type { Category, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -17,14 +18,26 @@ export const metadata: Metadata = {
 async function getSettings() {
   const { data } = await supabase
     .from('store_settings')
-    .select('store_name, store_description, whatsapp_number, contact_email, contact_phone, address')
+    .select(
+      'store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url'
+    )
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
   return data as Pick<
     StoreSettings,
-    'store_name' | 'store_description' | 'whatsapp_number' | 'contact_email' | 'contact_phone' | 'address'
+    | 'store_name'
+    | 'store_description'
+    | 'whatsapp_number'
+    | 'contact_email'
+    | 'contact_phone'
+    | 'address'
+    | 'facebook_url'
+    | 'instagram_url'
+    | 'tiktok_url'
+    | 'snapchat_url'
+    | 'youtube_url'
   > | null;
 }
 
@@ -40,10 +53,11 @@ async function getCategories() {
 
 export default async function CategoriesPage() {
   const [categories, settings] = await Promise.all([getCategories(), getSettings()]);
+  const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Header whatsappUrl={whatsappUrl} />
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <p className="text-sm text-muted-foreground">الكتالوج</p>

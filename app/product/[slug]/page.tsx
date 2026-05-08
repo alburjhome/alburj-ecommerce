@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductDetail } from '@/features/store/components/product-detail';
+import { getWhatsAppLink } from '@/lib/store-settings';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -15,14 +16,26 @@ interface ProductPageProps {
 async function getSettings() {
   const { data } = await supabase
     .from('store_settings')
-    .select('store_name, store_description, whatsapp_number, contact_email, contact_phone, address')
+    .select(
+      'store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url'
+    )
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
   return data as Pick<
     StoreSettings,
-    'store_name' | 'store_description' | 'whatsapp_number' | 'contact_email' | 'contact_phone' | 'address'
+    | 'store_name'
+    | 'store_description'
+    | 'whatsapp_number'
+    | 'contact_email'
+    | 'contact_phone'
+    | 'address'
+    | 'facebook_url'
+    | 'instagram_url'
+    | 'tiktok_url'
+    | 'snapchat_url'
+    | 'youtube_url'
   > | null;
 }
 
@@ -78,9 +91,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
     notFound();
   }
 
+  const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
+
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Header whatsappUrl={whatsappUrl} />
       <main>
         <ProductDetail product={product} />
       </main>

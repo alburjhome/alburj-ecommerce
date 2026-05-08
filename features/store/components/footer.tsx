@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Phone, MapPin, Mail, Clock, Facebook, Instagram } from 'lucide-react';
+import { Phone, MapPin, Mail, Clock, Facebook, Instagram, Youtube, Music, ExternalLink } from 'lucide-react';
 
 interface FooterSettings {
   store_name: string;
@@ -8,6 +8,11 @@ interface FooterSettings {
   contact_email: string | null;
   contact_phone: string | null;
   address: string | null;
+  facebook_url: string | null;
+  instagram_url: string | null;
+  tiktok_url: string | null;
+  snapchat_url: string | null;
+  youtube_url: string | null;
 }
 
 interface FooterProps {
@@ -45,10 +50,18 @@ export function Footer({ settings }: FooterProps) {
     ],
   };
 
+  const socialLinks = [
+    { url: settings?.facebook_url, icon: Facebook, label: 'فيسبوك' },
+    { url: settings?.instagram_url, icon: Instagram, label: 'إنستغرام' },
+    { url: settings?.tiktok_url, icon: Music, label: 'تيك توك' },
+    { url: settings?.snapchat_url, icon: ExternalLink, label: 'سناب شات' },
+    { url: settings?.youtube_url, icon: Youtube, label: 'يوتيوب' },
+  ].filter((link) => !!link.url);
+
   return (
-    <footer id="contact" className="bg-muted mt-16">
-      <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+    <footer id="contact" className="bg-muted mt-8 md:mt-12">
+      <div className="container mx-auto px-4 py-8 md:py-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
           <div className="space-y-4">
             <img
               src="/brand/logo.svg"
@@ -56,24 +69,25 @@ export function Footer({ settings }: FooterProps) {
               className="h-10 w-auto object-contain"
             />
             <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
-            <div className="flex gap-3">
-              <a
-                href="https://facebook.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
-              >
-                <Facebook className="h-5 w-5" />
-              </a>
-              <a
-                href="https://instagram.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
-              >
-                <Instagram className="h-5 w-5" />
-              </a>
-            </div>
+            {socialLinks.length > 0 && (
+              <div className="flex gap-3">
+                {socialLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <a
+                      key={link.label}
+                      href={link.url!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={link.label}
+                      className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+                    >
+                      <Icon className="h-5 w-5" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div>

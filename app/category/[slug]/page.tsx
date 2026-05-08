@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductCard } from '@/features/store/components/product-card';
+import { getWhatsAppLink } from '@/lib/store-settings';
 import type { Category, ProductWithDetails, StoreSettings, Subcategory } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -17,14 +18,26 @@ interface CategoryPageProps {
 async function getSettings() {
   const { data } = await supabase
     .from('store_settings')
-    .select('store_name, store_description, whatsapp_number, contact_email, contact_phone, address')
+    .select(
+      'store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url'
+    )
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
   return data as Pick<
     StoreSettings,
-    'store_name' | 'store_description' | 'whatsapp_number' | 'contact_email' | 'contact_phone' | 'address'
+    | 'store_name'
+    | 'store_description'
+    | 'whatsapp_number'
+    | 'contact_email'
+    | 'contact_phone'
+    | 'address'
+    | 'facebook_url'
+    | 'instagram_url'
+    | 'tiktok_url'
+    | 'snapchat_url'
+    | 'youtube_url'
   > | null;
 }
 
@@ -109,12 +122,12 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
 }
 
 export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
-  const [data, settings] = await Promise.all([
+  const [categoryData, settings] = await Promise.all([
     getCategoryData(params.slug, searchParams?.subcategory),
     getSettings(),
   ]);
 
-  if (!data) {
+  if (!categoryData) {
     const legacyHref = await getLegacyCategoryHref(params.slug);
     if (legacyHref) {
       redirect(legacyHref);
@@ -123,11 +136,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     notFound();
   }
 
-  const { category, subcategories, products, selectedSubcategory } = data;
+  const { category, subcategories, selectedSubcategory, products } = categoryData;
+  const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Header whatsappUrl={whatsappUrl} />
       <main>
         {/* Clean Hero - No large image */}
         <section className="border-b bg-muted/30">

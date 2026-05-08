@@ -25,16 +25,16 @@ const trustFeatures = [
 
 export function TrustSection() {
   return (
-    <section className="py-12 md:py-16">
+    <section className="py-8 md:py-10">
       <div className="container mx-auto px-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {trustFeatures.map((feature) => (
-            <div key={feature.title} className="text-center p-4 rounded-lg bg-muted/50">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                <feature.icon className="h-6 w-6 text-primary" />
+            <div key={feature.title} className="text-center p-3 md:p-4 rounded-lg bg-muted/50">
+              <div className="w-10 h-10 md:w-12 md:h-12 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center">
+                <feature.icon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
               </div>
-              <h3 className="font-semibold mb-1">{feature.title}</h3>
-              <p className="text-sm text-muted-foreground">{feature.description}</p>
+              <h3 className="font-semibold text-sm md:text-base mb-1">{feature.title}</h3>
+              <p className="text-xs md:text-sm text-muted-foreground">{feature.description}</p>
             </div>
           ))}
         </div>
