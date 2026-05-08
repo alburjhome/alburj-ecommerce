@@ -6,7 +6,7 @@ import { FeaturedProducts } from '@/features/store/components/featured-products'
 import { TrustSection } from '@/features/store/components/trust-section';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
-import { Truck, CreditCard, Shield, BadgePercent, Store, MessageCircle } from 'lucide-react';
+import { Truck, CreditCard, Shield, BadgePercent, Store, MessageCircle, Home, UtensilsCrossed, Package, ShoppingBag } from 'lucide-react';
 import { getWhatsAppLink } from '@/lib/store-settings';
 
 export const dynamic = 'force-dynamic';
@@ -75,6 +75,93 @@ function QuickTrustBar() {
   );
 }
 
+function ReadyBundlesSection({ whatsappUrl }: { whatsappUrl: string | null }) {
+  const bundles = [
+    {
+      icon: Home,
+      name: 'باقة تنظيف البيت',
+      description: 'منظفات وورقيات أساسية للاستخدام اليومي.',
+      items: ['شامبو سجاد', 'منظف أرضيات', 'أكياس نفايات', 'رول مطبخ'],
+    },
+    {
+      icon: UtensilsCrossed,
+      name: 'باقة تجهيز مطعم',
+      description: 'مستلزمات تغليف وورقيات مناسبة للمطاعم والكافيهات.',
+      items: ['علب تغليف', 'أكواب', 'مناديل', 'رول تغليف'],
+    },
+    {
+      icon: Package,
+      name: 'باقة الورقيات الشهرية',
+      description: 'كل ما تحتاجه من ورقيات للبيت أو المكتب.',
+      items: ['رول حمام', 'رول مطبخ', 'مناديل', 'أكياس نفايات'],
+    },
+    {
+      icon: ShoppingBag,
+      name: 'باقة المحلات',
+      description: 'مستلزمات يومية للمحلات بأسعار مناسبة.',
+      items: ['أكياس', 'تغليف', 'منظفات', 'أدوات بلاستيكية'],
+    },
+  ];
+
+  return (
+    <section className="py-8 md:py-10">
+      <div className="container mx-auto px-4">
+        <div className="mb-5 md:mb-6">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">باقات جاهزة لك</h2>
+          <p className="mt-2 text-sm md:text-base text-muted-foreground">
+            اختصر وقتك واختر باقة مناسبة لاحتياجك اليومي أو لمحلك.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {bundles.map((bundle) => {
+            const Icon = bundle.icon;
+            const message = `مرحبا، أريد طلب باقة:\n${bundle.name}\n\nالعناصر:\n- ${bundle.items.join(
+              '\n- '
+            )}\n\nهل يمكن تزويدي بالسعر والتفاصيل؟`;
+            const href = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(message)}` : null;
+
+            return (
+              <div key={bundle.name} className="rounded-xl border bg-card p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold leading-6">{bundle.name}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{bundle.description}</p>
+                  </div>
+                </div>
+
+                <ul className="mt-4 space-y-2 text-sm">
+                  {bundle.items.map((item) => (
+                    <li key={item} className="flex items-start gap-2">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+                      <span className="leading-6">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {href && (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    اطلب الباقة عبر واتساب
+                  </a>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ShopCTA({ whatsappUrl }: { whatsappUrl: string | null }) {
   return (
     <section className="py-8 md:py-10 bg-slate-50">
@@ -116,6 +203,7 @@ export default async function HomePage() {
         <QuickTrustBar />
         <CategorySection categories={categories} />
         <FeaturedProducts products={featuredProducts} />
+        <ReadyBundlesSection whatsappUrl={whatsappUrl} />
         <ShopCTA whatsappUrl={whatsappUrl} />
         <TrustSection />
       </main>
