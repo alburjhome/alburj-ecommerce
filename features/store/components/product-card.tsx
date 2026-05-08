@@ -5,7 +5,8 @@ import { ShoppingCart } from 'lucide-react';
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
-import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
+import { PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
+import { getPrimaryProductImage, debugProductImage } from '@/lib/product-image';
 import { formatPrice, calculateDiscountPercentage } from '@/lib/utils';
 import useCartStore from '@/stores/cart';
 
@@ -17,11 +18,8 @@ interface ProductCardProps {
 export function ProductCard({ product, priority = false }: ProductCardProps) {
   const { addItem, openCart } = useCartStore();
 
-  const primaryImage =
-    product.images?.find((img) => img.is_primary)?.url ||
-    product.images?.[0]?.url ||
-    PLACEHOLDER_PRODUCT;
-  const imageSrc = safeImageSrc(primaryImage, PLACEHOLDER_PRODUCT);
+  const imageSrc = getPrimaryProductImage(product);
+  debugProductImage(product, 'ProductCard');
 
   const hasDiscount = product.compare_price && product.compare_price > product.price;
   const discountPercentage = hasDiscount

@@ -61,6 +61,18 @@ async function getCategoryData(slug: string, subcategorySlug?: string) {
 
   const { data: products } = await productsQuery;
 
+  // Debug: Log first product's image data (dev only)
+  if (process.env.NODE_ENV === 'development' && products && products.length > 0) {
+    const firstProduct = products[0];
+    console.log('[Category Debug] First product:', {
+      id: firstProduct.id,
+      name: firstProduct.name,
+      imagesCount: firstProduct.images?.length || 0,
+      hasImages: !!firstProduct.images,
+      imageKeys: firstProduct.images ? Object.keys(firstProduct.images) : 'none',
+    });
+  }
+
   return {
     category: categoryRecord,
     subcategories: subcategoryRecords,
