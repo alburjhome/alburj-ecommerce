@@ -3,13 +3,18 @@ import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductCard } from '@/features/store/components/product-card';
+import {
+  INTENT_CONFIG,
+  ProductIntentFilters,
+  type ProductIntentKey,
+} from '@/features/store/components/product-intent-filters';
 import { getWhatsAppLink } from '@/lib/store-settings';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
 interface ProductsPageProps {
-  searchParams?: { search?: string };
+  searchParams?: { search?: string; intent?: string };
 }
 
 export const metadata: Metadata = {
@@ -66,28 +71,46 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const [products, settings] = await Promise.all([getProducts(searchParams?.search), getSettings()]);
   const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
 
+  const rawIntent = searchParams?.intent;
+  const selectedIntent = (INTENT_CONFIG.some((item) => item.key === rawIntent)
+    ? (rawIntent as ProductIntentKey)
+    : 'all') as ProductIntentKey;
+  const intentConfig = INTENT_CONFIG.find((item) => item.key === selectedIntent) || INTENT_CONFIG[0];
+  const filteredProducts =
+    selectedIntent === 'all'
+      ? products
+      : products.filter((product) => {
+          const slug = product.category?.slug;
+          if (!slug) return false;
+          return intentConfig.categorySlugs.includes(slug);
+        });
+
   return (
     <div className="min-h-screen bg-background">
       <Header whatsappUrl={whatsappUrl} />
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <p className="text-sm text-muted-foreground">الكتالوج</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight">المنتجات</h1>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight">{intentConfig.title}</h1>
           {searchParams?.search && (
             <p className="mt-2 text-sm text-muted-foreground">نتائج البحث عن: {searchParams.search}</p>
           )}
         </div>
 
-        {products.length > 0 ? (
+        <ProductIntentFilters selected={selectedIntent} />
+
+        {filteredProducts.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-            {products.map((product, index) => (
+            {filteredProducts.map((product, index) => (
               <ProductCard key={product.id} product={product} priority={index < 4} />
             ))}
           </div>
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-16 text-center">
-            <h2 className="text-lg font-semibold">لا توجد منتجات مطابقة</h2>
-            <p className="mt-2 text-sm text-muted-foreground">جرّب البحث بكلمة أخرى.</p>
+            <h2 className="text-lg font-semibold">لا توجد منتجات ضمن هذا الاختيار حاليًا</h2>
+            {searchParams?.search && (
+              <p className="mt-2 text-sm text-muted-foreground">جرّب البحث بكلمة أخرى.</p>
+            )}
           </div>
         )}
       </main>
