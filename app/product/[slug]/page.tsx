@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductDetail } from '@/features/store/components/product-detail';
+import { RecommendedAddons } from '@/features/store/components/recommended-addons';
 import { getWhatsAppLink } from '@/lib/store-settings';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
@@ -54,6 +55,63 @@ async function getProduct(slug: string) {
   } as ProductWithDetails;
 }
 
+async function getRecommendedAddons(product: ProductWithDetails) {
+  const isAvailable = (item: ProductWithDetails) => {
+    const stockQty = item.stock_quantity ?? 0;
+    if (!item.is_active) return false;
+    if (!item.track_stock) return true;
+    if (item.allow_backorders) return true;
+    return stockQty > 0;
+  };
+
+  const selected: ProductWithDetails[] = [];
+  const selectedIds = new Set<string>();
+
+  async function fetchBy(field: 'subcategory_id' | 'category_id', value: string) {
+    const { data } = await (supabase.from('products') as any)
+      .select('*, images:product_images(*), category:categories(*), subcategory:subcategories(*)')
+      .eq('is_active', true)
+      .eq(field, value)
+      .neq('id', product.id)
+      .order('created_at', { ascending: false })
+      .limit(12);
+
+    return (data || []) as ProductWithDetails[];
+  }
+
+  if (product.subcategory_id) {
+    const candidates = await fetchBy('subcategory_id', product.subcategory_id);
+    for (const candidate of candidates) {
+      if (selected.length >= 4) break;
+      if (selectedIds.has(candidate.id)) continue;
+      if (!isAvailable(candidate)) continue;
+      selected.push({
+        ...candidate,
+        variants: [],
+        images: [...(candidate.images || [])].sort((a, b) => a.sort_order - b.sort_order),
+      });
+      selectedIds.add(candidate.id);
+    }
+  }
+
+  if (selected.length < 4 && product.category_id) {
+    const candidates = await fetchBy('category_id', product.category_id);
+    for (const candidate of candidates) {
+      if (selected.length >= 4) break;
+      if (selectedIds.has(candidate.id)) continue;
+      if (!isAvailable(candidate)) continue;
+      selected.push({
+        ...candidate,
+        variants: [],
+        images: [...(candidate.images || [])].sort((a, b) => a.sort_order - b.sort_order),
+      });
+      selectedIds.add(candidate.id);
+    }
+  }
+
+  return selected.slice(0, 4);
+}
+
 async function getLegacyProductHref(slug: string) {
   if (slug !== '1') return null;
 
@@ -91,6 +149,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
     notFound();
   }
 
+  const recommendedAddons = await getRecommendedAddons(product);
+
   const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
 
   return (
@@ -98,6 +158,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <Header whatsappUrl={whatsappUrl} />
       <main>
         <ProductDetail product={product} whatsappNumber={settings?.whatsapp_number} />
+        {recommendedAddons.length > 0 && <RecommendedAddons products={recommendedAddons} />}
       </main>
       <Footer settings={settings} />
     </div>
