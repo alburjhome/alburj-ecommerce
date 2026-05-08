@@ -471,10 +471,12 @@ export function OrdersClient() {
                       <span className="text-muted-foreground">الهاتف: </span>
                       <span dir="ltr">{selectedOrder.customer_phone}</span>
                     </p>
-                    <p>
-                      <span className="text-muted-foreground">البريد: </span>
-                      {selectedOrder.customer_email || '-'}
-                    </p>
+                    {selectedOrder.customer_email && (
+                      <p>
+                        <span className="text-muted-foreground">البريد: </span>
+                        {selectedOrder.customer_email}
+                      </p>
+                    )}
                     <p>
                       <span className="text-muted-foreground">المحافظة: </span>
                       {selectedOrder.governorate}

@@ -29,7 +29,6 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_phone: '',
-    customer_email: '',
     governorate: '',
     city: '',
     address: '',
@@ -126,7 +125,6 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
       const result = await createOrder({
         customer_name: formData.customer_name,
         customer_phone: formData.customer_phone,
-        customer_email: formData.customer_email || null,
         governorate: formData.governorate,
         city: formData.city,
         address: formData.address,
@@ -211,16 +209,6 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
             onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
             placeholder="07XXXXXXXX"
             required
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="email">البريد الإلكتروني (اختياري)</Label>
-          <Input
-            id="email"
-            type="email"
-            value={formData.customer_email}
-            onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
           />
         </div>
 
