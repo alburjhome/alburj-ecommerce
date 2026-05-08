@@ -1,8 +1,8 @@
 'use server';
 
 import { randomUUID } from 'crypto';
-import { revalidatePath } from 'next/cache';
 import { createAdminActionClient } from '@/lib/admin-auth';
+import { revalidateProductSurfaces } from '@/lib/revalidate-product-surfaces';
 
 export interface ActionResult<T = unknown> {
   success: boolean;
@@ -227,8 +227,7 @@ export async function uploadAdminProductImage(
     }
 
     await normalizePrimaryImage(adminClient, productId);
-    revalidatePath('/admin/products');
-    revalidatePath(`/admin/products/${productId}/edit`);
+    await revalidateProductSurfaces({ accessToken, productId, before: null, after: null });
 
     return { success: true, data: image as ProductImageRecord };
   } catch (error) {
@@ -266,8 +265,7 @@ export async function updateAdminProductImage(
 
     if (error) throw error;
 
-    revalidatePath('/admin/products');
-    revalidatePath(`/admin/products/${image.product_id}/edit`);
+    await revalidateProductSurfaces({ accessToken, productId: image.product_id, before: null, after: null });
     return { success: true };
   } catch (error) {
     logAdminImageError('updateAdminProductImage', error);
@@ -303,8 +301,7 @@ export async function setAdminProductPrimaryImage(
 
     if (primaryError) throw primaryError;
 
-    revalidatePath('/admin/products');
-    revalidatePath(`/admin/products/${image.product_id}/edit`);
+    await revalidateProductSurfaces({ accessToken, productId: image.product_id, before: null, after: null });
     return { success: true };
   } catch (error) {
     logAdminImageError('setAdminProductPrimaryImage', error);
@@ -337,8 +334,7 @@ export async function deleteAdminProductImage(
 
     await normalizePrimaryImage(adminClient, image.product_id);
 
-    revalidatePath('/admin/products');
-    revalidatePath(`/admin/products/${image.product_id}/edit`);
+    await revalidateProductSurfaces({ accessToken, productId: image.product_id, before: null, after: null });
     return { success: true };
   } catch (error) {
     logAdminImageError('deleteAdminProductImage', error);

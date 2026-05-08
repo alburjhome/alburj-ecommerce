@@ -222,8 +222,8 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         title: mode === 'create' ? 'تمت إضافة المنتج' : 'تم حفظ التعديلات',
         description: values.name,
       });
-      router.push('/admin/products');
       router.refresh();
+      router.replace('/admin/products');
     } catch (error) {
       toast({
         title: 'تعذر حفظ المنتج',

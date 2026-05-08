@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Edit, EyeOff, PackageOpen, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +16,8 @@ import {
 } from '@/app/actions/admin-products';
 import type { CategoryOption, ProductListFilters, ProductListRow } from '@/app/actions/admin-products';
 import { supabase } from '@/lib/supabase';
-import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
+import { PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
+import { getPrimaryProductImage } from '@/lib/product-image';
 import { formatPrice } from '@/lib/utils';
 
 const statusOptions = [
@@ -39,11 +41,11 @@ async function getAccessToken() {
 }
 
 function getPrimaryImage(product: ProductListRow) {
-  const images = Array.isArray(product.images) ? product.images : [];
-  return safeImageSrc(images.find((image) => image.is_primary)?.url || images[0]?.url, PLACEHOLDER_PRODUCT);
+  return getPrimaryProductImage(product);
 }
 
 export function ProductsClient() {
+  const router = useRouter();
   const { toast } = useToast();
   const [products, setProducts] = useState<ProductListRow[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -127,6 +129,7 @@ export function ProductsClient() {
         description: product.name,
       });
       await loadProducts();
+      router.refresh();
     } catch (error) {
       toast({
         title: 'تعذر تغيير حالة المنتج',
@@ -156,6 +159,7 @@ export function ProductsClient() {
 
       toast({ title: 'تم حذف المنتج', description: product.name });
       await loadProducts();
+      router.refresh();
     } catch (error) {
       toast({
         title: 'تعذر حذف المنتج',

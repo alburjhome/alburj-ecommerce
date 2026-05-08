@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ImageIcon, RefreshCw, Save, Star, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,6 +61,7 @@ function validateImageFile(file: File) {
 }
 
 export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
+  const router = useRouter();
   const { toast } = useToast();
   const [images, setImages] = useState<ProductImageRecord[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ImageDraft>>({});
@@ -181,6 +183,7 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
       }
       setFileInputKey((key) => key + 1);
       await loadImages();
+      router.refresh();
     } catch (error) {
       toast({
         title: 'تعذر رفع الصورة',
@@ -219,6 +222,7 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
 
       toast({ title: 'تم حفظ بيانات الصورة' });
       await loadImages();
+      router.refresh();
     } catch (error) {
       toast({
         title: 'تعذر حفظ بيانات الصورة',
@@ -244,6 +248,7 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
 
       toast({ title: 'تم تعيين الصورة الأساسية' });
       await loadImages();
+      router.refresh();
     } catch (error) {
       toast({
         title: 'تعذر تعيين الصورة الأساسية',
@@ -273,6 +278,7 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
 
       toast({ title: 'تم حذف الصورة' });
       await loadImages();
+      router.refresh();
     } catch (error) {
       toast({
         title: 'تعذر حذف الصورة',

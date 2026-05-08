@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createAdminActionClient } from '@/lib/admin-auth';
 import { ProductFormInput, productSchema } from '@/lib/product-validation';
 import { createReadableSlug, isValidSlug, normalizeSlug } from '@/lib/slug';
+import { getProductSurfaceRecord, revalidateProductSurfaces } from '@/lib/revalidate-product-surfaces';
 import type { Json } from '@/types/supabase';
 
 export interface ActionResult<T = unknown> {
@@ -349,7 +350,11 @@ export async function createAdminProduct(
 
     if (error) throw error;
 
-    revalidatePath('/admin/products');
+    if (data?.id) {
+      await revalidateProductSurfaces({ accessToken, productId: data.id, after: null, before: null });
+    } else {
+      revalidatePath('/admin/products');
+    }
     return { success: true, data: data ? ({ id: data.id } as { id: string }) : undefined };
   } catch (error) {
     logAdminActionError('createAdminProduct', error);
@@ -364,6 +369,7 @@ export async function updateAdminProduct(
 ): Promise<ActionResult> {
   try {
     const adminClient = await createAdminActionClient(accessToken);
+    const before = await getProductSurfaceRecord(accessToken, productId);
     const parsed = productSchema.safeParse(input);
 
     if (!parsed.success) {
@@ -384,8 +390,8 @@ export async function updateAdminProduct(
 
     if (error) throw error;
 
-    revalidatePath('/admin/products');
-    revalidatePath(`/admin/products/${productId}/edit`);
+    const after = await getProductSurfaceRecord(accessToken, productId);
+    await revalidateProductSurfaces({ accessToken, productId, before, after });
     return { success: true };
   } catch (error) {
     logAdminActionError('updateAdminProduct', error);
@@ -400,13 +406,15 @@ export async function toggleAdminProductActive(
 ): Promise<ActionResult> {
   try {
     const adminClient = await createAdminActionClient(accessToken);
+    const before = await getProductSurfaceRecord(accessToken, productId);
     const { error } = await (adminClient.from('products') as any)
       .update({ is_active: isActive })
       .eq('id', productId);
 
     if (error) throw error;
 
-    revalidatePath('/admin/products');
+    const after = await getProductSurfaceRecord(accessToken, productId);
+    await revalidateProductSurfaces({ accessToken, productId, before, after });
     return { success: true };
   } catch (error) {
     logAdminActionError('toggleAdminProductActive', error);
@@ -420,13 +428,15 @@ export async function deleteAdminProduct(
 ): Promise<ActionResult> {
   try {
     const adminClient = await createAdminActionClient(accessToken);
+    const before = await getProductSurfaceRecord(accessToken, productId);
     const { error } = await (adminClient.from('products') as any)
       .delete()
       .eq('id', productId);
 
     if (error) throw error;
 
-    revalidatePath('/admin/products');
+    // After delete we can't fetch the new record.
+    await revalidateProductSurfaces({ accessToken, productId, before, after: null });
     return { success: true };
   } catch (error) {
     logAdminActionError('deleteAdminProduct', error);
