@@ -218,12 +218,26 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         throw new Error(result.error || 'تعذر حفظ المنتج');
       }
 
-      toast({
-        title: mode === 'create' ? 'تمت إضافة المنتج' : 'تم حفظ التعديلات',
-        description: values.name,
-      });
-      router.refresh();
-      router.replace('/admin/products');
+      if (mode === 'create') {
+        const created = (result as { success: boolean; data?: { id: string; slug: string } }).data;
+        if (!created?.id) {
+          throw new Error('تعذر إنشاء المنتج');
+        }
+
+        toast({
+          title: 'تم إنشاء المنتج، يمكنك الآن رفع الصور.',
+          description: values.name,
+        });
+        router.refresh();
+        router.replace(`/admin/products/${created.id}/edit?focus=images`);
+      } else {
+        toast({
+          title: 'تم حفظ التعديلات',
+          description: values.name,
+        });
+        router.refresh();
+        router.replace('/admin/products');
+      }
     } catch (error) {
       toast({
         title: 'تعذر حفظ المنتج',
@@ -322,6 +336,13 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           </div>
         </div>
       </section>
+
+      {mode === 'create' && (
+        <section className="rounded-lg border bg-card p-5 shadow-sm">
+          <h2 className="mb-2 text-lg font-semibold">صور المنتج</h2>
+          <p className="text-sm text-muted-foreground">احفظ المنتج أولًا حتى تتمكن من رفع الصور.</p>
+        </section>
+      )}
 
       <section className="rounded-lg border bg-card p-5 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold">التسعير والمخزون</h2>

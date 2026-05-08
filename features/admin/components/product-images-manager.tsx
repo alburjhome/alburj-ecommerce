@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 
 interface ProductImagesManagerProps {
   productId: string;
+  focusOnMount?: boolean;
 }
 
 interface ImageDraft {
@@ -60,7 +61,7 @@ function validateImageFile(file: File) {
   return null;
 }
 
-export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
+export function ProductImagesManager({ productId, focusOnMount = false }: ProductImagesManagerProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [images, setImages] = useState<ProductImageRecord[]>([]);
@@ -105,6 +106,17 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
   useEffect(() => {
     loadImages();
   }, [loadImages]);
+
+  useEffect(() => {
+    if (!focusOnMount) return;
+
+    const id = window.setTimeout(() => {
+      const container = document.getElementById('product-images');
+      container?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+
+    return () => window.clearTimeout(id);
+  }, [focusOnMount]);
 
   useEffect(() => {
     return () => {
@@ -294,7 +306,9 @@ export function ProductImagesManager({ productId }: ProductImagesManagerProps) {
     <section className="rounded-lg border bg-card p-5 shadow-sm">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">صور المنتج</h2>
+          <h2 className={focusOnMount ? 'text-lg font-semibold ring-2 ring-primary/30 rounded-md px-2 py-1 inline-block' : 'text-lg font-semibold'}>
+            صور المنتج
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             يفضل صور مربعة 1000×1000 أو 1200×1200، بخلفية نظيفة والمنتج يملأ 70–85% من الصورة. رفع الصور محدود بـ 5MB.
           </p>

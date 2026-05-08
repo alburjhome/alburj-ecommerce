@@ -326,7 +326,7 @@ export async function getAdminProductFormData(
 export async function createAdminProduct(
   accessToken: string | null,
   input: ProductFormInput
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; slug: string }>> {
   try {
     const adminClient = await createAdminActionClient(accessToken);
     const parsed = productSchema.safeParse(input);
@@ -345,7 +345,7 @@ export async function createAdminProduct(
 
     const { data, error } = await (adminClient.from('products') as any)
       .insert(payload)
-      .select('id')
+      .select('id, slug')
       .single();
 
     if (error) throw error;
@@ -355,7 +355,10 @@ export async function createAdminProduct(
     } else {
       revalidatePath('/admin/products');
     }
-    return { success: true, data: data ? ({ id: data.id } as { id: string }) : undefined };
+    return {
+      success: true,
+      data: data ? ({ id: data.id, slug: data.slug } as { id: string; slug: string }) : undefined,
+    };
   } catch (error) {
     logAdminActionError('createAdminProduct', error);
     return { success: false, error: friendlyError(error) };
