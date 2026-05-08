@@ -97,7 +97,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     <div className="min-h-screen bg-background">
       <Header whatsappUrl={whatsappUrl} />
       <main>
-        <ProductDetail product={product} />
+        <ProductDetail product={product} whatsappNumber={settings?.whatsapp_number} />
       </main>
       <Footer settings={settings} />
     </div>

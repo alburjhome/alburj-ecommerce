@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, Flame, Tag } from 'lucide-react';
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
@@ -39,9 +39,30 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
     openCart();
   };
 
+  const isAvailable = !product.track_stock || (product.stock_quantity ?? 0) > 0;
+
   return (
     <div className="group relative bg-card rounded-lg border overflow-hidden product-card">
-      {hasDiscount && <span className="discount-badge">-{discountPercentage}%</span>}
+      {/* Badges Stack */}
+      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1.5">
+        {product.is_featured && (
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
+            <Flame className="h-3 w-3" />
+            الأكثر طلبًا
+          </span>
+        )}
+        {hasDiscount && (
+          <span className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
+            <Tag className="h-3 w-3" />
+            عرض
+          </span>
+        )}
+        {isAvailable && (
+          <span className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
+            متوفر
+          </span>
+        )}
+      </div>
 
       <div className="relative aspect-square overflow-hidden">
         <Link href={`/product/${product.slug}`} className="relative block h-full w-full image-zoom">
@@ -81,21 +102,12 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
           )}
         </div>
 
-        {/* Stock Status - Unified Logic */}
-        <div className="mt-2 text-xs">
-          {(() => {
-            // Handle undefined/null stock_quantity
-            const stockQty = product.stock_quantity ?? 0;
-            // If track_stock is false, always show available
-            const isAvailable = !product.track_stock || stockQty > 0;
-            
-            return isAvailable ? (
-              <span className="in-stock">متوفر</span>
-            ) : (
-              <span className="out-of-stock">نفدت الكمية</span>
-            );
-          })()}
-        </div>
+        {/* Out of stock warning only */}
+        {!isAvailable && (
+          <div className="mt-2 text-xs">
+            <span className="out-of-stock">نفدت الكمية</span>
+          </div>
+        )}
 
         {/* Add to Cart Button - Only disabled when truly out of stock */}
         <Button

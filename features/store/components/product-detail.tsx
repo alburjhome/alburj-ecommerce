@@ -1,19 +1,21 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Minus, Plus, ShoppingCart } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, Award, Home, Store, UtensilsCrossed, Briefcase, MessageCircle, Package } from 'lucide-react';
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
 import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
 import { calculateDiscountPercentage, formatPrice } from '@/lib/utils';
 import useCartStore from '@/stores/cart';
+import { getWhatsAppLink } from '@/lib/store-settings';
 
 interface ProductDetailProps {
   product: ProductWithDetails;
+  whatsappNumber?: string | null;
 }
 
-export function ProductDetail({ product }: ProductDetailProps) {
+export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const { addItem, openCart } = useCartStore();
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -63,6 +65,13 @@ export function ProductDetail({ product }: ProductDetailProps) {
     });
     openCart();
   }
+
+  const productUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const inquiryText = `مرحبا، أريد الاستفسار عن المنتج:\n${product.name}\nالسعر: ${formatPrice(product.price)}\nالرابط: ${productUrl}`;
+  const orderText = `مرحبا، أريد طلب:\n${product.name}\nالكمية: ${quantity}\nالسعر: ${formatPrice(product.price)}\nالرابط: ${productUrl}`;
+  const whatsappUrl = getWhatsAppLink(whatsappNumber);
+  const inquiryUrl = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(inquiryText)}` : null;
+  const orderUrl = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(orderText)}` : null;
 
   return (
     <section className="container mx-auto px-4 py-8 md:py-12">
@@ -179,6 +188,79 @@ export function ProductDetail({ product }: ProductDetailProps) {
             <div className="border-t pt-5">
               <h2 className="mb-2 font-semibold">وصف المنتج</h2>
               <p className="whitespace-pre-line leading-7 text-muted-foreground">{product.description}</p>
+            </div>
+          )}
+
+          {/* Why Choose This Product */}
+          <div className="border-t pt-5">
+            <h2 className="mb-3 font-semibold">لماذا تختار هذا المنتج؟</h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { icon: Award, label: 'جودة ممتازة' },
+                { icon: Package, label: 'مناسب للاستخدام اليومي' },
+                { icon: ShoppingCart, label: 'سعر مناسب' },
+                { icon: Award, label: 'توصيل لجميع المحافظات' },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="flex flex-col items-center gap-2 rounded-lg border bg-muted/50 p-3 text-center"
+                >
+                  <item.icon className="h-5 w-5 text-primary" />
+                  <span className="text-xs font-medium leading-tight">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Suitable For */}
+          <div className="border-t pt-5">
+            <h2 className="mb-3 font-semibold">مناسب لـ</h2>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { icon: Home, label: 'البيت' },
+                { icon: Store, label: 'المحلات' },
+                { icon: UtensilsCrossed, label: 'المطاعم' },
+                { icon: Briefcase, label: 'المكاتب' },
+              ].map((item) => (
+                <span
+                  key={item.label}
+                  className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium"
+                >
+                  <item.icon className="h-3.5 w-3.5 text-primary" />
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* WhatsApp CTA */}
+          {whatsappUrl && (
+            <div className="border-t pt-5">
+              <h2 className="mb-3 font-semibold">اطلب عبر واتساب</h2>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {inquiryUrl && (
+                  <a
+                    href={inquiryUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-green-600 bg-white px-4 py-2.5 text-sm font-semibold text-green-700 transition-colors hover:bg-green-50"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    اسألنا عن هذا المنتج
+                  </a>
+                )}
+                {orderUrl && (
+                  <a
+                    href={orderUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    اطلبه مباشرة
+                  </a>
+                )}
+              </div>
             </div>
           )}
         </div>
