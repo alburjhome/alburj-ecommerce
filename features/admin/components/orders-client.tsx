@@ -446,9 +446,9 @@ export function OrdersClient() {
       </div>
 
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-          <div className="mt-10 w-full max-w-5xl rounded-lg border bg-background shadow-xl">
-            <div className="flex items-center justify-between border-b px-5 py-4">
+        <div className="fixed inset-0 z-50 bg-black/50 p-2 sm:p-4">
+          <div className="mx-auto mt-10 w-[calc(100vw-1rem)] max-w-6xl rounded-lg border bg-background shadow-xl sm:w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-background px-4 py-4 sm:px-5">
               <div>
                 <h2 className="text-lg font-semibold">تفاصيل الطلب {selectedOrder.order_number}</h2>
                 <p className="text-sm text-muted-foreground">{formatDateTime(selectedOrder.created_at)}</p>
@@ -458,7 +458,7 @@ export function OrdersClient() {
               </Button>
             </div>
 
-            <div className="grid gap-5 p-5 lg:grid-cols-[1fr_340px]">
+            <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_360px]">
               <div className="space-y-5">
                 <section className="rounded-lg border p-4">
                   <h3 className="font-semibold">بيانات العميل والعنوان</h3>
@@ -502,39 +502,43 @@ export function OrdersClient() {
 
                 <section className="rounded-lg border p-4">
                   <h3 className="font-semibold">المنتجات</h3>
-                  <div className="mt-3 overflow-x-auto">
-                    <table className="w-full min-w-[640px] text-sm">
-                      <thead className="border-b text-muted-foreground">
-                        <tr>
-                          <th className="py-2 text-right font-medium">المنتج</th>
-                          <th className="py-2 text-right font-medium">SKU</th>
-                          <th className="py-2 text-right font-medium">الكمية</th>
-                          <th className="py-2 text-right font-medium">سعر الوحدة</th>
-                          <th className="py-2 text-right font-medium">الإجمالي</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedOrder.items.map((item) => (
-                          <tr key={item.id} className="border-b last:border-0">
-                            <td className="py-3 font-medium">
-                              {item.product_name}
-                              {item.variant_name && (
-                                <span className="block text-xs text-muted-foreground">{item.variant_name}</span>
-                              )}
-                            </td>
-                            <td className="py-3 text-muted-foreground">{item.product_sku || '-'}</td>
-                            <td className="py-3">{item.quantity}</td>
-                            <td className="py-3">{formatPrice(Number(item.unit_price))}</td>
-                            <td className="py-3 font-medium">{formatPrice(Number(item.total_price))}</td>
+                  {selectedOrder.items.length === 0 ? (
+                    <p className="mt-3 text-sm text-muted-foreground">لا توجد منتجات ضمن هذا الطلب.</p>
+                  ) : (
+                    <div className="mt-3 max-w-full overflow-x-auto">
+                      <table className="w-full min-w-[560px] text-sm">
+                        <thead className="border-b text-muted-foreground">
+                          <tr>
+                            <th className="py-2 text-right font-medium">المنتج</th>
+                            <th className="py-2 text-right font-medium">SKU</th>
+                            <th className="py-2 text-right font-medium">الكمية</th>
+                            <th className="py-2 text-right font-medium">سعر الوحدة</th>
+                            <th className="py-2 text-right font-medium">الإجمالي</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {selectedOrder.items.map((item) => (
+                            <tr key={item.id} className="border-b last:border-0">
+                              <td className="py-3 font-medium">
+                                {item.product_name}
+                                {item.variant_name && (
+                                  <span className="block text-xs text-muted-foreground">{item.variant_name}</span>
+                                )}
+                              </td>
+                              <td className="py-3 text-muted-foreground">{item.product_sku || '-'}</td>
+                              <td className="py-3">{item.quantity}</td>
+                              <td className="py-3">{formatPrice(Number(item.unit_price))}</td>
+                              <td className="py-3 font-medium">{formatPrice(Number(item.total_price))}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </section>
               </div>
 
-              <aside className="space-y-4">
+              <aside className="space-y-4 lg:sticky lg:top-[84px] lg:self-start">
                 <section className="rounded-lg border p-4">
                   <h3 className="font-semibold">الحالة</h3>
                   <div className="mt-3 space-y-3">
