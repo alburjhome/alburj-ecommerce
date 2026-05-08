@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, X } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
 import useCartStore from '@/stores/cart';
@@ -18,7 +18,7 @@ export function CartDrawer() {
   if (showCheckout) {
     return (
       <Sheet open={isOpen} onOpenChange={(open) => !open && closeCart()}>
-        <SheetContent side="left" className="w-full sm:max-w-md">
+        <SheetContent side="left" className="w-full sm:max-w-md [&>button]:hidden">
           <SheetHeader className="sr-only">
             <SheetTitle>Checkout</SheetTitle>
             <SheetDescription>Enter delivery details and send the order to WhatsApp.</SheetDescription>
@@ -31,15 +31,26 @@ export function CartDrawer() {
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && closeCart()}>
-      <SheetContent side="left" className="w-full sm:max-w-md flex flex-col">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+      <SheetContent side="left" className="w-full sm:max-w-md flex flex-col p-0 [&>button]:hidden">
+        <div className="flex items-center justify-between gap-4 border-b px-4 py-4">
+          <div className="flex items-center gap-2">
             <ShoppingBag className="h-5 w-5" />
-            سلة المشتريات ({items.length})
-          </SheetTitle>
-          <SheetDescription className="sr-only">
-            Review cart items, adjust quantities, or continue to checkout.
-          </SheetDescription>
+            <h2 className="text-lg font-bold">سلة المشتريات ({items.length})</h2>
+          </div>
+          <SheetClose asChild>
+            <button
+              type="button"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
+              aria-label="إغلاق السلة"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </SheetClose>
+        </div>
+
+        <SheetHeader className="sr-only">
+          <SheetTitle>سلة المشتريات</SheetTitle>
+          <SheetDescription>Review cart items, adjust quantities, or continue to checkout.</SheetDescription>
         </SheetHeader>
 
         {items.length === 0 ? (
@@ -53,7 +64,7 @@ export function CartDrawer() {
         ) : (
           <>
             {/* Cart Items */}
-            <div className="flex-1 overflow-auto py-4 space-y-4">
+            <div className="flex-1 overflow-auto px-4 py-4 space-y-4">
               {items.map((item) => (
                 <div key={item.id} className="flex gap-3 p-3 bg-muted rounded-lg">
                   <div className="relative w-20 h-20 rounded-md overflow-hidden shrink-0">
@@ -106,7 +117,7 @@ export function CartDrawer() {
             </div>
 
             {/* Footer */}
-            <div className="border-t pt-4 space-y-4">
+            <div className="border-t px-4 pt-4 pb-4 space-y-4">
               <div className="flex justify-between text-lg font-semibold">
                 <span>المجموع:</span>
                 <span className="text-primary">{formatPrice(total)}</span>
