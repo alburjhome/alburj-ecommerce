@@ -48,7 +48,7 @@ export function Header() {
       </div>
 
       <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between gap-4">
+        <div className="flex h-[4.5rem] items-center justify-between gap-4">
           <Sheet>
             <SheetTrigger asChild className="lg:hidden">
               <Button variant="ghost" size="icon">
@@ -75,7 +75,11 @@ export function Header() {
           </Sheet>
 
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold text-primary">مؤسسة البرج</span>
+            <img
+              src="/brand/logo.svg"
+              alt="مؤسسة البرج"
+              className="h-8 w-auto object-contain md:h-10"
+            />
           </Link>
 
           <nav className="hidden lg:flex items-center gap-6">
@@ -90,8 +94,8 @@ export function Header() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2">
-            <div className={cn('hidden md:flex items-center', isSearchOpen && 'flex')}>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="hidden md:flex items-center">
               <form onSubmit={handleSearch} className="relative">
                 <Input
                   type="search"

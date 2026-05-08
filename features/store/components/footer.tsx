@@ -50,7 +50,11 @@ export function Footer({ settings }: FooterProps) {
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           <div className="space-y-4">
-            <h3 className="text-xl font-bold text-primary">{storeName}</h3>
+            <img
+              src="/brand/logo.svg"
+              alt="مؤسسة البرج"
+              className="h-10 w-auto object-contain"
+            />
             <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
             <div className="flex gap-3">
               <a
