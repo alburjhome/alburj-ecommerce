@@ -143,7 +143,7 @@ export function Header() {
 
         {isSearchOpen && (
           <div className="md:hidden pb-4">
-            <form onSubmit={handleSearch} className="relative">
+            <form onSubmit={handleSearch}>
               <Input
                 type="search"
                 placeholder="ابحث عن منتج..."
@@ -151,14 +151,6 @@ export function Header() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full"
               />
-              <Button
-                type="submit"
-                variant="ghost"
-                size="icon"
-                className="absolute left-2 top-1/2 -translate-y-1/2"
-              >
-                <Search className="h-4 w-4" />
-              </Button>
             </form>
           </div>
         )}
