@@ -77,6 +77,7 @@ export interface ProductFormRecord {
   subcategory_id: string | null;
   brand: string | null;
   tags: string[] | null;
+  intent_tags: string[] | null;
   weight: number | null;
   dimensions: Json | null;
   is_active: boolean;
@@ -125,6 +126,7 @@ function normalizeProductInput(input: ProductFormInput) {
     subcategory_id: input.subcategory_id,
     brand: normalizeNullable(input.brand),
     tags: input.tags.length ? input.tags : null,
+    intent_tags: input.intent_tags.length ? input.intent_tags : null,
     weight: input.weight,
     dimensions: hasDimensions ? dimensions : null,
     is_active: input.is_active,

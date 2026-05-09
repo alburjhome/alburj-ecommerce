@@ -130,6 +130,7 @@ export interface Database {
           subcategory_id: string | null;
           brand: string | null;
           tags: string[] | null;
+          intent_tags: string[] | null;
           weight: number | null;
           dimensions: Json | null;
           is_active: boolean;
@@ -159,6 +160,7 @@ export interface Database {
           subcategory_id?: string | null;
           brand?: string | null;
           tags?: string[] | null;
+          intent_tags?: string[] | null;
           weight?: number | null;
           dimensions?: Json | null;
           is_active?: boolean;
@@ -188,6 +190,7 @@ export interface Database {
           subcategory_id?: string | null;
           brand?: string | null;
           tags?: string[] | null;
+          intent_tags?: string[] | null;
           weight?: number | null;
           dimensions?: Json | null;
           is_active?: boolean;

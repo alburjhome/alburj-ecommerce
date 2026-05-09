@@ -33,6 +33,9 @@ export const productSchema = z.object({
   subcategory_id: z.string().uuid().nullable(),
   brand: z.string().trim().nullable(),
   tags: z.array(z.string().trim().min(1)).default([]),
+  intent_tags: z
+    .array(z.enum(['home', 'restaurants', 'shops', 'packaging', 'cleaning', 'bulk']))
+    .default([]),
   weight: optionalNumber,
   dimensions: z
     .object({

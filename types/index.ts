@@ -90,6 +90,7 @@ export interface Product {
   subcategory_id: string | null;
   brand: string | null;
   tags: string[] | null;
+  intent_tags: string[] | null;
   weight: number | null;
   dimensions: { length: number; width: number; height: number } | null;
   is_active: boolean;

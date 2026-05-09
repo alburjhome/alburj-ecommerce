@@ -3,60 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
-
-export type ProductIntentKey =
-  | 'all'
-  | 'home'
-  | 'restaurants'
-  | 'shops'
-  | 'packaging'
-  | 'cleaning'
-  | 'bulk';
-
-export const INTENT_CONFIG: Array<{
-  key: ProductIntentKey;
-  label: string;
-  title: string;
-  categorySlugs: string[];
-}> = [
-  { key: 'all', label: 'الكل', title: 'جميع المنتجات', categorySlugs: [] },
-  {
-    key: 'home',
-    label: 'للبيت',
-    title: 'منتجات مناسبة للبيت',
-    categorySlugs: ['home-kitchen', 'cleaning-paper-personal-care', 'furnishings-linens', 'electrical-appliances'],
-  },
-  {
-    key: 'restaurants',
-    label: 'للمطاعم والكافيهات',
-    title: 'منتجات مناسبة للمطاعم والكافيهات',
-    categorySlugs: ['restaurants-shops', 'plastic-packaging', 'cleaning-paper-personal-care'],
-  },
-  {
-    key: 'shops',
-    label: 'للمحلات',
-    title: 'منتجات مناسبة للمحلات',
-    categorySlugs: ['restaurants-shops', 'plastic-packaging', 'cleaning-paper-personal-care', 'offers-bulk'],
-  },
-  {
-    key: 'packaging',
-    label: 'للتغليف',
-    title: 'مستلزمات التغليف',
-    categorySlugs: ['plastic-packaging', 'restaurants-shops'],
-  },
-  {
-    key: 'cleaning',
-    label: 'للتنظيف اليومي',
-    title: 'منتجات التنظيف اليومي',
-    categorySlugs: ['cleaning-paper-personal-care', 'home-kitchen'],
-  },
-  {
-    key: 'bulk',
-    label: 'للكميات والعروض',
-    title: 'عروض وكميات',
-    categorySlugs: ['offers-bulk', 'plastic-packaging', 'restaurants-shops'],
-  },
-];
+import { INTENT_CONFIG, type ProductIntentKey } from '@/lib/product-intents';
 
 interface ProductIntentFiltersProps {
   selected: ProductIntentKey;

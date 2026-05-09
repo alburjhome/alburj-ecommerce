@@ -20,6 +20,7 @@ import type { ProductFormDataResult, ProductFormRecord } from '@/app/actions/adm
 import { supabase } from '@/lib/supabase';
 import { normalizeSlug } from '@/lib/slug';
 import { ProductFormInput, parseTags, productSchema, slugify, tagsToString } from '@/lib/product-validation';
+import { INTENT_TAG_CONFIG } from '@/lib/product-intents';
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
@@ -43,6 +44,7 @@ const emptyProduct: ProductFormInput = {
   subcategory_id: null,
   brand: null,
   tags: [],
+  intent_tags: [],
   weight: null,
   dimensions: {
     length: null,
@@ -88,6 +90,7 @@ function asFormValue(product: ProductFormRecord | null): ProductFormInput {
     subcategory_id: product.subcategory_id,
     brand: product.brand,
     tags: product.tags || [],
+    intent_tags: (product.intent_tags || []) as ProductFormInput['intent_tags'],
     weight: product.weight === null ? null : Number(product.weight),
     dimensions: {
       length: dimensions?.length ?? null,
@@ -139,6 +142,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const isActive = watch('is_active');
   const isFeatured = watch('is_featured');
   const selectedSubcategoryId = watch('subcategory_id');
+  const intentTags = watch('intent_tags');
 
   const filteredSubcategories = useMemo(() => {
     return formData.subcategories.filter((subcategory) => subcategory.category_id === selectedCategoryId);
@@ -203,6 +207,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         subcategory_id: values.subcategory_id || null,
         brand: values.brand || null,
         tags: parseTags(tagsText),
+        intent_tags: values.intent_tags,
         weight: values.weight ?? null,
         dimensions: values.dimensions || { length: null, width: null, height: null },
         meta_title: values.meta_title || null,
@@ -452,6 +457,34 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             <Input id="weight" type="number" step="0.01" min="0" {...register('weight')} />
           </div>
         </div>
+      </section>
+
+      <section className="rounded-lg border bg-card p-5 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold">مناسب لـ</h2>
+        <div className="flex flex-wrap gap-3">
+          {INTENT_TAG_CONFIG.map((tag) => (
+            <label
+              key={tag.key}
+              className="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm transition-colors hover:bg-muted"
+            >
+              <input
+                type="checkbox"
+                checked={intentTags?.includes(tag.key)}
+                onChange={(event) => {
+                  const current = intentTags || [];
+                  const next = event.target.checked
+                    ? [...current, tag.key]
+                    : current.filter((t) => t !== tag.key);
+                  setValue('intent_tags', next as ProductFormInput['intent_tags'], { shouldDirty: true });
+                }}
+              />
+              {tag.label}
+            </label>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          حدد الاستخدامات التي يناسبها هذا المنتج لتظهر في فلاتر "تسوق حسب احتياجك".
+        </p>
       </section>
 
       <section className="rounded-lg border bg-card p-5 shadow-sm">

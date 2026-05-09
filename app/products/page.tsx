@@ -3,12 +3,14 @@ import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductCard } from '@/features/store/components/product-card';
-import {
-  INTENT_CONFIG,
-  ProductIntentFilters,
-  type ProductIntentKey,
-} from '@/features/store/components/product-intent-filters';
+import { ProductIntentFilters } from '@/features/store/components/product-intent-filters';
 import { getWhatsAppLink } from '@/lib/store-settings';
+import {
+  getIntentConfig,
+  normalizeIntent,
+  productMatchesIntent,
+  type ProductIntentKey,
+} from '@/lib/product-intents';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -71,19 +73,22 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const [products, settings] = await Promise.all([getProducts(searchParams?.search), getSettings()]);
   const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
 
-  const rawIntent = searchParams?.intent;
-  const selectedIntent = (INTENT_CONFIG.some((item) => item.key === rawIntent)
-    ? (rawIntent as ProductIntentKey)
-    : 'all') as ProductIntentKey;
-  const intentConfig = INTENT_CONFIG.find((item) => item.key === selectedIntent) || INTENT_CONFIG[0];
-  const filteredProducts =
-    selectedIntent === 'all'
-      ? products
-      : products.filter((product) => {
-          const slug = product.category?.slug;
-          if (!slug) return false;
-          return intentConfig.categorySlugs.includes(slug);
-        });
+  const selectedIntent = normalizeIntent((searchParams as any)?.intent);
+  const intentConfig = getIntentConfig(selectedIntent);
+
+  let filteredProducts = products;
+  try {
+    filteredProducts =
+      selectedIntent === 'all'
+        ? products
+        : products.filter((product) => productMatchesIntent(product, selectedIntent));
+  } catch (error) {
+    console.error('Products intent filter failed', {
+      selectedIntent,
+      error,
+    });
+    filteredProducts = products;
+  }
 
   return (
     <div className="min-h-screen bg-background">
