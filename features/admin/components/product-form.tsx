@@ -118,20 +118,21 @@ function FieldError({ message }: { message?: string }) {
 export function ProductForm({ mode, productId }: ProductFormProps) {
   const router = useRouter();
   const { toast } = useToast();
+
   const [isLoading, setIsLoading] = useState(true);
+  const [formData, setFormData] = useState<ProductFormDataResult | null>(null);
+  const [product, setProduct] = useState<ProductFormRecord | null>(null);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<ProductFormDataResult>({
-    categories: [],
-    subcategories: [],
-    product: null,
-  });
   const [tagsText, setTagsText] = useState('');
   const [slugTouched, setSlugTouched] = useState(mode === 'edit');
+  const [hasAiSuggestedTaxonomy, setHasAiSuggestedTaxonomy] = useState(false);
 
   const {
     register,
     handleSubmit,
     setValue,
+    getValues,
     watch,
     reset,
     formState: { errors },
@@ -152,9 +153,153 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const productBadges = watch('product_badges');
   const keyFeatures = watch('key_features');
 
+  async function handleGenerateAi({ replace }: { replace: boolean }) {
+    if (!formData) return;
+
+    const currentValues = getValues();
+
+    setIsGeneratingAi(true);
+    try {
+      const token = await getAccessToken();
+      const response = await fetch('/api/admin/ai/product-copy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          name: currentValues.name,
+          price: currentValues.price,
+          comparePrice: currentValues.compare_price,
+          existingDescription: currentValues.description,
+          existingShortDescription: currentValues.short_description,
+          existingMarketingTagline: currentValues.marketing_tagline,
+          existingKeyFeatures: currentValues.key_features,
+          existingProductBadges: currentValues.product_badges,
+          existingIntentTags: currentValues.intent_tags,
+          sku: currentValues.sku,
+          metaTitle: currentValues.meta_title,
+          metaDescription: currentValues.meta_description,
+          currentCategoryId: currentValues.category_id,
+          currentSubcategoryId: currentValues.subcategory_id,
+          categories: formData.categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+          subcategories: formData.subcategories.map((s) => ({
+            id: s.id,
+            name: s.name,
+            slug: s.slug,
+            category_id: s.category_id,
+          })),
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const errorMessage = data?.error || 'فشل توليد المحتوى';
+        if (errorMessage === 'AI service is not configured') {
+          toast({
+            title: 'خدمة الذكاء الاصطناعي غير مفعلة',
+            description: 'أضف GEMINI_API_KEY.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        toast({
+          title: 'فشل توليد المحتوى',
+          description: String(errorMessage),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const shouldSet = (field: keyof ProductFormInput) => {
+        if (replace) return true;
+        const value = (currentValues as any)[field];
+        if (Array.isArray(value)) return value.length === 0;
+        if (typeof value === 'string') return value.trim().length === 0;
+        return value === null || value === undefined;
+      };
+
+      const shouldSetCategory = () => {
+        if (replace) return true;
+        return !currentValues.category_id;
+      };
+
+      const shouldSetSubcategory = () => {
+        if (replace) return true;
+        return !currentValues.subcategory_id;
+      };
+
+      if (shouldSet('marketing_tagline') && data?.marketing_tagline) {
+        setValue('marketing_tagline', data.marketing_tagline, { shouldDirty: true });
+      }
+
+      if (shouldSet('key_features') && Array.isArray(data?.key_features)) {
+        setValue('key_features', data.key_features, { shouldDirty: true });
+      }
+
+      if (shouldSet('product_badges') && Array.isArray(data?.product_badges)) {
+        setValue('product_badges', data.product_badges, { shouldDirty: true });
+      }
+
+      if (shouldSet('intent_tags') && Array.isArray(data?.intent_tags)) {
+        setValue('intent_tags', data.intent_tags, { shouldDirty: true });
+      }
+
+      if (shouldSet('description') && data?.description) {
+        setValue('description', data.description, { shouldDirty: true });
+      }
+
+      if (shouldSet('short_description') && data?.description) {
+        const short = String(data.description).split('\n').filter(Boolean)[0] || data.description;
+        setValue('short_description', short, { shouldDirty: true });
+      }
+
+      if (shouldSet('meta_title') && data?.meta_title) {
+        setValue('meta_title', data.meta_title, { shouldDirty: true });
+      }
+
+      if (shouldSet('meta_description') && data?.meta_description) {
+        setValue('meta_description', data.meta_description, { shouldDirty: true });
+      }
+
+      if (shouldSet('sku') && data?.suggested_sku) {
+        setValue('sku', data.suggested_sku, { shouldDirty: true });
+      }
+
+      const aiSuggestedCategoryId = typeof data?.category_id === 'string' ? data.category_id : null;
+      const aiSuggestedSubcategoryId = typeof data?.subcategory_id === 'string' ? data.subcategory_id : null;
+
+      if (aiSuggestedCategoryId || aiSuggestedSubcategoryId) {
+        setHasAiSuggestedTaxonomy(true);
+      }
+
+      if (shouldSetCategory() && aiSuggestedCategoryId) {
+        setValue('category_id', aiSuggestedCategoryId, { shouldDirty: true, shouldValidate: true });
+      }
+
+      if (shouldSetSubcategory() && aiSuggestedSubcategoryId) {
+        setValue('subcategory_id', aiSuggestedSubcategoryId, { shouldDirty: true });
+      }
+
+      toast({
+        title: 'تم توليد المحتوى واقتراح التصنيف وSEO، راجعه قبل الحفظ.',
+      });
+    } catch {
+      toast({
+        title: 'فشل توليد المحتوى',
+        description: 'تعذر الاتصال بخدمة الذكاء الاصطناعي.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  }
+
   const filteredSubcategories = useMemo(() => {
-    return formData.subcategories.filter((subcategory) => subcategory.category_id === selectedCategoryId);
-  }, [formData.subcategories, selectedCategoryId]);
+    return (formData?.subcategories || []).filter(
+      (subcategory) => subcategory.category_id === selectedCategoryId
+    );
+  }, [formData, selectedCategoryId]);
 
   useEffect(() => {
     let mounted = true;
@@ -354,7 +499,38 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       </section>
 
       <section className="rounded-lg border bg-card p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">معلومات تسويقية</h2>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold">معلومات تسويقية</h2>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={isGeneratingAi}
+              onClick={() => handleGenerateAi({ replace: false })}
+            >
+              {isGeneratingAi ? 'جاري التوليد...' : 'ولّد بالذكاء الاصطناعي'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isGeneratingAi}
+              onClick={() => {
+                const ok = window.confirm('هل تريد استبدال الحقول التسويقية وSEO والتصنيف بالمقترح؟');
+                if (!ok) return;
+                handleGenerateAi({ replace: true });
+              }}
+            >
+              استبدال بالمقترح
+            </Button>
+          </div>
+        </div>
+        {hasAiSuggestedTaxonomy && (
+          <p className="mb-4 text-xs text-muted-foreground">
+            تم اقتراح القسم والفئة بناءً على اسم المنتج، تأكد منها قبل الحفظ.
+          </p>
+        )}
         <div className="grid gap-4">
           <div>
             <Label htmlFor="marketing_tagline">عبارة تسويقية قصيرة</Label>
@@ -479,7 +655,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                 <SelectValue placeholder="اختر القسم" />
               </SelectTrigger>
               <SelectContent>
-                {formData.categories.map((category) => (
+                {(formData?.categories || []).map((category) => (
                   <SelectItem key={category.id} value={category.id}>
                     {category.name}
                   </SelectItem>

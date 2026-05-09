@@ -27,11 +27,13 @@ const PAGE_SIZE = 10;
 export interface CategoryOption {
   id: string;
   name: string;
+  slug: string;
 }
 
 export interface SubcategoryOption {
   id: string;
   name: string;
+  slug: string;
   category_id: string;
 }
 
@@ -304,9 +306,9 @@ export async function getAdminProductFormData(
     const adminClient = await createAdminActionClient(accessToken);
 
     const [categoriesResult, subcategoriesResult, productResult] = await Promise.all([
-      (adminClient.from('categories') as any).select('id, name').order('sort_order', { ascending: true }),
+      (adminClient.from('categories') as any).select('id, name, slug').order('sort_order', { ascending: true }),
       (adminClient.from('subcategories') as any)
-        .select('id, name, category_id')
+        .select('id, name, slug, category_id')
         .order('sort_order', { ascending: true }),
       productId
         ? (adminClient.from('products') as any).select('*').eq('id', productId).single()
