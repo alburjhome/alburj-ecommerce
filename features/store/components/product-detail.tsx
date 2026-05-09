@@ -51,6 +51,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
     : 0;
   const maxQuantity = product.track_stock && !product.allow_backorders ? product.stock_quantity : 99;
   const canAddToCart = maxQuantity > 0 || product.allow_backorders;
+  const isUnavailable = Boolean(product.track_stock && !product.allow_backorders && product.stock_quantity <= 0);
 
   function handleAddToCart() {
     if (!canAddToCart) return;
@@ -120,7 +121,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   })();
 
   return (
-    <section className="container mx-auto px-4 py-8 md:py-12">
+    <section className="container mx-auto px-4 py-8 pb-28 md:py-12 md:pb-12">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-4">
           <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
@@ -342,6 +343,49 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
                 )}
               </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+        <div className="mx-auto flex max-w-screen-sm items-center gap-3 px-4 py-3" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}>
+          <div className="min-w-0">
+            <div className="text-sm text-muted-foreground">السعر</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-base font-bold text-primary">{formatPrice(product.price)}</span>
+              {hasDiscount && (
+                <span className="text-xs text-muted-foreground line-through">
+                  {formatPrice(product.compare_price || 0)}
+                </span>
+              )}
+              {hasDiscount && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                  خصم {discount}%
+                </span>
+              )}
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            className="h-11 flex-1"
+            disabled={!canAddToCart}
+            onClick={handleAddToCart}
+          >
+            <ShoppingCart className="ml-2 h-4 w-4" />
+            أضف للسلة
+          </Button>
+
+          {whatsappUrl && (isUnavailable ? inquiryUrl : orderUrl) && (
+            <a
+              href={(isUnavailable ? inquiryUrl : orderUrl) as string}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+            >
+              <MessageCircle className="ml-2 h-4 w-4" />
+              {isUnavailable ? 'اسألنا عن توفره' : 'اطلب عبر واتساب'}
+            </a>
           )}
         </div>
       </div>
