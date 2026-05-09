@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Phone, MapPin, Mail, Clock, Facebook, Instagram, Youtube, Music, ExternalLink } from 'lucide-react';
-import { trackWhatsAppClick } from '@/lib/analytics';
+import { TrackedWhatsAppLink } from '@/components/tracked-whatsapp-link';
 
 interface FooterSettings {
   store_name: string;
@@ -133,17 +133,24 @@ export function Footer({ settings }: FooterProps) {
               {phoneHref && contactPhone && (
                 <li className="flex items-center gap-3 text-sm">
                   <Phone className="h-5 w-5 text-primary shrink-0" />
-                  <a
-                    href={phoneHref}
-                    onClick={() => {
-                      if (contactPhone === settings?.whatsapp_number) {
-                        trackWhatsAppClick('footer_whatsapp');
-                      }
-                    }}
-                    className="text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    {contactPhone}
-                  </a>
+                  {contactPhone === settings?.whatsapp_number ? (
+                    <TrackedWhatsAppLink
+                      href={phoneHref}
+                      source="footer_whatsapp"
+                      className="text-muted-foreground hover:text-primary transition-colors"
+                      target={undefined}
+                      rel={undefined}
+                    >
+                      {contactPhone}
+                    </TrackedWhatsAppLink>
+                  ) : (
+                    <a
+                      href={phoneHref}
+                      className="text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {contactPhone}
+                    </a>
+                  )}
                 </li>
               )}
               <li className="flex items-center gap-3 text-sm">

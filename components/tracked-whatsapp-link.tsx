@@ -8,18 +8,22 @@ export function TrackedWhatsAppLink({
   metadata,
   className,
   children,
+  target = '_blank',
+  rel = 'noopener noreferrer',
 }: {
   href: string;
   source: string;
   metadata?: AnalyticsMetadata;
   className?: string;
   children: React.ReactNode;
+  target?: string;
+  rel?: string;
 }) {
   return (
     <a
       href={href}
-      target="_blank"
-      rel="noopener noreferrer"
+      target={target}
+      rel={rel}
       className={className}
       onClick={() => {
         trackWhatsAppClick(source, metadata);
