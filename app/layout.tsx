@@ -3,6 +3,8 @@ import { Cairo } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
+import { AnalyticsScripts } from '@/components/analytics-scripts';
+import { createSupabaseServerClient } from '@/lib/supabase-ssr';
 
 const cairo = Cairo({
   subsets: ['arabic', 'latin'],
@@ -25,11 +27,24 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const supabase = createSupabaseServerClient();
+  const { data } = await supabase
+    .from('store_settings')
+    .select('meta_pixel_id, ga4_measurement_id')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const settings = data as { meta_pixel_id: string | null; ga4_measurement_id: string | null } | null;
+
+  const metaPixelId = settings?.meta_pixel_id ?? null;
+  const ga4MeasurementId = settings?.ga4_measurement_id ?? null;
+
   return (
     <html lang="ar" dir="rtl" className={cairo.variable} suppressHydrationWarning>
       <body className={`${cairo.className} antialiased`}>
@@ -39,6 +54,7 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
+          <AnalyticsScripts metaPixelId={metaPixelId} ga4MeasurementId={ga4MeasurementId} />
           {children}
           <Toaster />
         </ThemeProvider>

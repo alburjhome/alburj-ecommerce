@@ -481,6 +481,8 @@ export interface Database {
           tiktok_url: string | null;
           snapchat_url: string | null;
           youtube_url: string | null;
+          meta_pixel_id: string | null;
+          ga4_measurement_id: string | null;
           currency: string;
           currency_symbol: string;
           tax_rate: number;
@@ -492,7 +494,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          store_name?: string;
+          store_name: string;
           store_description?: string | null;
           whatsapp_number?: string | null;
           contact_email?: string | null;
@@ -503,6 +505,8 @@ export interface Database {
           tiktok_url?: string | null;
           snapchat_url?: string | null;
           youtube_url?: string | null;
+          meta_pixel_id?: string | null;
+          ga4_measurement_id?: string | null;
           currency?: string;
           currency_symbol?: string;
           tax_rate?: number;
@@ -525,6 +529,8 @@ export interface Database {
           tiktok_url?: string | null;
           snapchat_url?: string | null;
           youtube_url?: string | null;
+          meta_pixel_id?: string | null;
+          ga4_measurement_id?: string | null;
           currency?: string;
           currency_symbol?: string;
           tax_rate?: number;

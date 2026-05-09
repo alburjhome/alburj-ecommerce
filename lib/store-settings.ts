@@ -12,13 +12,15 @@ export interface PublicStoreSettings {
   tiktok_url: string | null;
   snapchat_url: string | null;
   youtube_url: string | null;
+  meta_pixel_id: string | null;
+  ga4_measurement_id: string | null;
 }
 
 export async function getPublicStoreSettings(): Promise<PublicStoreSettings> {
   const { data, error } = await supabase
     .from('store_settings')
     .select(
-      'store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url'
+      'store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url, meta_pixel_id, ga4_measurement_id'
     )
     .order('created_at', { ascending: true })
     .limit(1)
@@ -37,6 +39,8 @@ export async function getPublicStoreSettings(): Promise<PublicStoreSettings> {
       tiktok_url: null,
       snapchat_url: null,
       youtube_url: null,
+      meta_pixel_id: null,
+      ga4_measurement_id: null,
     };
   }
 

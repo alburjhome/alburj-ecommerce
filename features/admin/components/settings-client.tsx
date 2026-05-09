@@ -25,6 +25,8 @@ interface SettingsFormState {
   tiktok_url: string | null;
   snapchat_url: string | null;
   youtube_url: string | null;
+  meta_pixel_id: string | null;
+  ga4_measurement_id: string | null;
   currency: string;
   currency_symbol: string;
   free_shipping_threshold: string;
@@ -44,6 +46,8 @@ const emptyForm: SettingsFormState = {
   tiktok_url: null,
   snapchat_url: null,
   youtube_url: null,
+  meta_pixel_id: null,
+  ga4_measurement_id: null,
   currency: 'JOD',
   currency_symbol: 'د.أ',
   free_shipping_threshold: '',
@@ -72,6 +76,8 @@ function formFromSettings(settings: StoreSettingsRecord): SettingsFormState {
     tiktok_url: settings.tiktok_url,
     snapchat_url: settings.snapchat_url,
     youtube_url: settings.youtube_url,
+    meta_pixel_id: settings.meta_pixel_id,
+    ga4_measurement_id: settings.ga4_measurement_id,
     currency: settings.currency,
     currency_symbol: settings.currency_symbol,
     free_shipping_threshold:
@@ -145,6 +151,8 @@ export function SettingsClient() {
         tiktok_url: textOrNull(form.tiktok_url),
         snapchat_url: textOrNull(form.snapchat_url),
         youtube_url: textOrNull(form.youtube_url),
+        meta_pixel_id: textOrNull(form.meta_pixel_id),
+        ga4_measurement_id: textOrNull(form.ga4_measurement_id),
         currency: form.currency,
         currency_symbol: form.currency_symbol,
         free_shipping_threshold: numberOrNull(form.free_shipping_threshold),
@@ -318,6 +326,35 @@ export function SettingsClient() {
                 value={form.youtube_url || ''}
                 onChange={(event) => setForm((current) => ({ ...current, youtube_url: event.target.value }))}
                 placeholder="https://youtube.com/..."
+              />
+            </div>
+
+            <div className="md:col-span-2 pt-3 border-t">
+              <h3 className="text-base font-semibold mb-1">التتبع والتحليلات</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                ضع المعرف فقط (ID) بدون أي سكربت.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="meta-pixel-id">Meta Pixel ID</Label>
+              <Input
+                id="meta-pixel-id"
+                dir="ltr"
+                value={form.meta_pixel_id || ''}
+                onChange={(event) => setForm((current) => ({ ...current, meta_pixel_id: event.target.value }))}
+                placeholder="مثال: 123456789012345"
+              />
+            </div>
+            <div>
+              <Label htmlFor="ga4-measurement-id">GA4 Measurement ID</Label>
+              <Input
+                id="ga4-measurement-id"
+                dir="ltr"
+                value={form.ga4_measurement_id || ''}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, ga4_measurement_id: event.target.value }))
+                }
+                placeholder="مثال: G-XXXXXXXXXX"
               />
             </div>
 

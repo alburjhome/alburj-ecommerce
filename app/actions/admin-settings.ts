@@ -24,6 +24,8 @@ export interface StoreSettingsRecord {
   tiktok_url: string | null;
   snapchat_url: string | null;
   youtube_url: string | null;
+  meta_pixel_id: string | null;
+  ga4_measurement_id: string | null;
   currency: string;
   currency_symbol: string;
   free_shipping_threshold: number | null;
@@ -54,6 +56,28 @@ const nullableUrl = z.preprocess(
     .nullable()
 );
 
+const nullableMetaPixelId = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
+  z
+    .string()
+    .trim()
+    .refine((val) => val === null || /^[0-9]+$/.test(val), {
+      message: 'Meta Pixel ID يجب أن يحتوي أرقام فقط',
+    })
+    .nullable()
+);
+
+const nullableGa4MeasurementId = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
+  z
+    .string()
+    .trim()
+    .refine((val) => val === null || val.startsWith('G-'), {
+      message: 'GA4 Measurement ID يجب أن يبدأ بـ G-',
+    })
+    .nullable()
+);
+
 const settingsSchema = z.object({
   store_name: z.string().trim().min(1, 'اسم المتجر مطلوب'),
   store_description: nullableText,
@@ -69,6 +93,8 @@ const settingsSchema = z.object({
   tiktok_url: nullableUrl,
   snapchat_url: nullableUrl,
   youtube_url: nullableUrl,
+  meta_pixel_id: nullableMetaPixelId,
+  ga4_measurement_id: nullableGa4MeasurementId,
   currency: z.string().trim().min(1, 'العملة مطلوبة'),
   currency_symbol: z.string().trim().min(1, 'رمز العملة مطلوب'),
   free_shipping_threshold: nullableNumber,
@@ -102,7 +128,7 @@ export async function getAdminStoreSettings(
     const adminClient = await createAdminActionClient(accessToken);
     const { data, error } = await (adminClient.from('store_settings') as any)
       .select(
-        'id, store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url, currency, currency_symbol, free_shipping_threshold, min_order_amount, maintenance_mode, created_at, updated_at'
+        'id, store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url, meta_pixel_id, ga4_measurement_id, currency, currency_symbol, free_shipping_threshold, min_order_amount, maintenance_mode, created_at, updated_at'
       )
       .order('created_at', { ascending: true })
       .limit(1)
@@ -144,6 +170,8 @@ export async function updateAdminStoreSettings(
     revalidatePath('/products');
     revalidatePath('/categories');
     revalidatePath('/category/[slug]');
+    revalidatePath('/product/[slug]');
+    revalidatePath('/quick-order');
     revalidatePath('/admin/settings');
     return { success: true };
   } catch (error) {

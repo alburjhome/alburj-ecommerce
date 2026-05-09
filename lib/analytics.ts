@@ -61,6 +61,7 @@ export function trackWhatsAppClick(source: string, metadata?: AnalyticsMetadata)
 
   try {
     window.fbq?.('trackCustom', 'WhatsAppClick', { source, ...safeMetadata });
+    window.fbq?.('track', 'Contact', { source, ...safeMetadata });
   } catch {
     // ignore
   }
