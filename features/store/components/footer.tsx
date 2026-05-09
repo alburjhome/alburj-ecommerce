@@ -42,7 +42,7 @@ export function Footer({ settings }: FooterProps) {
     shop: [
       { href: '/products', label: 'جميع المنتجات' },
       { href: '/categories', label: 'الأقسام' },
-      { href: '/products', label: 'العروض الخاصة' },
+      { href: '/offers', label: 'العروض الخاصة' },
     ],
     support: [
       { href: '/#contact', label: 'تواصل معنا' },

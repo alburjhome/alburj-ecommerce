@@ -19,9 +19,6 @@ function normalizeBannerLink(value: string | null | undefined) {
   if (href.startsWith('/categories/')) {
     return href.replace('/categories/', '/category/');
   }
-  if (href === '/offers') {
-    return '/products';
-  }
   if (href.startsWith('/') || href.startsWith('#') || href.startsWith('https://')) {
     return href;
   }

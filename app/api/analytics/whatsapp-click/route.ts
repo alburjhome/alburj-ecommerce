@@ -8,6 +8,8 @@ const ALLOWED_SOURCES = [
   'quick_order',
   'homepage_shop_cta',
   'homepage_bundle',
+  'offers_hero_whatsapp',
+  'offers_bundle',
   'mobile_menu_whatsapp',
   'footer_whatsapp',
 ] as const;
