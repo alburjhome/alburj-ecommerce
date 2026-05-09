@@ -6,6 +6,8 @@ import { Footer } from '@/features/store/components/footer';
 import { ProductDetail } from '@/features/store/components/product-detail';
 import { RecommendedAddons } from '@/features/store/components/recommended-addons';
 import { getWhatsAppLink } from '@/lib/store-settings';
+import { getPrimaryProductImage } from '@/lib/product-image';
+import { safeImageSrc, PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -131,9 +133,47 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     return { title: 'المنتج غير موجود' };
   }
 
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '');
+  const canonical = `${baseUrl}/product/${product.slug}`;
+
+  const rawDescription =
+    product.meta_description || product.short_description || product.description || '';
+  const description = rawDescription
+    ? rawDescription.length > 180
+      ? `${rawDescription.slice(0, 177)}...`
+      : rawDescription
+    : undefined;
+
+  const primaryImage = safeImageSrc(getPrimaryProductImage(product), PLACEHOLDER_PRODUCT);
+  const ogImageUrl = primaryImage.startsWith('http') ? primaryImage : `${baseUrl}${primaryImage}`;
+
+  const title = product.meta_title || product.name;
+
   return {
-    title: product.meta_title || product.name,
-    description: product.meta_description || product.short_description || product.description || undefined,
+    title,
+    description,
+    alternates: {
+      canonical,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: 'website',
+      images: ogImageUrl
+        ? [
+            {
+              url: ogImageUrl,
+            },
+          ]
+        : undefined,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: ogImageUrl ? [ogImageUrl] : undefined,
+    },
   };
 }
 

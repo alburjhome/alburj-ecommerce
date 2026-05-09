@@ -8,6 +8,7 @@ import { ProductCard } from '@/features/store/components/product-card';
 import { getWhatsAppLink } from '@/lib/store-settings';
 import { TrackedWhatsAppLink } from '@/components/tracked-whatsapp-link';
 import { getIntentConfig, normalizeIntent, productMatchesIntent, type ProductIntentKey } from '@/lib/product-intents';
+import { PLACEHOLDER_BANNER } from '@/lib/image-utils';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,28 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'عروض مؤسسة البرج | منتجات بلاستيكية ومنظفات وتغليف',
   description: 'تسوق عروض مؤسسة البرج على مستلزمات البيت والمحل، المنظفات، البلاستيكيات، التغليف والأدوات المنزلية.',
+  alternates: {
+    canonical: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '')}/offers`,
+  },
+  openGraph: {
+    title: 'عروض مؤسسة البرج | منتجات بلاستيكية ومنظفات وتغليف',
+    description: 'تسوق عروض مؤسسة البرج على مستلزمات البيت والمحل، المنظفات، البلاستيكيات، التغليف والأدوات المنزلية.',
+    url: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '')}/offers`,
+    type: 'website',
+    images: [
+      {
+        url: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '')}${PLACEHOLDER_BANNER}`,
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'عروض مؤسسة البرج | منتجات بلاستيكية ومنظفات وتغليف',
+    description: 'تسوق عروض مؤسسة البرج على مستلزمات البيت والمحل، المنظفات، البلاستيكيات، التغليف والأدوات المنزلية.',
+    images: [
+      `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '')}${PLACEHOLDER_BANNER}`,
+    ],
+  },
 };
 
 interface OffersPageProps {

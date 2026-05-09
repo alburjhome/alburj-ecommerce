@@ -11,8 +11,33 @@ import type { Category, StoreSettings } from '@/types';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'الأقسام',
-  description: 'تصفح أقسام متجر مؤسسة البرج.',
+  title: 'أقسام مؤسسة البرج | مستلزمات البيت والمحل',
+  description:
+    'تصفح أقسام مؤسسة البرج واختر القسم المناسب لمنظفات، ورقيات، بلاستيكيات، تغليف، أدوات منزلية ومطبخ، أجهزة كهربائية ومفروشات.',
+  alternates: {
+    canonical: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/?$/, '')}/categories`,
+  },
+  openGraph: {
+    title: 'أقسام مؤسسة البرج | مستلزمات البيت والمحل',
+    description:
+      'تصفح أقسام مؤسسة البرج واختر القسم المناسب لمنظفات، ورقيات، بلاستيكيات، تغليف، أدوات منزلية ومطبخ، أجهزة كهربائية ومفروشات.',
+    url: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/?$/, '')}/categories`,
+    type: 'website',
+    images: [
+      {
+        url: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/?$/, '')}${PLACEHOLDER_CATEGORY}`,
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'أقسام مؤسسة البرج | مستلزمات البيت والمحل',
+    description:
+      'تصفح أقسام مؤسسة البرج واختر القسم المناسب لمنظفات، ورقيات، بلاستيكيات، تغليف، أدوات منزلية ومطبخ، أجهزة كهربائية ومفروشات.',
+    images: [
+      `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/?$/, '')}${PLACEHOLDER_CATEGORY}`,
+    ],
+  },
 };
 
 async function getSettings() {

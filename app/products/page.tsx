@@ -20,8 +20,9 @@ interface ProductsPageProps {
 }
 
 export const metadata: Metadata = {
-  title: 'المنتجات',
-  description: 'تصفح منتجات مؤسسة البرج.',
+  title: 'منتجات مؤسسة البرج | مستلزمات البيت والمحل',
+  description:
+    'تصفح منتجات مؤسسة البرج من منظفات، بلاستيكيات، تغليف، أدوات منزلية، أدوات مطبخ، أجهزة كهربائية ومفروشات.',
 };
 
 function normalizeSearchTerm(value: string) {

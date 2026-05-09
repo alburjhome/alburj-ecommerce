@@ -6,6 +6,7 @@ import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductCard } from '@/features/store/components/product-card';
 import { getWhatsAppLink } from '@/lib/store-settings';
+import { safeImageSrc, PLACEHOLDER_CATEGORY } from '@/lib/image-utils';
 import type { Category, ProductWithDetails, StoreSettings, Subcategory } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -115,9 +116,41 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   const data = await getCategoryData(params.slug);
   if (!data) return { title: 'القسم غير موجود' };
 
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '');
+  const canonical = `${baseUrl}/category/${data.category.slug}`;
+
+  const title = `${data.category.name} | مؤسسة البرج`;
+  const rawDescription = data.category.description || `تصفح منتجات قسم ${data.category.name} من مؤسسة البرج.`;
+  const description = rawDescription.length > 180 ? `${rawDescription.slice(0, 177)}...` : rawDescription;
+
+  const image = safeImageSrc((data.category as any).image_url, PLACEHOLDER_CATEGORY);
+  const ogImageUrl = image.startsWith('http') ? image : `${baseUrl}${image}`;
+
   return {
-    title: data.category.name,
-    description: data.category.description || undefined,
+    title,
+    description,
+    alternates: {
+      canonical,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: 'website',
+      images: ogImageUrl
+        ? [
+            {
+              url: ogImageUrl,
+            },
+          ]
+        : undefined,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: ogImageUrl ? [ogImageUrl] : undefined,
+    },
   };
 }
 

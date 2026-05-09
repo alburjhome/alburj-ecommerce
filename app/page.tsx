@@ -14,8 +14,9 @@ import { TrackedWhatsAppLink } from '@/components/tracked-whatsapp-link';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'الرئيسية',
-  description: 'مؤسسة البرج - وجهتك الأولى للمنتجات البلاستيكية، الأدوات المنزلية، والأجهزة الكهربائية في الأردن',
+  title: 'مؤسسة البرج | مستلزمات البيت والمحل',
+  description:
+    'مؤسسة البرج توفر مستلزمات البيت والمحل من منظفات، ورقيات، بلاستيكيات، تغليف، أدوات منزلية ومطبخ، أجهزة كهربائية ومفروشات.',
 };
 
 async function getHomeData() {
