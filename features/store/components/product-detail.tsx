@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Minus, Plus, ShoppingCart, Award, Home, Store, UtensilsCrossed, Briefcase, MessageCircle, Package } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, Award, MessageCircle, Package } from 'lucide-react';
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
@@ -9,6 +9,7 @@ import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
 import { calculateDiscountPercentage, formatPrice } from '@/lib/utils';
 import useCartStore from '@/stores/cart';
 import { getWhatsAppLink } from '@/lib/store-settings';
+import { getProductSuitableForTags, INTENT_TAG_CONFIG, type ProductIntentKey } from '@/lib/product-intents';
 
 interface ProductDetailProps {
   product: ProductWithDetails;
@@ -99,6 +100,24 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const resolvedFeatures = keyFeatures
     .map((feature) => (typeof feature === 'string' ? feature : null))
     .filter(Boolean) as string[];
+
+  const suitableForTags = (() => {
+    const tags = getProductSuitableForTags(product);
+    const order: ProductIntentKey[] = [
+      'home',
+      'kitchen',
+      'plastics',
+      'restaurants',
+      'shops',
+      'cleaning',
+      'packaging',
+      'bulk',
+      'appliances',
+      'furnishings',
+    ];
+    const ordered = order.filter((key) => tags.includes(key));
+    return ordered.slice(0, 6);
+  })();
 
   return (
     <section className="container mx-auto px-4 py-8 md:py-12">
@@ -274,25 +293,25 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
           </div>
 
           {/* Suitable For */}
-          <div className="border-t pt-5">
-            <h2 className="mb-3 font-semibold">مناسب لـ</h2>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { icon: Home, label: 'البيت' },
-                { icon: Store, label: 'المحلات' },
-                { icon: UtensilsCrossed, label: 'المطاعم' },
-                { icon: Briefcase, label: 'المكاتب' },
-              ].map((item) => (
-                <span
-                  key={item.label}
-                  className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium"
-                >
-                  <item.icon className="h-3.5 w-3.5 text-primary" />
-                  {item.label}
-                </span>
-              ))}
+          {suitableForTags.length > 0 && (
+            <div className="border-t pt-5">
+              <h2 className="mb-3 font-semibold">مناسب لـ</h2>
+              <div className="flex flex-wrap gap-2">
+                {suitableForTags.map((key) => {
+                  const label = INTENT_TAG_CONFIG.find((item) => item.key === key)?.label;
+                  if (!label) return null;
+                  return (
+                    <span
+                      key={key}
+                      className="inline-flex items-center rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium"
+                    >
+                      {label}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* WhatsApp CTA */}
           {whatsappUrl && (

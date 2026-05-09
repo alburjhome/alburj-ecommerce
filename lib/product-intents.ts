@@ -118,6 +118,25 @@ const CATEGORY_TO_INTENTS: Record<string, ProductIntentKey[]> = {
   'offers-bulk': ['bulk', 'shops', 'restaurants', 'plastics'],
 };
 
+export function getProductSuitableForTags(product: unknown): ProductIntentKey[] {
+  // 1) Use explicit intent_tags when present
+  const intentTags = getProductIntentTags(product);
+  if (intentTags.length > 0) {
+    return intentTags
+      .filter((tag): tag is ProductIntentKey => INTENT_CONFIG.some((item) => item.key === tag))
+      .filter((tag) => tag !== 'all');
+  }
+
+  // 2) Fallback: category.slug mapping
+  const categorySlug = getProductCategorySlug(product);
+  if (!categorySlug) return [];
+
+  const intentsForCategory = CATEGORY_TO_INTENTS[categorySlug];
+  if (!intentsForCategory) return [];
+
+  return intentsForCategory.filter((tag) => tag !== 'all');
+}
+
 export function productMatchesIntent(product: unknown, intent: ProductIntentKey): boolean {
   if (intent === 'all') return true;
 
