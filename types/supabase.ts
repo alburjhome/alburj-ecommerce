@@ -137,6 +137,9 @@ export interface Database {
           is_featured: boolean;
           view_count: number;
           sales_count: number;
+          marketing_tagline: string | null;
+          key_features: string[] | null;
+          product_badges: string[] | null;
           meta_title: string | null;
           meta_description: string | null;
           created_at: string;
@@ -167,6 +170,9 @@ export interface Database {
           is_featured?: boolean;
           view_count?: number;
           sales_count?: number;
+          marketing_tagline?: string | null;
+          key_features?: string[] | null;
+          product_badges?: string[] | null;
           meta_title?: string | null;
           meta_description?: string | null;
           created_at?: string;
@@ -197,6 +203,9 @@ export interface Database {
           is_featured?: boolean;
           view_count?: number;
           sales_count?: number;
+          marketing_tagline?: string | null;
+          key_features?: string[] | null;
+          product_badges?: string[] | null;
           meta_title?: string | null;
           meta_description?: string | null;
           created_at?: string;

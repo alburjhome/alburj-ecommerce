@@ -41,6 +41,23 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
 
   const isAvailable = !product.track_stock || (product.stock_quantity ?? 0) > 0;
 
+  const marketingBadgeLabel = (badge: string) => {
+    switch (badge) {
+      case 'bestselling':
+        return 'الأكثر طلبًا';
+      case 'offer':
+        return 'عرض';
+      case 'new':
+        return 'جديد';
+      case 'wholesale':
+        return 'سعر جملة';
+      case 'limited':
+        return 'كمية محدودة';
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="group relative bg-card rounded-lg border overflow-hidden product-card">
       {/* Badges Stack */}
@@ -57,6 +74,15 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
             عرض
           </span>
         )}
+        {Array.isArray((product as any).product_badges) && (product as any).product_badges.length > 0 && (() => {
+          const label = marketingBadgeLabel((product as any).product_badges[0]);
+          if (!label) return null;
+          return (
+            <span className="inline-flex items-center rounded-md bg-slate-900 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
+              {label}
+            </span>
+          );
+        })()}
         {isAvailable && (
           <span className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
             متوفر
@@ -94,6 +120,10 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
             {product.name}
           </h3>
         </Link>
+
+        {Boolean((product as any).marketing_tagline) && (
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{(product as any).marketing_tagline}</p>
+        )}
 
         <div className="mt-2 flex items-center gap-2">
           <span className="price-current">{formatPrice(product.price)}</span>

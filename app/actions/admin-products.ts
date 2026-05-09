@@ -82,6 +82,9 @@ export interface ProductFormRecord {
   dimensions: Json | null;
   is_active: boolean;
   is_featured: boolean;
+  marketing_tagline: string | null;
+  key_features: string[] | null;
+  product_badges: string[] | null;
   meta_title: string | null;
   meta_description: string | null;
 }
@@ -127,6 +130,9 @@ function normalizeProductInput(input: ProductFormInput) {
     brand: normalizeNullable(input.brand),
     tags: input.tags.length ? input.tags : null,
     intent_tags: input.intent_tags.length ? input.intent_tags : null,
+    marketing_tagline: normalizeNullable(input.marketing_tagline),
+    key_features: input.key_features.length ? input.key_features : null,
+    product_badges: input.product_badges.length ? input.product_badges : null,
     weight: input.weight,
     dimensions: hasDimensions ? dimensions : null,
     is_active: input.is_active,

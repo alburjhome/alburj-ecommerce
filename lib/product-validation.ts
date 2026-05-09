@@ -46,6 +46,12 @@ export const productSchema = z.object({
     .nullable(),
   is_active: z.boolean(),
   is_featured: z.boolean(),
+  marketing_tagline: z.string().trim().max(120, 'لا تتجاوز 120 حرف').nullable(),
+  key_features: z.array(z.string().trim().max(80, 'كل ميزة لا تتجاوز 80 حرف')).max(6, 'أقصى 6 مميزات').default([]),
+  product_badges: z
+    .array(z.enum(['bestselling', 'offer', 'new', 'wholesale', 'limited']))
+    .max(5, 'أقصى 5 وسوم')
+    .default([]),
   meta_title: z.string().trim().nullable(),
   meta_description: z.string().trim().nullable(),
 });

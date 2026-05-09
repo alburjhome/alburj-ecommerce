@@ -73,6 +73,33 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const inquiryUrl = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(inquiryText)}` : null;
   const orderUrl = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(orderText)}` : null;
 
+  const marketingBadgeLabel = (badge: string) => {
+    switch (badge) {
+      case 'bestselling':
+        return 'الأكثر طلبًا';
+      case 'offer':
+        return 'عرض';
+      case 'new':
+        return 'جديد';
+      case 'wholesale':
+        return 'سعر جملة';
+      case 'limited':
+        return 'كمية محدودة';
+      default:
+        return null;
+    }
+  };
+
+  const marketingTagline = (product as any).marketing_tagline as string | null | undefined;
+  const keyFeatures = ((product as any).key_features as unknown[] | null | undefined) || [];
+  const productBadges = ((product as any).product_badges as unknown[] | null | undefined) || [];
+  const resolvedBadges = productBadges
+    .map((badge) => (typeof badge === 'string' ? badge : null))
+    .filter(Boolean) as string[];
+  const resolvedFeatures = keyFeatures
+    .map((feature) => (typeof feature === 'string' ? feature : null))
+    .filter(Boolean) as string[];
+
   return (
     <section className="container mx-auto px-4 py-8 md:py-12">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
@@ -122,6 +149,26 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
               <p className="text-sm text-muted-foreground">{product.category.name}</p>
             )}
             <h1 className="mt-2 text-3xl font-bold tracking-tight">{product.name}</h1>
+            {Boolean(marketingTagline) && (
+              <p className="mt-2 text-sm font-medium text-muted-foreground">{marketingTagline}</p>
+            )}
+
+            {resolvedBadges.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {resolvedBadges.slice(0, 5).map((badge) => {
+                  const label = marketingBadgeLabel(badge);
+                  if (!label) return null;
+                  return (
+                    <span
+                      key={badge}
+                      className="inline-flex items-center rounded-full border bg-muted/50 px-3 py-1 text-xs font-medium"
+                    >
+                      {label}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
             {product.short_description && (
               <p className="mt-3 text-muted-foreground">{product.short_description}</p>
             )}
@@ -188,6 +235,20 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
             <div className="border-t pt-5">
               <h2 className="mb-2 font-semibold">وصف المنتج</h2>
               <p className="whitespace-pre-line leading-7 text-muted-foreground">{product.description}</p>
+            </div>
+          )}
+
+          {resolvedFeatures.length > 0 && (
+            <div className="border-t pt-5">
+              <h2 className="mb-3 font-semibold">مميزات المنتج</h2>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {resolvedFeatures.slice(0, 6).map((feature, idx) => (
+                  <li key={`${idx}-${feature}`} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    <span className="leading-7">{feature}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

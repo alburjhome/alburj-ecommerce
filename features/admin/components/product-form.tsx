@@ -45,6 +45,9 @@ const emptyProduct: ProductFormInput = {
   brand: null,
   tags: [],
   intent_tags: [],
+  marketing_tagline: null,
+  key_features: [],
+  product_badges: [],
   weight: null,
   dimensions: {
     length: null,
@@ -91,6 +94,9 @@ function asFormValue(product: ProductFormRecord | null): ProductFormInput {
     brand: product.brand,
     tags: product.tags || [],
     intent_tags: (product.intent_tags || []) as ProductFormInput['intent_tags'],
+    marketing_tagline: product.marketing_tagline,
+    key_features: (product.key_features || []) as ProductFormInput['key_features'],
+    product_badges: (product.product_badges || []) as ProductFormInput['product_badges'],
     weight: product.weight === null ? null : Number(product.weight),
     dimensions: {
       length: dimensions?.length ?? null,
@@ -143,6 +149,8 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const isFeatured = watch('is_featured');
   const selectedSubcategoryId = watch('subcategory_id');
   const intentTags = watch('intent_tags');
+  const productBadges = watch('product_badges');
+  const keyFeatures = watch('key_features');
 
   const filteredSubcategories = useMemo(() => {
     return formData.subcategories.filter((subcategory) => subcategory.category_id === selectedCategoryId);
@@ -208,6 +216,9 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         brand: values.brand || null,
         tags: parseTags(tagsText),
         intent_tags: values.intent_tags,
+        marketing_tagline: values.marketing_tagline || null,
+        key_features: values.key_features,
+        product_badges: values.product_badges,
         weight: values.weight ?? null,
         dimensions: values.dimensions || { length: null, width: null, height: null },
         meta_title: values.meta_title || null,
@@ -338,6 +349,73 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
               className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               {...register('description')}
             />
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border bg-card p-5 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold">معلومات تسويقية</h2>
+        <div className="grid gap-4">
+          <div>
+            <Label htmlFor="marketing_tagline">عبارة تسويقية قصيرة</Label>
+            <Input
+              id="marketing_tagline"
+              {...register('marketing_tagline')}
+              placeholder="مثال: رغوة عالية لتنظيف أعمق للسجاد والموكيت"
+            />
+            <FieldError message={(errors as any).marketing_tagline?.message} />
+          </div>
+
+          <div>
+            <Label htmlFor="key_features">مميزات المنتج</Label>
+            <textarea
+              id="key_features"
+              rows={6}
+              value={(keyFeatures || []).join('\n')}
+              onChange={(event) => {
+                const lines = event.target.value
+                  .split('\n')
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                  .slice(0, 6);
+                setValue('key_features', lines as ProductFormInput['key_features'], { shouldDirty: true });
+              }}
+              className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="كل سطر يمثل ميزة (حتى 6)"
+            />
+            <FieldError message={(errors as any).key_features?.message} />
+          </div>
+
+          <div>
+            <Label>وسوم تسويقية</Label>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {[
+                { key: 'bestselling', label: 'الأكثر طلبًا' },
+                { key: 'offer', label: 'عرض' },
+                { key: 'new', label: 'جديد' },
+                { key: 'wholesale', label: 'سعر جملة' },
+                { key: 'limited', label: 'كمية محدودة' },
+              ].map((badge) => (
+                <label
+                  key={badge.key}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm transition-colors hover:bg-muted"
+                >
+                  <input
+                    type="checkbox"
+                    checked={productBadges?.includes(badge.key as any)}
+                    onChange={(event) => {
+                      const current = productBadges || [];
+                      const next = event.target.checked
+                        ? [...current, badge.key]
+                        : current.filter((b) => b !== badge.key);
+                      setValue('product_badges', next as ProductFormInput['product_badges'], { shouldDirty: true });
+                    }}
+                  />
+                  {badge.label}
+                </label>
+              ))}
+            </div>
+            <FieldError message={(errors as any).product_badges?.message} />
           </div>
         </div>
       </section>
