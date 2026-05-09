@@ -25,6 +25,11 @@ type WhatsAppClickRow = {
   created_at: string;
 };
 
+function nonEmpty(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 function countBy<T extends string>(values: Array<T | null | undefined>) {
   const map = new Map<string, number>();
   for (const value of values) {
@@ -143,6 +148,19 @@ export default async function AdminAnalyticsPage({
   const topNeedsCount = quickOrderNeedsCounts[0]?.key || null;
   const quickOrderHasBundleCount = quickOrderEvents.filter((e) => e.has_bundle === true).length;
 
+  const quickNotes: string[] = [];
+  if (bestSource) {
+    quickNotes.push(`أفضل مصدر حاليًا هو: ${sourceLabel(bestSource)}`);
+  }
+  if (topProduct?.name) {
+    quickNotes.push(`أكثر منتج جلب ضغطات واتساب: ${topProduct.name}`);
+  }
+  if (quickOrderCount === 0) {
+    quickNotes.push('صفحة جهّز طلبك لم تحصل على ضغطات ضمن هذه الفترة.');
+  } else {
+    quickNotes.push(`صفحة جهّز طلبك حصلت على ${quickOrderCount} ضغطة ضمن هذه الفترة.`);
+  }
+
   return (
     <div className="min-w-0 space-y-6">
       <div>
@@ -217,7 +235,7 @@ export default async function AdminAnalyticsPage({
 
         <div className="min-w-0 rounded-lg border bg-card p-5 shadow-sm">
           <div className="flex min-w-0 items-center justify-between gap-3">
-            <p className="min-w-0 text-sm text-muted-foreground">ضغطات Quick Order</p>
+            <p className="min-w-0 text-sm text-muted-foreground">طلبات جهّز طلبك</p>
             <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
               <MessageCircle className="h-5 w-5" />
             </span>
@@ -281,8 +299,8 @@ export default async function AdminAnalyticsPage({
                         style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
                       />
                     </div>
-                    <span className="ml-2 shrink-0 rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
-                      {item.count}
+                    <span className="ml-2 shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
+                      {item.count} ضغطة
                     </span>
                   </div>
                 </div>
@@ -316,12 +334,38 @@ export default async function AdminAnalyticsPage({
               </thead>
               <tbody>
                 {latest20.map((event) => {
-                  const details = event.product_name || event.bundle_name || event.use_case || '—';
+                  const productName = nonEmpty(event.product_name);
+                  const bundleName = nonEmpty(event.bundle_name);
+                  const useCase = nonEmpty(event.use_case);
+                  const details = productName || bundleName || useCase || '—';
                   return (
                     <tr key={event.id} className="border-b last:border-0">
                       <td className="py-3 text-muted-foreground">{formatDateTime(event.created_at)}</td>
                       <td className="py-3 font-medium">{sourceLabel(event.source)}</td>
-                      <td className="py-3">{details}</td>
+                      <td className="py-3">
+                        <div className="flex min-w-0 items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="max-w-[380px] truncate font-medium" title={details}>
+                              {details}
+                            </p>
+                            {(bundleName || useCase) && productName && (
+                              <p className="mt-1 max-w-[380px] truncate text-xs text-muted-foreground" title={bundleName || useCase || ''}>
+                                {bundleName || useCase}
+                              </p>
+                            )}
+                          </div>
+                          {event.product_slug ? (
+                            <Link
+                              href={`/product/${event.product_slug}`}
+                              className="shrink-0 inline-flex items-center justify-center rounded-md border bg-card px-3 py-1 text-xs font-semibold hover:bg-muted"
+                            >
+                              فتح المنتج
+                            </Link>
+                          ) : (
+                            <span className="shrink-0 text-xs text-muted-foreground">—</span>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -334,6 +378,25 @@ export default async function AdminAnalyticsPage({
           )}
         </section>
       </div>
+
+      <section className="min-w-0 rounded-lg border bg-card p-5 shadow-sm" dir="rtl">
+        <div>
+          <h2 className="text-lg font-semibold">ملاحظات سريعة</h2>
+          <p className="text-sm text-muted-foreground">ملخص ذكي بناءً على بيانات الفترة المحددة.</p>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {totalRange === 0 ? (
+            <p className="text-sm text-muted-foreground">لا توجد ملاحظات لأن الفترة لا تحتوي على بيانات.</p>
+          ) : (
+            quickNotes.slice(0, 3).map((note, index) => (
+              <p key={index} className="text-sm">
+                {note}
+              </p>
+            ))
+          )}
+        </div>
+      </section>
 
       <section className="min-w-0 rounded-lg border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
@@ -402,20 +465,20 @@ export default async function AdminAnalyticsPage({
           </div>
 
           <div className="rounded-md border p-4">
-            <p className="text-xs text-muted-foreground">أكثر use_case</p>
+            <p className="text-xs text-muted-foreground">أكثر استخدام</p>
             <p className="mt-2 text-base font-semibold">{topUseCase || '—'}</p>
           </div>
 
           <div className="rounded-md border p-4">
-            <p className="text-xs text-muted-foreground">الأكثر شيوعًا (needs_count)</p>
+            <p className="text-xs text-muted-foreground">أكثر عدد احتياجات</p>
             <p className="mt-2 text-base font-semibold">{topNeedsCount ? `${topNeedsCount}` : '—'}</p>
           </div>
         </div>
 
         <div className="mt-4 rounded-md border p-4">
-          <p className="text-sm font-semibold">باقة ضمن Quick Order</p>
+          <p className="text-sm font-semibold">طلبات تحتوي على باقة</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            ضغطات تحتوي `has_bundle=true`:
+            عدد الضغطات التي تضم باقة ضمن صفحة جهّز طلبك:
             <span className="mr-2 rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
               {quickOrderHasBundleCount}
             </span>
