@@ -535,6 +535,53 @@ export interface Database {
           updated_at?: string;
         };
       };
+      whatsapp_click_events: {
+        Row: {
+          id: string;
+          source: string;
+          product_id: string | null;
+          product_name: string | null;
+          product_slug: string | null;
+          price: number | null;
+          use_case: string | null;
+          needs_count: number | null;
+          has_bundle: boolean | null;
+          bundle_name: string | null;
+          cta_name: string | null;
+          path: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          source: string;
+          product_id?: string | null;
+          product_name?: string | null;
+          product_slug?: string | null;
+          price?: number | null;
+          use_case?: string | null;
+          needs_count?: number | null;
+          has_bundle?: boolean | null;
+          bundle_name?: string | null;
+          cta_name?: string | null;
+          path?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          source?: string;
+          product_id?: string | null;
+          product_name?: string | null;
+          product_slug?: string | null;
+          price?: number | null;
+          use_case?: string | null;
+          needs_count?: number | null;
+          has_bundle?: boolean | null;
+          bundle_name?: string | null;
+          cta_name?: string | null;
+          path?: string | null;
+          created_at?: string;
+        };
+      };
     };
   };
 }

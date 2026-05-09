@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import {
   Boxes,
+  LineChart,
   Gauge,
   Image,
   LayoutGrid,
@@ -28,6 +29,7 @@ const navItems = [
   { href: '/admin/categories', label: 'الأقسام', icon: LayoutGrid },
   { href: '/admin/subcategories', label: 'الفئات', icon: Tags },
   { href: '/admin/orders', label: 'الطلبات', icon: ShoppingCart },
+  { href: '/admin/analytics', label: 'التحليلات', icon: LineChart },
   { href: '/admin/shipping', label: 'الشحن', icon: Truck },
   { href: '/admin/banners', label: 'البانرات', icon: Image },
   { href: '/admin/settings', label: 'الإعدادات', icon: Settings },
