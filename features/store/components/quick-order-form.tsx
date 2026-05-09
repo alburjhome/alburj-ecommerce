@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getWhatsAppLink } from '@/lib/store-settings';
+import { trackWhatsAppClick } from '@/lib/analytics';
 
 type UseCase = 'البيت' | 'مطعم أو كافيه' | 'محل' | 'مكتب' | 'مطبخ' | 'كمية أو عرض';
 
@@ -261,7 +262,16 @@ export function QuickOrderForm({ whatsappNumber }: { whatsappNumber: string | nu
               : 'inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-muted px-4 py-3 text-sm font-semibold text-muted-foreground'
           }
           onClick={(e) => {
-            if (!canSend) e.preventDefault();
+            if (!canSend) {
+              e.preventDefault();
+              return;
+            }
+
+            trackWhatsAppClick('quick_order', {
+              use_case: useCase ?? 'غير محدد',
+              needs_count: needs.length,
+              has_bundle: Boolean(suggestedBundle),
+            });
           }}
         >
           <MessageCircle className="h-5 w-5" />

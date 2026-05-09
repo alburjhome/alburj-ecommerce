@@ -9,6 +9,7 @@ import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { Truck, CreditCard, Shield, BadgePercent, Store, MessageCircle, Home, UtensilsCrossed, Package, ShoppingBag } from 'lucide-react';
 import { getWhatsAppLink } from '@/lib/store-settings';
+import { TrackedWhatsAppLink } from '@/components/tracked-whatsapp-link';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,15 +145,15 @@ function ReadyBundlesSection({ whatsappUrl }: { whatsappUrl: string | null }) {
                 </ul>
 
                 {href && (
-                  <a
+                  <TrackedWhatsAppLink
                     href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    source="homepage_bundle"
+                    metadata={{ bundle_name: bundle.name }}
                     className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
                   >
                     <MessageCircle className="h-4 w-4" />
                     اطلب الباقة عبر واتساب
-                  </a>
+                  </TrackedWhatsAppLink>
                 )}
               </div>
             );
@@ -175,15 +176,15 @@ function ShopCTA({ whatsappUrl }: { whatsappUrl: string | null }) {
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             {whatsappUrl ? (
-              <a
+              <TrackedWhatsAppLink
                 href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                source="homepage_shop_cta"
+                metadata={{ cta_name: 'shop_cta' }}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
               >
                 <MessageCircle className="h-5 w-5" />
                 تواصل عبر واتساب
-              </a>
+              </TrackedWhatsAppLink>
             ) : (
               <span className="inline-flex items-center justify-center rounded-lg border bg-white px-5 py-2.5 text-sm text-muted-foreground">
                 رقم واتساب غير مُعدّل حاليًا

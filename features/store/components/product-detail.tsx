@@ -10,6 +10,7 @@ import { calculateDiscountPercentage, formatPrice } from '@/lib/utils';
 import useCartStore from '@/stores/cart';
 import { getWhatsAppLink } from '@/lib/store-settings';
 import { getProductSuitableForTags, INTENT_TAG_CONFIG, type ProductIntentKey } from '@/lib/product-intents';
+import { trackWhatsAppClick } from '@/lib/analytics';
 
 interface ProductDetailProps {
   product: ProductWithDetails;
@@ -324,6 +325,14 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
                     href={inquiryUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      trackWhatsAppClick('product_inquiry', {
+                        product_id: product.id,
+                        product_name: product.name,
+                        product_slug: product.slug,
+                        price: product.price,
+                      });
+                    }}
                     className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-green-600 bg-white px-4 py-2.5 text-sm font-semibold text-green-700 transition-colors hover:bg-green-50"
                   >
                     <MessageCircle className="h-4 w-4" />
@@ -335,6 +344,14 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
                     href={orderUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      trackWhatsAppClick('product_direct_order', {
+                        product_id: product.id,
+                        product_name: product.name,
+                        product_slug: product.slug,
+                        price: product.price,
+                      });
+                    }}
                     className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
                   >
                     <MessageCircle className="h-4 w-4" />
@@ -381,6 +398,14 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
               href={(isUnavailable ? inquiryUrl : orderUrl) as string}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => {
+                trackWhatsAppClick('product_sticky_cta', {
+                  product_id: product.id,
+                  product_name: product.name,
+                  product_slug: product.slug,
+                  price: product.price,
+                });
+              }}
               className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-green-700"
             >
               <MessageCircle className="ml-2 h-4 w-4" />

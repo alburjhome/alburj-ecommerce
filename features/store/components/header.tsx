@@ -17,6 +17,7 @@ import {
 import useCartStore from '@/stores/cart';
 import { CartDrawer } from './cart-drawer';
 import { cn } from '@/lib/utils';
+import { trackWhatsAppClick } from '@/lib/analytics';
 
 interface HeaderProps {
   whatsappUrl?: string | null;
@@ -136,6 +137,9 @@ export function Header({ whatsappUrl }: HeaderProps) {
                         href={whatsappUrl}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={() => {
+                          trackWhatsAppClick('mobile_menu_whatsapp');
+                        }}
                         className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
                       >
                         <MessageCircle className="h-5 w-5" />
