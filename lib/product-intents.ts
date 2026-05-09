@@ -7,6 +7,18 @@ export const INTENT_CONFIG = [
     categorySlugs: ['home-kitchen', 'cleaning-paper-personal-care', 'furnishings-linens', 'electrical-appliances'],
   },
   {
+    key: 'kitchen' as const,
+    label: 'للمطبخ والأدوات المنزلية',
+    title: 'أدوات المطبخ والمنزل',
+    categorySlugs: ['home-kitchen'],
+  },
+  {
+    key: 'plastics' as const,
+    label: 'للبلاستيكيات',
+    title: 'البلاستيكيات',
+    categorySlugs: ['plastic-packaging'],
+  },
+  {
     key: 'restaurants' as const,
     label: 'للمطاعم والكافيهات',
     title: 'منتجات مناسبة للمطاعم والكافيهات',
@@ -19,16 +31,16 @@ export const INTENT_CONFIG = [
     categorySlugs: ['restaurants-shops', 'plastic-packaging', 'cleaning-paper-personal-care', 'offers-bulk'],
   },
   {
+    key: 'cleaning' as const,
+    label: 'للتنظيف والورقيات',
+    title: 'منتجات التنظيف والورقيات',
+    categorySlugs: ['cleaning-paper-personal-care', 'home-kitchen'],
+  },
+  {
     key: 'packaging' as const,
     label: 'للتغليف',
     title: 'مستلزمات التغليف',
     categorySlugs: ['plastic-packaging', 'restaurants-shops'],
-  },
-  {
-    key: 'cleaning' as const,
-    label: 'للتنظيف اليومي',
-    title: 'منتجات التنظيف اليومي',
-    categorySlugs: ['cleaning-paper-personal-care', 'home-kitchen'],
   },
   {
     key: 'bulk' as const,
@@ -36,17 +48,33 @@ export const INTENT_CONFIG = [
     title: 'عروض وكميات',
     categorySlugs: ['offers-bulk', 'plastic-packaging', 'restaurants-shops'],
   },
+  {
+    key: 'appliances' as const,
+    label: 'للأجهزة الكهربائية',
+    title: 'الأجهزة الكهربائية',
+    categorySlugs: ['electrical-appliances', 'home-kitchen'],
+  },
+  {
+    key: 'furnishings' as const,
+    label: 'للمفروشات والبياضات',
+    title: 'المفروشات والبياضات',
+    categorySlugs: ['furnishings-linens', 'home-kitchen'],
+  },
 ];
 
 export type ProductIntentKey = (typeof INTENT_CONFIG)[number]['key'];
 
 export const INTENT_TAG_CONFIG = [
   { key: 'home' as const, label: 'للبيت' },
+  { key: 'kitchen' as const, label: 'للمطبخ والأدوات المنزلية' },
+  { key: 'plastics' as const, label: 'للبلاستيكيات' },
   { key: 'restaurants' as const, label: 'للمطاعم والكافيهات' },
   { key: 'shops' as const, label: 'للمحلات' },
+  { key: 'cleaning' as const, label: 'للتنظيف والورقيات' },
   { key: 'packaging' as const, label: 'للتغليف' },
-  { key: 'cleaning' as const, label: 'للتنظيف اليومي' },
   { key: 'bulk' as const, label: 'للكميات والعروض' },
+  { key: 'appliances' as const, label: 'للأجهزة الكهربائية' },
+  { key: 'furnishings' as const, label: 'للمفروشات والبياضات' },
 ];
 
 export function normalizeIntent(intent: unknown): ProductIntentKey {
@@ -80,6 +108,16 @@ export function getProductIntentTags(product: unknown): string[] {
   return tags.filter((t) => typeof t === 'string');
 }
 
+const CATEGORY_TO_INTENTS: Record<string, ProductIntentKey[]> = {
+  'home-kitchen': ['home', 'kitchen'],
+  'plastic-packaging': ['plastics', 'packaging', 'restaurants', 'shops', 'bulk'],
+  'restaurants-shops': ['restaurants', 'shops', 'packaging', 'bulk'],
+  'cleaning-paper-personal-care': ['cleaning', 'home', 'restaurants', 'shops'],
+  'electrical-appliances': ['appliances', 'home'],
+  'furnishings-linens': ['furnishings', 'home'],
+  'offers-bulk': ['bulk', 'shops', 'restaurants', 'plastics'],
+};
+
 export function productMatchesIntent(product: unknown, intent: ProductIntentKey): boolean {
   if (intent === 'all') return true;
 
@@ -89,10 +127,12 @@ export function productMatchesIntent(product: unknown, intent: ProductIntentKey)
     return intentTags.includes(intent);
   }
 
-  // 2. Fallback: category slug matching (backward compatibility)
+  // 2. Fallback: category slug → intents mapping (backward compatibility)
   const categorySlug = getProductCategorySlug(product);
   if (!categorySlug) return false;
 
-  const config = getIntentConfig(intent);
-  return config.categorySlugs.includes(categorySlug);
+  const intentsForCategory = CATEGORY_TO_INTENTS[categorySlug];
+  if (!intentsForCategory) return false;
+
+  return intentsForCategory.includes(intent);
 }

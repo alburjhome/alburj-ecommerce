@@ -34,7 +34,7 @@ export const productSchema = z.object({
   brand: z.string().trim().nullable(),
   tags: z.array(z.string().trim().min(1)).default([]),
   intent_tags: z
-    .array(z.enum(['home', 'restaurants', 'shops', 'packaging', 'cleaning', 'bulk']))
+    .array(z.enum(['home', 'kitchen', 'plastics', 'restaurants', 'shops', 'packaging', 'cleaning', 'bulk', 'appliances', 'furnishings']))
     .default([]),
   weight: optionalNumber,
   dimensions: z
