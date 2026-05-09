@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { HeroBanner } from '@/features/store/components/hero-banner';
 import { CategorySection } from '@/features/store/components/category-section';
@@ -172,19 +173,30 @@ function ShopCTA({ whatsappUrl }: { whatsappUrl: string | null }) {
           <p className="max-w-xl text-sm md:text-base text-muted-foreground">
             نوفر لك مستلزمات التغليف، البلاستيك، الورقيات والمنظفات بكميات وأسعار مناسبة.
           </p>
-          {whatsappUrl ? (
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {whatsappUrl ? (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+              >
+                <MessageCircle className="h-5 w-5" />
+                تواصل عبر واتساب
+              </a>
+            ) : (
+              <span className="inline-flex items-center justify-center rounded-lg border bg-white px-5 py-2.5 text-sm text-muted-foreground">
+                رقم واتساب غير مُعدّل حاليًا
+              </span>
+            )}
+
+            <Link
+              href="/quick-order"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border bg-white px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
-              <MessageCircle className="h-5 w-5" />
-              تواصل عبر واتساب
-            </a>
-          ) : (
-            <span className="text-sm text-muted-foreground">رقم واتساب غير مُعدّل حاليًا</span>
-          )}
+              جهّز طلبك خلال دقيقة
+            </Link>
+          </div>
         </div>
       </div>
     </section>

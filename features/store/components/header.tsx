@@ -39,6 +39,7 @@ export function Header({ whatsappUrl }: HeaderProps) {
     { href: '/', label: 'الرئيسية', icon: Home },
     { href: '/products', label: 'المنتجات', icon: Package },
     { href: '/categories', label: 'الأقسام', icon: LayoutGrid },
+    { href: '/quick-order', label: 'جهّز طلبك خلال دقيقة', icon: MessageCircle },
     { href: '/products', label: 'العروض', icon: Tag },
     { href: '/#contact', label: 'تواصل معنا', icon: MessageCircle },
   ];
