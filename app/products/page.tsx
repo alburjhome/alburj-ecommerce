@@ -24,6 +24,37 @@ export const metadata: Metadata = {
   description: 'تصفح منتجات مؤسسة البرج.',
 };
 
+function normalizeSearchTerm(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function productMatchesSearch(product: ProductWithDetails, term: string) {
+  const q = normalizeSearchTerm(term);
+  if (!q) return true;
+
+  const candidates: string[] = [];
+  if (product.name) candidates.push(product.name);
+  if ((product as any).description) candidates.push((product as any).description);
+  if ((product as any).short_description) candidates.push((product as any).short_description);
+  if ((product as any).marketing_tagline) candidates.push((product as any).marketing_tagline);
+  if ((product as any).sku) candidates.push((product as any).sku);
+  if ((product as any).brand) candidates.push((product as any).brand);
+  if ((product as any).category?.name) candidates.push((product as any).category.name);
+  if ((product as any).subcategory?.name) candidates.push((product as any).subcategory.name);
+
+  const tags = ((product as any).tags as string[] | null | undefined) || [];
+  for (const tag of tags) {
+    if (tag) candidates.push(tag);
+  }
+
+  const haystack = candidates
+    .filter(Boolean)
+    .join(' \n ')
+    .toLowerCase();
+
+  return haystack.includes(q);
+}
+
 async function getSettings() {
   const { data } = await supabase
     .from('store_settings')
@@ -57,16 +88,16 @@ async function getProducts(search?: string) {
     .order('created_at', { ascending: false });
 
   const term = search?.trim();
-  if (term) {
-    query = query.or(`name.ilike.%${term}%,sku.ilike.%${term}%`);
-  }
 
   const { data } = await query;
-  return ((data || []) as ProductWithDetails[]).map((product) => ({
+  const products = ((data || []) as ProductWithDetails[]).map((product) => ({
     ...product,
     variants: [],
     images: [...(product.images || [])].sort((a, b) => a.sort_order - b.sort_order),
   }));
+
+  if (!term) return products;
+  return products.filter((product) => productMatchesSearch(product, term));
 }
 
 export default async function ProductsPage({ searchParams }: ProductsPageProps) {
@@ -75,6 +106,8 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
 
   const selectedIntent = normalizeIntent((searchParams as any)?.intent);
   const intentConfig = getIntentConfig(selectedIntent);
+
+  const searchTerm = searchParams?.search?.trim() || '';
 
   let filteredProducts = products;
   try {
@@ -97,8 +130,12 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
         <div className="mb-8">
           <p className="text-sm text-muted-foreground">الكتالوج</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">{intentConfig.title}</h1>
-          {searchParams?.search && (
-            <p className="mt-2 text-sm text-muted-foreground">نتائج البحث عن: {searchParams.search}</p>
+          {searchTerm && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              {selectedIntent !== 'all'
+                ? `نتائج "${searchTerm}" ضمن: ${intentConfig.title}`
+                : `نتائج البحث عن: "${searchTerm}"`}
+            </p>
           )}
         </div>
 
@@ -112,9 +149,15 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
           </div>
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-16 text-center">
-            <h2 className="text-lg font-semibold">لا توجد منتجات ضمن هذا الاختيار حاليًا</h2>
-            {searchParams?.search && (
-              <p className="mt-2 text-sm text-muted-foreground">جرّب البحث بكلمة أخرى.</p>
+            {searchTerm ? (
+              <>
+                <h2 className="text-lg font-semibold">لم نجد منتجات مطابقة لبحثك</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  جرّب كلمة أبسط مثل: شامبو، تغليف، كرسي، مناديل
+                </p>
+              </>
+            ) : (
+              <h2 className="text-lg font-semibold">لا توجد منتجات ضمن هذا الاختيار حاليًا</h2>
             )}
           </div>
         )}

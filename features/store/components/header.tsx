@@ -29,6 +29,16 @@ export function Header({ whatsappUrl }: HeaderProps) {
   const { openCart, getTotalItems } = useCartStore();
   const cartCount = getTotalItems();
 
+  const quickSearchSuggestions = [
+    'شامبو سجاد',
+    'علب تغليف',
+    'كراسي بلاستيك',
+    'مناديل',
+    'أدوات مطبخ',
+    'منظفات',
+    'بلاستيكيات',
+  ];
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -36,12 +46,20 @@ export function Header({ whatsappUrl }: HeaderProps) {
     }
   };
 
+  const goToSearch = (keyword: string) => {
+    const term = keyword.trim();
+    if (!term) return;
+    setIsSearchOpen(false);
+    setSearchQuery(term);
+    window.location.href = `/products?search=${encodeURIComponent(term)}`;
+  };
+
   const navLinks = [
     { href: '/', label: 'الرئيسية', icon: Home },
     { href: '/products', label: 'المنتجات', icon: Package },
     { href: '/categories', label: 'الأقسام', icon: LayoutGrid },
     { href: '/quick-order', label: 'جهّز طلبك خلال دقيقة', icon: MessageCircle },
-    { href: '/products', label: 'العروض', icon: Tag },
+    { href: '/offers', label: 'العروض', icon: Tag },
     { href: '/#contact', label: 'تواصل معنا', icon: MessageCircle },
   ];
 
@@ -239,15 +257,31 @@ export function Header({ whatsappUrl }: HeaderProps) {
         </div>
 
         {isSearchOpen && (
-          <div className="md:hidden pb-4">
-            <form onSubmit={handleSearch}>
-              <Input
-                type="search"
-                placeholder="ابحث عن منتج..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full"
-              />
+          <div className="md:hidden pb-4" dir="rtl">
+            <form onSubmit={handleSearch} className="space-y-3">
+              <div className="relative">
+                <Input
+                  type="search"
+                  placeholder="ابحث عن منتج..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full text-base"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {quickSearchSuggestions.map((keyword) => (
+                  <button
+                    key={keyword}
+                    type="button"
+                    onClick={() => goToSearch(keyword)}
+                    className="rounded-full border bg-card px-3 py-1 text-sm font-semibold text-foreground hover:bg-muted"
+                  >
+                    {keyword}
+                  </button>
+                ))}
+              </div>
             </form>
           </div>
         )}
