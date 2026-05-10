@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Minus, Plus, ShoppingCart, Award, MessageCircle, Package, Check, Truck, CreditCard, Boxes, HelpCircle } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, MessageCircle, Check, Truck, CreditCard, Boxes, HelpCircle } from 'lucide-react';
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
@@ -18,19 +18,21 @@ interface ProductDetailProps {
 }
 
 export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
-  const cartStore = useCartStore();
-  const [hasHydrated, setHasHydrated] = useState(false);
+  // Use selectors to avoid re-renders from changing store object
+  const addItem = useCartStore((state) => state.addItem);
+  const openCart = useCartStore((state) => state.openCart);
+  const hasHydrated = useCartStore((state) => state.hasHydrated);
+  const rehydrate = useCartStore((state) => state.rehydrate);
+
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
 
-  // Prevent hydration mismatch with cart store
+  // Rehydrate only once when not hydrated
   useEffect(() => {
-    const rehydrate = (cartStore as any).rehydrate;
-    if (typeof rehydrate === 'function') {
+    if (!hasHydrated && rehydrate) {
       rehydrate();
     }
-    setHasHydrated(true);
-  }, [cartStore]);
+  }, [hasHydrated, rehydrate]);
 
   const images = useMemo(() => {
     const sortedImages = [...(product.images || [])].sort((a, b) => {
@@ -67,7 +69,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   function handleAddToCart() {
     if (!canAddToCart || !hasHydrated) return;
 
-    cartStore.addItem({
+    addItem({
       product_id: product.id,
       variant_id: null,
       name: product.name,
@@ -76,7 +78,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
       image: imageSrc,
       stock_quantity: product.stock_quantity,
     });
-    cartStore.openCart();
+    openCart();
   }
 
   const productUrl = typeof window !== 'undefined' ? window.location.href : '';

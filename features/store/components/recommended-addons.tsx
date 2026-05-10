@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,17 +16,18 @@ interface RecommendedAddonsProps {
 }
 
 export function RecommendedAddons({ products }: RecommendedAddonsProps) {
-  const cartStore = useCartStore();
-  const [hasHydrated, setHasHydrated] = useState(false);
+  // Use selectors to avoid re-renders from changing store object
+  const addItem = useCartStore((state) => state.addItem);
+  const openCart = useCartStore((state) => state.openCart);
+  const hasHydrated = useCartStore((state) => state.hasHydrated);
+  const rehydrate = useCartStore((state) => state.rehydrate);
 
-  // Prevent hydration mismatch with cart store
+  // Rehydrate only once when not hydrated
   useEffect(() => {
-    const rehydrate = (cartStore as any).rehydrate;
-    if (typeof rehydrate === 'function') {
+    if (!hasHydrated && rehydrate) {
       rehydrate();
     }
-    setHasHydrated(true);
-  }, [cartStore]);
+  }, [hasHydrated, rehydrate]);
 
   if (!products.length) return null;
 
@@ -75,7 +76,7 @@ export function RecommendedAddons({ products }: RecommendedAddonsProps) {
                     size="sm"
                     onClick={() => {
                       if (!hasHydrated) return;
-                      cartStore.addItem({
+                      addItem({
                         product_id: product.id,
                         variant_id: null,
                         name: product.name,
@@ -84,7 +85,7 @@ export function RecommendedAddons({ products }: RecommendedAddonsProps) {
                         image: imageSrc,
                         stock_quantity: product.stock_quantity,
                       });
-                      cartStore.openCart();
+                      openCart();
                     }}
                     disabled={!hasHydrated || (product.track_stock && (product.stock_quantity ?? 0) <= 0 && !product.allow_backorders)}
                   >
