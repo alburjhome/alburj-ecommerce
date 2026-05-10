@@ -121,6 +121,7 @@ export function BannersClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
 
   const currentLinkPresetValue = useMemo(() => {
     const value = form.link_url.trim();
@@ -128,6 +129,16 @@ export function BannersClient() {
     const match = linkPresetOptions.some((option) => option.value === value);
     return match ? value : '__custom__';
   }, [form.link_url]);
+
+  const previewDesktopImage = useMemo(
+    () => safeImageSrc(form.image_url || null, PLACEHOLDER_BANNER),
+    [form.image_url]
+  );
+
+  const previewMobileImage = useMemo(
+    () => safeImageSrc(form.mobile_image_url || form.image_url || null, PLACEHOLDER_BANNER),
+    [form.mobile_image_url, form.image_url]
+  );
 
   const loadBanners = useCallback(async () => {
     setIsLoading(true);
@@ -420,6 +431,102 @@ export function BannersClient() {
             />
             البانر نشط
           </label>
+
+          <div className="md:col-span-2 rounded-lg border bg-muted/20 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-sm font-semibold">معاينة البانر</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  المعاينة تقريبية، وقد يختلف القص قليلًا حسب حجم الشاشة.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={previewMode === 'desktop' ? 'secondary' : 'outline'}
+                  onClick={() => setPreviewMode('desktop')}
+                >
+                  معاينة الديسكتوب
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={previewMode === 'mobile' ? 'secondary' : 'outline'}
+                  onClick={() => setPreviewMode('mobile')}
+                >
+                  معاينة الموبايل
+                </Button>
+              </div>
+            </div>
+
+            {previewMode === 'desktop' ? (
+              <div className="mt-4">
+                {!form.image_url ? (
+                  <div className="flex aspect-[1920/650] w-full items-center justify-center rounded-lg border bg-background text-sm text-muted-foreground">
+                    ارفع صورة الديسكتوب لمعاينة البانر
+                  </div>
+                ) : (
+                  <div className="relative aspect-[1920/650] w-full overflow-hidden rounded-lg border bg-muted">
+                    <SafeImage
+                      src={previewDesktopImage}
+                      fallbackSrc={PLACEHOLDER_BANNER}
+                      alt={form.title || 'Banner preview'}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 900px"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-4 text-white md:p-6">
+                      {form.title && <div className="text-lg font-bold md:text-2xl">{form.title}</div>}
+                      {form.subtitle && <div className="mt-1 text-sm text-white/90 md:text-base">{form.subtitle}</div>}
+                      {form.link_url.trim() && (
+                        <div className="mt-3 inline-flex rounded-md bg-white px-4 py-2 text-sm font-semibold text-primary">
+                          تسوق الآن
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4">
+                {!form.mobile_image_url && !form.image_url ? (
+                  <div className="flex aspect-[1080/1350] w-full items-center justify-center rounded-lg border bg-background text-sm text-muted-foreground">
+                    ارفع صورة لمعاينة بانر الموبايل
+                  </div>
+                ) : (
+                  <div className="mx-auto w-full max-w-[420px]">
+                    <div className="relative aspect-[1080/1350] w-full overflow-hidden rounded-lg border bg-muted">
+                      <SafeImage
+                        src={previewMobileImage}
+                        fallbackSrc={PLACEHOLDER_BANNER}
+                        alt={form.title || 'Banner preview'}
+                        fill
+                        className="object-cover"
+                        sizes="420px"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
+                      <div className="absolute inset-x-0 bottom-0 p-4 text-white">
+                        {form.title && <div className="text-lg font-bold">{form.title}</div>}
+                        {form.subtitle && <div className="mt-1 text-sm text-white/90">{form.subtitle}</div>}
+                        {form.link_url.trim() && (
+                          <div className="mt-3 inline-flex rounded-md bg-white px-4 py-2 text-sm font-semibold text-primary">
+                            تسوق الآن
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {!form.mobile_image_url && form.image_url && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        تم استخدام صورة الديسكتوب كصورة موبايل (fallback) لعدم وجود صورة موبايل.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-4 flex justify-end">
