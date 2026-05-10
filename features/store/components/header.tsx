@@ -60,19 +60,35 @@ export function Header({ whatsappUrl }: HeaderProps) {
     window.location.href = `/products?search=${encodeURIComponent(term)}`;
   };
 
-  const navLinks = [
+  // Desktop navigation: essential links only
+  const desktopNavLinks = [
     { href: '/', label: 'الرئيسية', icon: Home },
     { href: '/products', label: 'المنتجات', icon: Package },
     { href: '/categories', label: 'الأقسام', icon: LayoutGrid },
     { href: '/offers', label: 'العروض', icon: Tag },
+    { href: '/restaurants', label: 'للمطاعم والكافيهات', icon: Store },
+    { href: '/bulk', label: 'الكميات والجملة', icon: Boxes },
+  ];
+
+  // Mobile navigation: organized into groups
+  const mobileMainLinks = [
+    { href: '/', label: 'الرئيسية', icon: Home },
+    { href: '/products', label: 'المنتجات', icon: Package },
+    { href: '/categories', label: 'الأقسام', icon: LayoutGrid },
+    { href: '/offers', label: 'العروض', icon: Tag },
+  ];
+
+  const mobileShopByNeedLinks = [
     { href: '/restaurants', label: 'للمطاعم والكافيهات', icon: Store },
     { href: '/packaging', label: 'التغليف', icon: Box },
     { href: '/plastic-products', label: 'البلاستيكيات', icon: Sofa },
     { href: '/home-kitchen', label: 'البيت والمطبخ', icon: ChefHat },
     { href: '/cleaning', label: 'المنظفات والورقيات', icon: Sparkles },
     { href: '/bulk', label: 'الكميات والجملة', icon: Boxes },
+  ];
+
+  const mobileQuickLinks = [
     { href: '/quick-order', label: 'جهّز طلبك خلال دقيقة', icon: MessageCircle },
-    { href: '/#contact', label: 'تواصل معنا', icon: MessageCircle },
   ];
 
   const categoryLinks = [
@@ -121,23 +137,88 @@ export function Header({ whatsappUrl }: HeaderProps) {
                   </p>
                 </div>
 
-                {/* Main nav links */}
-                <nav className="flex flex-col gap-1 px-3 py-4">
-                  {navLinks.map((link) => {
-                    const Icon = link.icon;
-                    return (
-                      <SheetClose asChild key={`${link.href}-${link.label}`}>
-                        <Link
-                          href={link.href}
-                          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted hover:text-primary"
+                {/* Group 1: Main Links */}
+                <div className="px-3 py-3">
+                  <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    روابط رئيسية
+                  </div>
+                  <nav className="flex flex-col gap-0.5">
+                    {mobileMainLinks.map((link) => {
+                      const Icon = link.icon;
+                      return (
+                        <SheetClose asChild key={`mobile-main-${link.href}`}>
+                          <Link
+                            href={link.href}
+                            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted hover:text-primary"
+                          >
+                            <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                            {link.label}
+                          </Link>
+                        </SheetClose>
+                      );
+                    })}
+                  </nav>
+                </div>
+
+                {/* Group 2: Shop by Need */}
+                <div className="px-3 py-2">
+                  <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    تسوق حسب احتياجك
+                  </div>
+                  <nav className="flex flex-col gap-0.5">
+                    {mobileShopByNeedLinks.map((link) => {
+                      const Icon = link.icon;
+                      return (
+                        <SheetClose asChild key={`mobile-need-${link.href}`}>
+                          <Link
+                            href={link.href}
+                            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted hover:text-primary"
+                          >
+                            <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                            {link.label}
+                          </Link>
+                        </SheetClose>
+                      );
+                    })}
+                  </nav>
+                </div>
+
+                {/* Group 3: Quick Order */}
+                <div className="px-3 py-2">
+                  <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    اطلب بسرعة
+                  </div>
+                  <nav className="flex flex-col gap-0.5">
+                    {mobileQuickLinks.map((link) => {
+                      const Icon = link.icon;
+                      return (
+                        <SheetClose asChild key={`mobile-quick-${link.href}`}>
+                          <Link
+                            href={link.href}
+                            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted hover:text-primary"
+                          >
+                            <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                            {link.label}
+                          </Link>
+                        </SheetClose>
+                      );
+                    })}
+                    {whatsappUrl && (
+                      <SheetClose asChild>
+                        <a
+                          href={whatsappUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackWhatsAppClick('mobile_menu_whatsapp')}
+                          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-green-600 transition-colors hover:bg-green-50"
                         >
-                          <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
-                          {link.label}
-                        </Link>
+                          <MessageCircle className="h-5 w-5 shrink-0" />
+                          تواصل معنا عبر واتساب
+                        </a>
                       </SheetClose>
-                    );
-                  })}
-                </nav>
+                    )}
+                  </nav>
+                </div>
 
                 {/* Shop by category */}
                 <div className="px-3 py-2">
@@ -159,25 +240,7 @@ export function Header({ whatsappUrl }: HeaderProps) {
                   </nav>
                 </div>
 
-                <div className="mt-auto border-t px-5 py-5 space-y-4">
-                  {/* WhatsApp button */}
-                  {whatsappUrl && (
-                    <SheetClose asChild>
-                      <a
-                        href={whatsappUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => {
-                          trackWhatsAppClick('mobile_menu_whatsapp');
-                        }}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
-                      >
-                        <MessageCircle className="h-5 w-5" />
-                        تواصل عبر واتساب
-                      </a>
-                    </SheetClose>
-                  )}
-
+                <div className="mt-auto border-t px-5 py-4">
                   {/* Trust points */}
                   <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-muted-foreground">
                     <div className="flex flex-col items-center gap-1">
@@ -210,7 +273,7 @@ export function Header({ whatsappUrl }: HeaderProps) {
           </Link>
 
           <nav className="hidden lg:flex items-center gap-6">
-            {navLinks.map((link) => (
+            {desktopNavLinks.map((link) => (
               <Link
                 key={`${link.href}-${link.label}`}
                 href={link.href}

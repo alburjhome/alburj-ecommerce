@@ -17,7 +17,11 @@ export const metadata: Metadata = {
   description: 'مؤسسة البرج - وجهتك الأولى للمنتجات البلاستيكية، الأدوات المنزلية، والأجهزة الكهربائية في الأردن. توصيل سريع، أسعار مميزة، وخدمة ممتازة.',
   keywords: 'مؤسسة البرج, منتجات بلاستيكية, أدوات منزلية, أجهزة كهربائية, الأردن, تسوق اونلاين',
   icons: {
-    icon: '/favicon.svg',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: { url: '/favicon.svg', type: 'image/svg+xml' },
+    apple: { url: '/favicon.svg', type: 'image/svg+xml' },
   },
   openGraph: {
     title: 'مؤسسة البرج - منتجات بلاستيكية وأدوات منزلية',
