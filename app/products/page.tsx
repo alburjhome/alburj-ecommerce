@@ -187,21 +187,21 @@ function HeroSection({
   const heroWhatsAppHref = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(heroMessage)}` : null;
 
   return (
-    <section className="bg-gradient-to-b from-primary/5 to-background py-8 md:py-10" dir="rtl">
+    <section className="bg-gradient-to-b from-primary/5 to-background py-5 md:py-10" dir="rtl">
       <div className="container mx-auto px-4">
         <div className="mx-auto max-w-3xl text-center">
-          <h1 className="text-2xl font-bold tracking-tight md:text-4xl">{title}</h1>
-          <p className="mt-3 text-sm text-muted-foreground md:text-base">{description}</p>
+          <h1 className="text-xl font-bold tracking-tight md:text-4xl">{title}</h1>
+          <p className="mt-2 text-xs text-muted-foreground md:mt-3 md:text-base md:text-sm">{description}</p>
 
-          <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+          <div className="mt-3 flex flex-col items-center justify-center gap-2 sm:mt-5 sm:flex-row">
             {heroWhatsAppHref && !searchTerm && selectedIntent === 'all' && (
               <TrackedWhatsAppLink
                 href={heroWhatsAppHref}
                 source="products_hero_whatsapp"
                 metadata={{ cta_name: 'products_hero' }}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-green-700 md:px-5 md:py-2.5 md:text-sm"
               >
-                <MessageCircle className="h-4 w-4" />
+                <MessageCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 استفسر عبر واتساب
               </TrackedWhatsAppLink>
             )}
@@ -214,19 +214,19 @@ function HeroSection({
 
 function QuickShortcutsSection() {
   return (
-    <section className="py-4 md:py-6" dir="rtl">
+    <section className="py-2 md:py-6" dir="rtl">
       <div className="container mx-auto px-4">
-        <p className="mb-3 text-sm font-medium text-muted-foreground">اختصارات سريعة:</p>
-        <div className="flex flex-wrap gap-2">
+        <p className="mb-2 text-xs font-medium text-muted-foreground md:mb-3 md:text-sm">اختصارات سريعة:</p>
+        <div className="flex flex-wrap gap-1.5 md:gap-2">
           {quickShortcuts.map((item) => {
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-80 ${item.color}`}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors hover:opacity-80 md:gap-1.5 md:px-3 md:py-1.5 md:text-sm ${item.color}`}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-3 w-3 md:h-4 md:w-4" />
                 {item.label}
               </Link>
             );
@@ -247,9 +247,9 @@ function SortBar({
   selectedIntent: ProductIntentKey;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 py-3" dir="rtl">
-      <span className="text-sm text-muted-foreground">الترتيب:</span>
-      <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-1.5 py-2 md:gap-2 md:py-3" dir="rtl">
+      <span className="text-xs text-muted-foreground md:text-sm">الترتيب:</span>
+      <div className="flex flex-wrap gap-1.5 md:gap-2">
         {sortOptions.map((option) => {
           const Icon = option.icon;
           const isActive = currentSort === option.key;
@@ -261,14 +261,17 @@ function SortBar({
                 intent: selectedIntent,
                 sort: option.key,
               })}
-              className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors md:rounded-lg md:px-3 md:py-1.5 md:text-sm ${
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'border bg-background text-foreground hover:bg-muted'
               }`}
             >
-              <Icon className="h-3.5 w-3.5" />
-              {option.label}
+              <Icon className="h-3 w-3 md:h-3.5 md:w-3.5" />
+              <span className="hidden sm:inline">{option.label}</span>
+              <span className="sm:hidden">
+                {option.key === 'price_asc' ? 'الأرخص' : option.key === 'price_desc' ? 'الأغلى' : option.label}
+              </span>
             </Link>
           );
         })}
@@ -279,8 +282,8 @@ function SortBar({
 
 function ResultsCount({ count }: { count: number }) {
   return (
-    <p className="text-sm text-muted-foreground" dir="rtl">
-      {count === 0 ? 'لا توجد منتجات' : count === 1 ? 'منتج واحد' : `عرض ${count} منتج`}
+    <p className="text-xs text-muted-foreground md:text-sm" dir="rtl">
+      {count === 0 ? 'لا توجد منتجات' : count === 1 ? 'منتج واحد' : count === 2 ? 'منتجان' : count < 11 ? `${count} منتجات` : `${count} منتجًا`}
     </p>
   );
 }

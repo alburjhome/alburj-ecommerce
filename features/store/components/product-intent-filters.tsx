@@ -22,12 +22,12 @@ export function ProductIntentFilters({ selected }: ProductIntentFiltersProps) {
   const search = searchParams.get('search');
 
   return (
-    <section className="mb-6">
-      <div className="mb-3">
-        <h2 className="text-base font-semibold">تسوق حسب احتياجك</h2>
+    <section className="mb-3 md:mb-6">
+      <div className="mb-2 md:mb-3">
+        <h2 className="text-sm font-semibold md:text-base">تسوق حسب احتياجك</h2>
       </div>
 
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         {INTENT_CONFIG.map((intent) => {
           const active = selected === intent.key;
           return (
@@ -35,7 +35,7 @@ export function ProductIntentFilters({ selected }: ProductIntentFiltersProps) {
               key={intent.key}
               href={buildProductsHref(intent.key, search)}
               className={cn(
-                'shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
+                'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:px-4 md:py-2 md:text-sm',
                 active
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-background text-foreground hover:bg-muted'
