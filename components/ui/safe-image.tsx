@@ -1,7 +1,7 @@
 'use client';
 
 import Image, { ImageProps } from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
 
 type SafeImageProps = Omit<ImageProps, 'src'> & {
@@ -19,6 +19,11 @@ export function SafeImage({
 }: SafeImageProps) {
   const [currentSrc, setCurrentSrc] = useState(() => safeImageSrc(src, fallbackSrc));
   const resolvedSizes = sizes ?? (props.fill ? '100vw' : undefined);
+
+  useEffect(() => {
+    const nextSrc = safeImageSrc(src, fallbackSrc);
+    setCurrentSrc(nextSrc);
+  }, [src, fallbackSrc]);
 
   return (
     <Image

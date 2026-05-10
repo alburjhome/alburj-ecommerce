@@ -75,7 +75,7 @@ export function HeroBanner({ banners }: HeroBannerProps) {
           fill
           className="object-cover"
           sizes="100vw"
-          priority
+          priority={false}
         />
       </div>
 

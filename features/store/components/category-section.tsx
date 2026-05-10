@@ -33,7 +33,7 @@ export function CategorySection({ categories }: CategorySectionProps) {
                 fill
                 className="object-cover"
                 sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                priority={index < 4}
+                priority={index < 2}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
               <div className="absolute bottom-0 left-0 right-0 p-3 md:p-4">
