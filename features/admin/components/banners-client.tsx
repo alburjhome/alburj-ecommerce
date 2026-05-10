@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Edit, EyeOff, ImageIcon, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +51,21 @@ const positionOptions: Array<{ value: BannerPosition; label: string }> = [
   { value: 'home_middle', label: 'الرئيسية - الوسط' },
   { value: 'home_bottom', label: 'الرئيسية - الأسفل' },
   { value: 'category_page', label: 'صفحة القسم' },
+];
+
+const linkPresetOptions: Array<{ value: string; label: string }> = [
+  { label: 'بدون رابط', value: '' },
+  { label: 'الرئيسية', value: '/' },
+  { label: 'كل المنتجات', value: '/products' },
+  { label: 'الأقسام', value: '/categories' },
+  { label: 'العروض', value: '/offers' },
+  { label: 'للمطاعم والكافيهات', value: '/restaurants' },
+  { label: 'التغليف', value: '/packaging' },
+  { label: 'البلاستيكيات', value: '/plastic-products' },
+  { label: 'البيت والمطبخ', value: '/home-kitchen' },
+  { label: 'المنظفات والورقيات', value: '/cleaning' },
+  { label: 'الكميات والجملة', value: '/bulk' },
+  { label: 'جهّز طلبك خلال دقيقة', value: '/quick-order' },
 ];
 
 async function getAccessToken() {
@@ -107,6 +122,12 @@ export function BannersClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
+
+  const currentLinkPresetValue = useMemo(() => {
+    const value = form.link_url.trim();
+    const match = linkPresetOptions.some((option) => option.value === value);
+    return match ? value : '__custom__';
+  }, [form.link_url]);
 
   const loadBanners = useCallback(async () => {
     setIsLoading(true);
@@ -301,14 +322,38 @@ export function BannersClient() {
             />
           </div>
           <div>
-            <Label htmlFor="banner-link">رابط الانتقال</Label>
-            <Input
-              id="banner-link"
-              dir="ltr"
-              value={form.link_url}
-              onChange={(event) => setForm((current) => ({ ...current, link_url: event.target.value }))}
-              placeholder="/category/electrical-appliances"
-            />
+            <Label>اختر رابطًا جاهزًا</Label>
+            <Select
+              value={currentLinkPresetValue}
+              onValueChange={(value) => {
+                if (value === '__custom__') return;
+                setForm((current) => ({ ...current, link_url: value }));
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="اختر رابطًا" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__custom__">رابط مخصص</SelectItem>
+                {linkPresetOptions.map((option) => (
+                  <SelectItem key={option.label} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">اختر رابطًا جاهزًا أو اكتب رابطًا مخصصًا يدويًا.</p>
+
+            <div className="mt-3">
+              <Label htmlFor="banner-link">أو اكتب رابطًا مخصصًا</Label>
+              <Input
+                id="banner-link"
+                dir="ltr"
+                value={form.link_url}
+                onChange={(event) => setForm((current) => ({ ...current, link_url: event.target.value }))}
+                placeholder="/category/cleaning-paper-personal-care أو https://wa.me/..."
+              />
+            </div>
           </div>
           <div>
             <Label>مكان الظهور</Label>
