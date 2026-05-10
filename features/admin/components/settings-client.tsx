@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { RefreshCw, Save, Settings } from 'lucide-react';
+import { RefreshCw, Save, Settings, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +32,7 @@ interface SettingsFormState {
   free_shipping_threshold: string;
   min_order_amount: string;
   maintenance_mode: boolean;
+  ai_provider: 'gemini' | 'openai' | null;
 }
 
 const emptyForm: SettingsFormState = {
@@ -53,6 +54,7 @@ const emptyForm: SettingsFormState = {
   free_shipping_threshold: '',
   min_order_amount: '',
   maintenance_mode: false,
+  ai_provider: 'gemini',
 };
 
 async function getAccessToken() {
@@ -84,6 +86,7 @@ function formFromSettings(settings: StoreSettingsRecord): SettingsFormState {
       settings.free_shipping_threshold === null ? '' : String(settings.free_shipping_threshold),
     min_order_amount: settings.min_order_amount === null ? '' : String(settings.min_order_amount),
     maintenance_mode: settings.maintenance_mode,
+    ai_provider: settings.ai_provider || 'gemini',
   };
 }
 
@@ -158,6 +161,7 @@ export function SettingsClient() {
         free_shipping_threshold: numberOrNull(form.free_shipping_threshold),
         min_order_amount: numberOrNull(form.min_order_amount),
         maintenance_mode: form.maintenance_mode,
+        ai_provider: form.ai_provider,
       };
 
       const result = await updateAdminStoreSettings(token, settingsId, payload);
@@ -413,6 +417,35 @@ export function SettingsClient() {
               />
               تفعيل وضع الصيانة
             </label>
+
+            <div className="md:col-span-2 pt-3 border-t">
+              <h3 className="text-base font-semibold mb-1 flex items-center gap-2">
+                <Bot className="h-4 w-4" />
+                إعدادات الذكاء الاصطناعي
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                يتم استخدام هذا المزود لتوليد وصف المنتجات وSEO ووصف الصور. المفاتيح يتم ضبطها من متغيرات البيئة ولا تظهر في المتصفح.
+              </p>
+            </div>
+            <div className="md:col-span-2">
+              <label htmlFor="ai-provider" className="block text-sm font-medium mb-1">
+                مزود الذكاء الاصطناعي
+              </label>
+              <select
+                id="ai-provider"
+                value={form.ai_provider || 'gemini'}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    ai_provider: event.target.value as 'gemini' | 'openai',
+                  }))
+                }
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="gemini">Gemini (Google)</option>
+                <option value="openai">ChatGPT / OpenAI</option>
+              </select>
+            </div>
           </div>
 
           <div className="mt-5 flex justify-end">

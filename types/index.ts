@@ -257,6 +257,7 @@ export interface StoreSettings {
   free_shipping_threshold: number | null;
   min_order_amount: number | null;
   maintenance_mode: boolean;
+  ai_provider: 'gemini' | 'openai' | null;
   created_at: string;
   updated_at: string;
 }

@@ -31,6 +31,7 @@ export interface StoreSettingsRecord {
   free_shipping_threshold: number | null;
   min_order_amount: number | null;
   maintenance_mode: boolean;
+  ai_provider: 'gemini' | 'openai' | null;
   created_at: string;
   updated_at: string;
 }
@@ -78,6 +79,11 @@ const nullableGa4MeasurementId = z.preprocess(
     .nullable()
 );
 
+const aiProviderSchema = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
+  z.enum(['gemini', 'openai']).nullable()
+);
+
 const settingsSchema = z.object({
   store_name: z.string().trim().min(1, 'اسم المتجر مطلوب'),
   store_description: nullableText,
@@ -100,6 +106,7 @@ const settingsSchema = z.object({
   free_shipping_threshold: nullableNumber,
   min_order_amount: nullableNumber,
   maintenance_mode: z.boolean(),
+  ai_provider: aiProviderSchema,
 });
 
 export type StoreSettingsInput = z.infer<typeof settingsSchema>;
@@ -128,7 +135,7 @@ export async function getAdminStoreSettings(
     const adminClient = await createAdminActionClient(accessToken);
     const { data, error } = await (adminClient.from('store_settings') as any)
       .select(
-        'id, store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url, meta_pixel_id, ga4_measurement_id, currency, currency_symbol, free_shipping_threshold, min_order_amount, maintenance_mode, created_at, updated_at'
+        'id, store_name, store_description, whatsapp_number, contact_email, contact_phone, address, facebook_url, instagram_url, tiktok_url, snapchat_url, youtube_url, meta_pixel_id, ga4_measurement_id, currency, currency_symbol, free_shipping_threshold, min_order_amount, maintenance_mode, ai_provider, created_at, updated_at'
       )
       .order('created_at', { ascending: true })
       .limit(1)
