@@ -16,6 +16,9 @@ export const WHATSAPP_CLICK_SOURCE_LABELS_AR: Record<string, string> = {
   plastics_hero_whatsapp: 'واتساب صفحة البلاستيكيات',
   plastics_bundle: 'باقات البلاستيكيات',
   plastics_empty_whatsapp: 'واتساب عدم توفر منتجات البلاستيكيات',
+  home_kitchen_hero_whatsapp: 'واتساب صفحة البيت والمطبخ',
+  home_kitchen_bundle: 'باقات البيت والمطبخ',
+  home_kitchen_empty_whatsapp: 'واتساب عدم توفر منتجات البيت والمطبخ',
   mobile_menu_whatsapp: 'واتساب القائمة الجانبية',
   footer_whatsapp: 'واتساب الفوتر',
 };

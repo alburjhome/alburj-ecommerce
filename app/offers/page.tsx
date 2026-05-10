@@ -241,6 +241,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 >
                   شاهد عروض البلاستيكيات ←
                 </Link>
+                <Link
+                  href="/home-kitchen"
+                  className="text-sm text-primary hover:underline"
+                >
+                  شاهد عروض البيت والمطبخ ←
+                </Link>
               </div>
             </div>
           </div>
