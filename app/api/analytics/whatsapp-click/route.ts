@@ -34,6 +34,9 @@ const ALLOWED_SOURCES = [
   'categories_help_whatsapp',
   'categories_hero_whatsapp',
   'categories_empty_whatsapp',
+  'products_empty_whatsapp',
+  'products_help_whatsapp',
+  'products_hero_whatsapp',
 ] as const;
 
 type AllowedSource = (typeof ALLOWED_SOURCES)[number];

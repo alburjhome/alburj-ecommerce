@@ -31,4 +31,7 @@ export const WHATSAPP_CLICK_SOURCE_LABELS_AR: Record<string, string> = {
   categories_help_whatsapp: 'واتساب مساعدة صفحة الأقسام',
   categories_hero_whatsapp: 'واتساب hero صفحة الأقسام',
   categories_empty_whatsapp: 'واتساب صفحة الأقسام (فارغ)',
+  products_empty_whatsapp: 'واتساب عدم وجود نتائج المنتجات',
+  products_help_whatsapp: 'واتساب مساعدة صفحة المنتجات',
+  products_hero_whatsapp: 'واتساب hero صفحة المنتجات',
 };
