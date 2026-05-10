@@ -221,6 +221,7 @@ export interface Banner {
   title: string;
   subtitle: string | null;
   image_url: string;
+  mobile_image_url: string | null;
   link_url: string | null;
   position: BannerPosition;
   is_active: boolean;

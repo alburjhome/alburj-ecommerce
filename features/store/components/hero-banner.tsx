@@ -28,7 +28,7 @@ function normalizeBannerLink(value: string | null | undefined) {
 export function HeroBanner({ banners }: HeroBannerProps) {
   if (!banners.length) {
     return (
-      <section className="relative h-[400px] md:h-[500px] bg-gradient-to-r from-primary/10 to-primary/5 flex items-center">
+      <section className="relative h-[460px] md:h-[620px] bg-gradient-to-r from-primary/10 to-primary/5 flex items-center">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl">
             <h1 className="text-3xl md:text-5xl font-bold mb-4 text-foreground">
@@ -48,21 +48,41 @@ export function HeroBanner({ banners }: HeroBannerProps) {
 
   const banner = banners[0];
   const imageSrc = safeImageSrc(banner.image_url, PLACEHOLDER_BANNER);
+  const mobileImageSrc = safeImageSrc(banner.mobile_image_url || banner.image_url, PLACEHOLDER_BANNER);
   const bannerLink = normalizeBannerLink(banner.link_url);
 
   return (
-    <section className="relative h-[400px] md:h-[500px] hero-banner">
-      <SafeImage
-        src={imageSrc}
-        fallbackSrc={PLACEHOLDER_BANNER}
-        alt={banner.title}
-        fill
-        className="object-cover"
-        sizes="100vw"
-        priority
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent z-10" />
-      <div className="relative z-20 container mx-auto px-4 h-full flex items-end pb-16">
+    <section className="relative h-[460px] md:h-[620px] hero-banner">
+      {/* Mobile image */}
+      <div className="absolute inset-0 md:hidden">
+        <SafeImage
+          src={mobileImageSrc}
+          fallbackSrc={PLACEHOLDER_BANNER}
+          alt={banner.title}
+          fill
+          className="object-cover"
+          sizes="100vw"
+          priority
+        />
+      </div>
+
+      {/* Desktop image */}
+      <div className="absolute inset-0 hidden md:block">
+        <SafeImage
+          src={imageSrc}
+          fallbackSrc={PLACEHOLDER_BANNER}
+          alt={banner.title}
+          fill
+          className="object-cover"
+          sizes="100vw"
+          priority
+        />
+      </div>
+
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent z-10" />
+
+      <div className="relative z-20 container mx-auto px-4 h-full flex items-end pb-12 md:pb-20">
         <div className="max-w-2xl text-white">
           <h1 className="text-3xl md:text-5xl font-bold mb-4">{banner.title}</h1>
           {banner.subtitle && (

@@ -19,6 +19,7 @@ export interface BannerRecord {
   title: string;
   subtitle: string | null;
   image_url: string;
+  mobile_image_url: string | null;
   link_url: string | null;
   position: BannerPosition;
   is_active: boolean;
@@ -37,6 +38,7 @@ const bannerSchema = z.object({
   title: z.string().trim().min(1, 'عنوان البانر مطلوب'),
   subtitle: z.string().trim().nullable(),
   image_url: z.string().trim().min(1, 'صورة البانر مطلوبة'),
+  mobile_image_url: z.string().trim().nullable(),
   link_url: z.string().trim().nullable(),
   position: z.enum(['home_hero', 'home_middle', 'home_bottom', 'category_page']),
   is_active: z.boolean(),
@@ -136,11 +138,12 @@ async function uploadBannerFile(
   return { path, publicUrl: data.publicUrl };
 }
 
-function bannerPayloadFromForm(formData: FormData, imageUrl: string) {
+function bannerPayloadFromForm(formData: FormData, imageUrl: string, mobileImageUrl: string | null) {
   const payload = {
     title: String(formData.get('title') || ''),
     subtitle: nullableText(formData.get('subtitle')),
     image_url: imageUrl,
+    mobile_image_url: mobileImageUrl,
     link_url: nullableText(formData.get('link_url')),
     position: String(formData.get('position') || 'home_hero'),
     is_active: booleanFromForm(formData.get('is_active')),
@@ -201,11 +204,14 @@ export async function createAdminBanner(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   let uploadedPath: string | null = null;
+  let uploadedMobilePath: string | null = null;
 
   try {
     const adminClient = await createAdminActionClient(accessToken);
     const file = formData.get('image_file');
+    const mobileFile = formData.get('mobile_image_file');
     let imageUrl = nullableText(formData.get('image_url'));
+    let mobileImageUrl = nullableText(formData.get('mobile_image_url'));
 
     if (file instanceof File && file.size > 0) {
       const uploaded = await uploadBannerFile(adminClient, file);
@@ -213,11 +219,17 @@ export async function createAdminBanner(
       imageUrl = uploaded.publicUrl;
     }
 
+    if (mobileFile instanceof File && mobileFile.size > 0) {
+      const uploaded = await uploadBannerFile(adminClient, mobileFile);
+      uploadedMobilePath = uploaded.path;
+      mobileImageUrl = uploaded.publicUrl;
+    }
+
     if (!imageUrl) {
       throw new Error('أضف رابط صورة أو ارفع صورة للبانر');
     }
 
-    const parsed = bannerPayloadFromForm(formData, imageUrl);
+    const parsed = bannerPayloadFromForm(formData, imageUrl, mobileImageUrl);
     if (!parsed.success) {
       return {
         success: false,
@@ -241,10 +253,13 @@ export async function createAdminBanner(
     revalidatePath('/admin/banners');
     return { success: true, data: data ? { id: data.id } : undefined };
   } catch (error) {
-    if (uploadedPath) {
+    if (uploadedPath || uploadedMobilePath) {
       try {
         const adminClient = await createAdminActionClient(accessToken);
-        await adminClient.storage.from(BANNERS_BUCKET).remove([uploadedPath]);
+        const paths = [uploadedPath, uploadedMobilePath].filter(Boolean) as string[];
+        if (paths.length) {
+          await adminClient.storage.from(BANNERS_BUCKET).remove(paths);
+        }
       } catch {
         // Best effort cleanup only.
       }
@@ -261,18 +276,21 @@ export async function updateAdminBanner(
   formData: FormData
 ): Promise<ActionResult> {
   let uploadedPath: string | null = null;
+  let uploadedMobilePath: string | null = null;
 
   try {
     const adminClient = await createAdminActionClient(accessToken);
     const { data: currentBanner, error: currentError } = await (adminClient.from('banners') as any)
-      .select('id, image_url')
+      .select('id, image_url, mobile_image_url')
       .eq('id', bannerId)
       .single();
 
     if (currentError || !currentBanner) throw currentError || new Error('البانر غير موجود');
 
     const file = formData.get('image_file');
+    const mobileFile = formData.get('mobile_image_file');
     let imageUrl = nullableText(formData.get('image_url')) || currentBanner.image_url;
+    let mobileImageUrl = nullableText(formData.get('mobile_image_url')) ?? currentBanner.mobile_image_url;
 
     if (file instanceof File && file.size > 0) {
       const uploaded = await uploadBannerFile(adminClient, file);
@@ -280,7 +298,13 @@ export async function updateAdminBanner(
       imageUrl = uploaded.publicUrl;
     }
 
-    const parsed = bannerPayloadFromForm(formData, imageUrl);
+    if (mobileFile instanceof File && mobileFile.size > 0) {
+      const uploaded = await uploadBannerFile(adminClient, mobileFile);
+      uploadedMobilePath = uploaded.path;
+      mobileImageUrl = uploaded.publicUrl;
+    }
+
+    const parsed = bannerPayloadFromForm(formData, imageUrl, mobileImageUrl);
     if (!parsed.success) {
       return {
         success: false,
@@ -302,14 +326,24 @@ export async function updateAdminBanner(
       }
     }
 
+    if (uploadedMobilePath && currentBanner.mobile_image_url) {
+      const oldMobilePath = getStoragePathFromPublicUrl(currentBanner.mobile_image_url);
+      if (oldMobilePath) {
+        await adminClient.storage.from(BANNERS_BUCKET).remove([oldMobilePath]);
+      }
+    }
+
     revalidatePath('/');
     revalidatePath('/admin/banners');
     return { success: true };
   } catch (error) {
-    if (uploadedPath) {
+    if (uploadedPath || uploadedMobilePath) {
       try {
         const adminClient = await createAdminActionClient(accessToken);
-        await adminClient.storage.from(BANNERS_BUCKET).remove([uploadedPath]);
+        const paths = [uploadedPath, uploadedMobilePath].filter(Boolean) as string[];
+        if (paths.length) {
+          await adminClient.storage.from(BANNERS_BUCKET).remove(paths);
+        }
       } catch {
         // Best effort cleanup only.
       }
@@ -346,15 +380,17 @@ export async function deleteAdminBanner(accessToken: string | null, bannerId: st
   try {
     const adminClient = await createAdminActionClient(accessToken);
     const { data: banner, error: bannerError } = await (adminClient.from('banners') as any)
-      .select('id, image_url')
+      .select('id, image_url, mobile_image_url')
       .eq('id', bannerId)
       .single();
 
     if (bannerError || !banner) throw bannerError || new Error('البانر غير موجود');
 
     const storagePath = getStoragePathFromPublicUrl(banner.image_url);
-    if (storagePath) {
-      const { error: storageError } = await adminClient.storage.from(BANNERS_BUCKET).remove([storagePath]);
+    const mobileStoragePath = banner.mobile_image_url ? getStoragePathFromPublicUrl(banner.mobile_image_url) : null;
+    const pathsToRemove = [storagePath, mobileStoragePath].filter(Boolean) as string[];
+    if (pathsToRemove.length) {
+      const { error: storageError } = await adminClient.storage.from(BANNERS_BUCKET).remove(pathsToRemove);
       if (storageError) throw storageError;
     }
 

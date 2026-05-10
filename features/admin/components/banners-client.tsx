@@ -24,6 +24,7 @@ interface BannerFormState {
   title: string;
   subtitle: string;
   image_url: string;
+  mobile_image_url: string;
   link_url: string;
   position: BannerPosition;
   is_active: boolean;
@@ -36,6 +37,7 @@ const emptyForm: BannerFormState = {
   title: '',
   subtitle: '',
   image_url: '',
+  mobile_image_url: '',
   link_url: '',
   position: 'home_hero',
   is_active: true,
@@ -72,6 +74,7 @@ function formFromBanner(banner: BannerRecord): BannerFormState {
     title: banner.title,
     subtitle: banner.subtitle || '',
     image_url: banner.image_url,
+    mobile_image_url: banner.mobile_image_url || '',
     link_url: banner.link_url || '',
     position: banner.position,
     is_active: banner.is_active,
@@ -86,6 +89,7 @@ function appendFormData(form: BannerFormState) {
   formData.append('title', form.title);
   formData.append('subtitle', form.subtitle);
   formData.append('image_url', form.image_url);
+  formData.append('mobile_image_url', form.mobile_image_url);
   formData.append('link_url', form.link_url);
   formData.append('position', form.position);
   formData.append('is_active', String(form.is_active));
@@ -279,6 +283,19 @@ export function BannersClient() {
               folder={`banners/${form.position}/${form.title || 'draft'}`}
               value={form.image_url || null}
               onChange={(url) => setForm((current) => ({ ...current, image_url: url || '' }))}
+              disabled={isSubmitting}
+              maxSizeMb={10}
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <AdminImageUploadField
+              bucket="banners"
+              label="صورة الموبايل"
+              description="يفضل مقاس 1080×1350 أو 1080×1440. إذا تُركت فارغة سيتم استخدام صورة الديسكتوب. الحد الأقصى 10MB."
+              folder={`banners/${form.position}/${form.title || 'draft'}/mobile`}
+              value={form.mobile_image_url || null}
+              onChange={(url) => setForm((current) => ({ ...current, mobile_image_url: url || '' }))}
               disabled={isSubmitting}
               maxSizeMb={10}
             />
