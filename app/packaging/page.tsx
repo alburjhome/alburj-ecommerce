@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
-import { Package, Truck, CreditCard, ShieldCheck, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Package, Store, Truck, Percent, MessageCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
@@ -14,17 +14,17 @@ import type { ProductWithDetails, StoreSettings } from '@/types';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'مستلزمات المطاعم والكافيهات | مؤسسة البرج',
+  title: 'مستلزمات التغليف والعلب | مؤسسة البرج',
   description:
-    'اطلب مستلزمات المطاعم والكافيهات من مؤسسة البرج: تغليف، ورقيات، منظفات، بلاستيكيات، أكياس وعلب، مع توصيل لجميع المحافظات.',
+    'اطلب مستلزمات التغليف من مؤسسة البرج: علب، أكياس، رولات تغليف، صحون سفري، أكواب ومنتجات مناسبة للمطاعم والمحلات مع توصيل لجميع المحافظات.',
   alternates: {
-    canonical: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '')}/restaurants`,
+    canonical: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '')}/packaging`,
   },
   openGraph: {
-    title: 'مستلزمات المطاعم والكافيهات | مؤسسة البرج',
+    title: 'مستلزمات التغليف والعلب | مؤسسة البرج',
     description:
-      'اطلب مستلزمات المطاعم والكافيهات من مؤسسة البرج: تغليف، ورقيات، منظفات، بلاستيكيات، أكياس وعلب، مع توصيل لجميع المحافظات.',
-    url: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '')}/restaurants`,
+      'اطلب مستلزمات التغليف من مؤسسة البرج: علب، أكياس، رولات تغليف، صحون سفري، أكواب ومنتجات مناسبة للمطاعم والمحلات مع توصيل لجميع المحافظات.',
+    url: `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '')}/packaging`,
     type: 'website',
     images: [
       {
@@ -34,9 +34,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'مستلزمات المطاعم والكافيهات | مؤسسة البرج',
+    title: 'مستلزمات التغليف والعلب | مؤسسة البرج',
     description:
-      'اطلب مستلزمات المطاعم والكافيهات من مؤسسة البرج: تغليف، ورقيات، منظفات، بلاستيكيات، أكياس وعلب، مع توصيل لجميع المحافظات.',
+      'اطلب مستلزمات التغليف من مؤسسة البرج: علب، أكياس، رولات تغليف، صحون سفري، أكواب ومنتجات مناسبة للمطاعم والمحلات مع توصيل لجميع المحافظات.',
     images: [
       `${(process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '')}${PLACEHOLDER_BANNER}`,
     ],
@@ -69,7 +69,7 @@ async function getSettings() {
   > | null;
 }
 
-async function getRestaurantProducts() {
+async function getPackagingProducts() {
   const { data } = await (supabase.from('products') as any)
     .select('*, images:product_images(*), category:categories(*), subcategory:subcategories(*)')
     .eq('is_active', true)
@@ -82,15 +82,15 @@ async function getRestaurantProducts() {
     images: [...((product as any).images || [])].sort((a: any, b: any) => a.sort_order - b.sort_order),
   }));
 
-  return products.filter((product) => productMatchesIntent(product, 'restaurants'));
+  return products.filter((product) => productMatchesIntent(product, 'packaging'));
 }
 
-function RestaurantsTrustBar() {
+function PackagingTrustBar() {
   const items = [
-    { icon: Package, label: 'تجهيز كميات' },
+    { icon: Package, label: 'خيارات متعددة للتغليف' },
+    { icon: Store, label: 'مناسب للمطاعم والمحلات' },
     { icon: Truck, label: 'توصيل لجميع المحافظات' },
-    { icon: CreditCard, label: 'الدفع عند الاستلام' },
-    { icon: ShieldCheck, label: 'منتجات مناسبة للمطاعم والكافيهات' },
+    { icon: Percent, label: 'عروض للكميات' },
   ];
 
   return (
@@ -114,29 +114,34 @@ function RestaurantsTrustBar() {
 
 const needCategories = [
   {
-    title: 'التغليف والعلب',
-    description: 'علب وأكياس تغليف متنوعة لحفظ الطعام والمشروبات.',
-    search: 'تغليف',
+    title: 'علب تغليف',
+    description: 'علب بأحجام مختلفة مناسبة للحلويات والأطعمة والمشروبات.',
+    search: 'علب',
   },
   {
-    title: 'الورقيات والمناديل',
-    description: 'مناديل ورقية، مناشف مطبخ، ورقيات بمختلف الأحجام.',
-    search: 'مناديل',
+    title: 'أكياس',
+    description: 'أكياس تغليف متنوعة لجميع الاستخدامات التجارية.',
+    search: 'أكياس',
   },
   {
-    title: 'المنظفات',
-    description: 'منظفات أساسية للمطابخ والصالات والتعقيم.',
-    search: 'منظفات',
+    title: 'رولات تغليف',
+    description: 'رولات تغليف عملية للحفاظ على الطعام والمنتجات.',
+    search: 'رولات',
   },
   {
-    title: 'البلاستيكيات',
-    description: 'أدوات بلاستيكية عملية للتقديم والتخزين.',
-    search: 'بلاستيكيات',
+    title: 'صحون سفري',
+    description: 'صحون سفري متنوعة للمطاعم والمحلات والتوصيل.',
+    search: 'صحون',
   },
   {
-    title: 'أدوات التقديم والمطبخ',
-    description: 'أدوات تقديم، مستلزمات مطبخ عملية للاستخدام اليومي.',
-    search: 'مطبخ',
+    title: 'أكواب',
+    description: 'أكواب تقديم مناسبة للمشروبات الساخنة والباردة.',
+    search: 'أكواب',
+  },
+  {
+    title: 'تغليف للمطاعم',
+    description: 'حلول تغليف متكاملة للمطاعم والمحلات الغذائية.',
+    search: 'مطاعم',
   },
 ];
 
@@ -145,9 +150,9 @@ function NeedCategoriesSection() {
     <section className="py-8 md:py-10" dir="rtl">
       <div className="container mx-auto px-4">
         <div className="mb-5 md:mb-6">
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">احتياجات المطاعم والكافيهات</h2>
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">احتياجات التغليف</h2>
           <p className="mt-2 text-sm text-muted-foreground md:text-base">
-            اختر القسم المناسب لتصفح المنتجات المخصصة للمطاعم والكافيهات.
+            اختر القسم المناسب لتصفح منتجات التغليف والعلب والأكياس.
           </p>
         </div>
 
@@ -157,7 +162,7 @@ function NeedCategoriesSection() {
               <h3 className="text-base font-bold leading-6">{category.title}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{category.description}</p>
               <Link
-                href={`/products?intent=restaurants&search=${encodeURIComponent(category.search)}`}
+                href={`/products?intent=packaging&search=${encodeURIComponent(category.search)}`}
                 className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -173,25 +178,25 @@ function NeedCategoriesSection() {
 
 const bundles = [
   {
-    name: 'باقة افتتاح مطعم',
-    description: 'تشمل: علب تغليف، أكياس، مناديل، منظفات أساسية',
+    name: 'باقة مطعم سفري',
+    description: 'تشمل: علب، أكياس، مناديل، صحون سفري',
   },
   {
     name: 'باقة كافيه',
-    description: 'تشمل: أكواب، مناديل، أكياس، مواد تنظيف',
+    description: 'تشمل: أكواب، أكياس، مناديل، مواد تغليف',
   },
   {
-    name: 'باقة طلبات يومية',
-    description: 'تشمل: ورقيات، أكياس، تغليف، منظفات',
+    name: 'باقة محل حلويات',
+    description: 'تشمل: علب تغليف، أكياس، رولات، أدوات تقديم',
   },
 ];
 
-function RestaurantBundlesSection({ whatsappUrl }: { whatsappUrl: string | null }) {
+function PackagingBundlesSection({ whatsappUrl }: { whatsappUrl: string | null }) {
   return (
     <section className="py-8 md:py-10" dir="rtl">
       <div className="container mx-auto px-4">
         <div className="mb-5 md:mb-6">
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">باقات جاهزة للمطاعم والكافيهات</h2>
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">باقات جاهزة للتغليف</h2>
           <p className="mt-2 text-sm text-muted-foreground md:text-base">
             باقات مُجهزة مسبقًا لتسهيل طلبك وتوفير الوقت.
           </p>
@@ -199,7 +204,7 @@ function RestaurantBundlesSection({ whatsappUrl }: { whatsappUrl: string | null 
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {bundles.map((bundle) => {
-            const message = `مرحبا، أريد الاستفسار عن ${bundle.name} للمطاعم والكافيهات.`;
+            const message = `مرحبا، أريد الاستفسار عن ${bundle.name} من صفحة التغليف.`;
             const href = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(message)}` : null;
 
             return (
@@ -210,7 +215,7 @@ function RestaurantBundlesSection({ whatsappUrl }: { whatsappUrl: string | null 
                 {href ? (
                   <TrackedWhatsAppLink
                     href={href}
-                    source="restaurants_bundle"
+                    source="packaging_bundle"
                     metadata={{ bundle_name: bundle.name }}
                     className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
                   >
@@ -231,12 +236,12 @@ function RestaurantBundlesSection({ whatsappUrl }: { whatsappUrl: string | null 
   );
 }
 
-export default async function RestaurantsPage() {
-  const [settings, restaurantProducts] = await Promise.all([getSettings(), getRestaurantProducts()]);
+export default async function PackagingPage() {
+  const [settings, packagingProducts] = await Promise.all([getSettings(), getPackagingProducts()]);
   const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
-  const featuredProducts = restaurantProducts.slice(0, 8);
+  const featuredProducts = packagingProducts.slice(0, 8);
 
-  const heroMessage = 'مرحبا، أريد الاستفسار عن تجهيز مطعمي/كافيهي.';
+  const heroMessage = 'مرحبا، أريد الاستفسار عن مستلزمات التغليف لمحلي.';
   const heroWhatsAppHref = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(heroMessage)}` : null;
 
   return (
@@ -249,23 +254,22 @@ export default async function RestaurantsPage() {
           <div className="container mx-auto px-4">
             <div className="mx-auto max-w-3xl text-center">
               <h1 className="text-3xl font-bold tracking-tight md:text-5xl">
-                مستلزمات المطاعم والكافيهات من مكان واحد
+                مستلزمات التغليف لمحلك من مكان واحد
               </h1>
               <p className="mt-4 text-sm text-muted-foreground md:text-base">
-                جهّز مطعمك أو كافيهك بكل ما تحتاجه من تغليف، ورقيات، منظفات، بلاستيكيات وأدوات تقديم — واطلب مباشرة
-                عبر واتساب.
+                علب، أكياس، رولات، صحون سفري وأدوات تغليف مناسبة للمطاعم والمحلات — اطلب الكمية المناسبة عبر واتساب.
               </p>
 
               <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
                 {heroWhatsAppHref ? (
                   <TrackedWhatsAppLink
                     href={heroWhatsAppHref}
-                    source="restaurants_hero_whatsapp"
-                    metadata={{ cta_name: 'restaurants_hero' }}
+                    source="packaging_hero_whatsapp"
+                    metadata={{ cta_name: 'packaging_hero' }}
                     className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-700"
                   >
                     <MessageCircle className="h-5 w-5" />
-                    اطلب تجهيز مطعمك عبر واتساب
+                    اطلب التغليف عبر واتساب
                   </TrackedWhatsAppLink>
                 ) : (
                   <span className="inline-flex items-center justify-center rounded-lg border bg-card px-6 py-3 text-sm text-muted-foreground">
@@ -274,25 +278,17 @@ export default async function RestaurantsPage() {
                 )}
 
                 <Link
-                  href="/products?intent=restaurants"
+                  href="/products?intent=packaging"
                   className="inline-flex items-center justify-center rounded-lg border bg-card px-6 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
                 >
-                  تصفح المنتجات
-                </Link>
-              </div>
-              <div className="mt-3">
-                <Link
-                  href="/packaging"
-                  className="text-sm text-primary hover:underline"
-                >
-                  تحتاج تغليف لمطعمك؟ شاهد صفحة التغليف ←
+                  تصفح منتجات التغليف
                 </Link>
               </div>
             </div>
           </div>
         </section>
 
-        <RestaurantsTrustBar />
+        <PackagingTrustBar />
 
         <NeedCategoriesSection />
 
@@ -300,9 +296,9 @@ export default async function RestaurantsPage() {
         <section className="py-8 md:py-10" dir="rtl">
           <div className="container mx-auto px-4">
             <div className="mb-5 md:mb-6">
-              <h2 className="text-2xl font-bold tracking-tight md:text-3xl">منتجات مختارة للمطاعم والكافيهات</h2>
+              <h2 className="text-2xl font-bold tracking-tight md:text-3xl">منتجات مختارة للتغليف</h2>
               <p className="mt-2 text-sm text-muted-foreground md:text-base">
-                منتجات عملية تناسب احتياجات المطاعم والكافيهات والمحلات الغذائية.
+                منتجات عملية تناسب احتياجات التغليف للمطاعم والمحلات والأسر المنتجة.
               </p>
             </div>
 
@@ -314,19 +310,19 @@ export default async function RestaurantsPage() {
               </div>
             ) : (
               <div className="rounded-lg border border-dashed px-4 py-14 text-center">
-                <h3 className="text-lg font-semibold">لم يتم إضافة منتجات مخصصة للمطاعم بعد</h3>
+                <h3 className="text-lg font-semibold">لم يتم إضافة منتجات تغليف بعد</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  تواصل معنا لمعرفة المنتجات المتاحة لتجهيز المطاعم والكافيهات.
+                  تواصل معنا لمعرفة المنتجات المتاحة للتغليف والعلب والأكياس.
                 </p>
                 {whatsappUrl && (
                   <TrackedWhatsAppLink
                     href={whatsappUrl}
-                    source="restaurants_empty_whatsapp"
-                    metadata={{ cta_name: 'restaurants_empty' }}
+                    source="packaging_empty_whatsapp"
+                    metadata={{ cta_name: 'packaging_empty' }}
                     className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
                   >
                     <MessageCircle className="h-5 w-5" />
-                    اسألنا عن تجهيز المطاعم
+                    اسألنا عن منتجات التغليف
                   </TrackedWhatsAppLink>
                 )}
               </div>
@@ -334,7 +330,7 @@ export default async function RestaurantsPage() {
           </div>
         </section>
 
-        <RestaurantBundlesSection whatsappUrl={whatsappUrl} />
+        <PackagingBundlesSection whatsappUrl={whatsappUrl} />
       </main>
 
       <Footer settings={settings} />

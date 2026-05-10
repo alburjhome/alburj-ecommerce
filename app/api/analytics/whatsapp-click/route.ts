@@ -13,6 +13,9 @@ const ALLOWED_SOURCES = [
   'restaurants_hero_whatsapp',
   'restaurants_bundle',
   'restaurants_empty_whatsapp',
+  'packaging_hero_whatsapp',
+  'packaging_bundle',
+  'packaging_empty_whatsapp',
   'mobile_menu_whatsapp',
   'footer_whatsapp',
 ] as const;

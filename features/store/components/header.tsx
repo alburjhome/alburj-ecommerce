@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Menu, Search, ShoppingCart, User, X, Phone, Home, Package, LayoutGrid, Tag, MessageCircle, Store, Truck, CreditCard, CheckCircle } from 'lucide-react';
+import { Menu, Search, ShoppingCart, User, X, Phone, Home, Package, LayoutGrid, Tag, MessageCircle, Store, Box, Truck, CreditCard, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -66,6 +66,7 @@ export function Header({ whatsappUrl }: HeaderProps) {
     { href: '/categories', label: 'الأقسام', icon: LayoutGrid },
     { href: '/offers', label: 'العروض', icon: Tag },
     { href: '/restaurants', label: 'للمطاعم والكافيهات', icon: Store },
+    { href: '/packaging', label: 'التغليف', icon: Box },
     { href: '/quick-order', label: 'جهّز طلبك خلال دقيقة', icon: MessageCircle },
     { href: '/#contact', label: 'تواصل معنا', icon: MessageCircle },
   ];

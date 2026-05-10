@@ -10,6 +10,9 @@ export const WHATSAPP_CLICK_SOURCE_LABELS_AR: Record<string, string> = {
   restaurants_hero_whatsapp: 'واتساب صفحة المطاعم والكافيهات',
   restaurants_bundle: 'باقات صفحة المطاعم والكافيهات',
   restaurants_empty_whatsapp: 'واتساب صفحة المطاعم (الحالة الفارغة)',
+  packaging_hero_whatsapp: 'واتساب صفحة التغليف',
+  packaging_bundle: 'باقات التغليف',
+  packaging_empty_whatsapp: 'واتساب عدم توفر منتجات التغليف',
   mobile_menu_whatsapp: 'واتساب القائمة الجانبية',
   footer_whatsapp: 'واتساب الفوتر',
 };
