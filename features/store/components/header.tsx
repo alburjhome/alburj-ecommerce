@@ -26,11 +26,15 @@ interface HeaderProps {
 export function Header({ whatsappUrl }: HeaderProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { openCart, getTotalItems, hasHydrated, rehydrate } = useCartStore();
+  // Use selectors for stable references and granular re-renders
+  const openCart = useCartStore((state) => state.openCart);
+  const getTotalItems = useCartStore((state) => state.getTotalItems);
+  const hasHydrated = useCartStore((state) => state.hasHydrated);
+  const rehydrate = useCartStore((state) => state.rehydrate);
   const cartCount = hasHydrated ? getTotalItems() : 0;
 
   useEffect(() => {
-    if (!hasHydrated) {
+    if (!hasHydrated && rehydrate) {
       rehydrate();
     }
   }, [hasHydrated, rehydrate]);

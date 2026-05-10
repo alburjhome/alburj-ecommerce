@@ -11,14 +11,23 @@ import { formatPrice } from '@/lib/utils';
 import { CartCheckout } from './cart-checkout';
 
 export function CartDrawer() {
-  const { items, isOpen, closeCart, updateQuantity, removeItem, getTotalPrice, hasHydrated, rehydrate } =
-    useCartStore();
+  // Use selectors for stable references and granular re-renders
+  const items = useCartStore((state) => state.items);
+  const isOpen = useCartStore((state) => state.isOpen);
+  const closeCart = useCartStore((state) => state.closeCart);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const removeItem = useCartStore((state) => state.removeItem);
+  const getTotalPrice = useCartStore((state) => state.getTotalPrice);
+  const hasHydrated = useCartStore((state) => state.hasHydrated);
+  const rehydrate = useCartStore((state) => state.rehydrate);
+
   const [showCheckout, setShowCheckout] = useState(false);
+  // Show empty state until hydration completes to avoid SSR/CSR mismatch
   const hydratedItems = hasHydrated ? items : [];
   const total = hasHydrated ? getTotalPrice() : 0;
 
   useEffect(() => {
-    if (!hasHydrated) {
+    if (!hasHydrated && rehydrate) {
       rehydrate();
     }
   }, [hasHydrated, rehydrate]);
