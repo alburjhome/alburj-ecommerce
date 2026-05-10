@@ -619,9 +619,9 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             <div>
               <Label>القسم الرئيسي *</Label>
               <Select
-                value={selectedCategoryId || undefined}
+                value={selectedCategoryId || 'none'}
                 onValueChange={(value) => {
-                  setValue('category_id', value, { shouldValidate: true });
+                  setValue('category_id', value === 'none' ? '' : value, { shouldValidate: true });
                   setValue('subcategory_id', null);
                 }}
               >
@@ -629,6 +629,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                   <SelectValue placeholder="اختر القسم" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">اختر القسم</SelectItem>
                   {(formData?.categories || []).map((category) => (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}

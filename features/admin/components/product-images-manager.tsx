@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ImageIcon, RefreshCw, Save, Star, Trash2, Upload, ArrowUp, ArrowDown, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ImageIcon, RefreshCw, Save, Star, Trash2, Upload, ArrowUp, ArrowDown, AlertCircle, CheckCircle2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,9 +19,18 @@ import type { ProductImageRecord } from '@/app/actions/admin-product-images';
 import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
 import { supabase } from '@/lib/supabase';
 
+interface ProductData {
+  name?: string;
+  categoryName?: string;
+  shortDescription?: string;
+  marketingTagline?: string;
+  keyFeatures?: string[];
+}
+
 interface ProductImagesManagerProps {
   productId: string;
   focusOnMount?: boolean;
+  productData?: ProductData;
 }
 
 interface ImageDraft {
@@ -61,7 +70,7 @@ function validateImageFile(file: File) {
   return null;
 }
 
-export function ProductImagesManager({ productId, focusOnMount = false }: ProductImagesManagerProps) {
+export function ProductImagesManager({ productId, focusOnMount = false, productData }: ProductImagesManagerProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [images, setImages] = useState<ProductImageRecord[]>([]);
@@ -73,6 +82,7 @@ export function ProductImagesManager({ productId, focusOnMount = false }: Produc
   const [uploadAltText, setUploadAltText] = useState('');
   const [uploadSortOrder, setUploadSortOrder] = useState('');
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [generatingAltTextId, setGeneratingAltTextId] = useState<string | null>(null);
 
   const nextSortOrder = useMemo(() => {
     if (!images.length) return 10;
@@ -383,6 +393,73 @@ export function ProductImagesManager({ productId, focusOnMount = false }: Produc
     }
   }
 
+  async function handleGenerateAiAltText(image: ProductImageRecord, draft: ImageDraft) {
+    if (!productData?.name) {
+      toast({
+        title: 'أدخل اسم المنتج أولًا',
+        description: 'يجب إدخال اسم المنتج في النموذج أعلاه قبل توليد وصف الصورة.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // If alt text already exists, confirm replacement
+    if (draft.alt_text?.trim()) {
+      const confirmed = window.confirm(
+        'الحقل يحتوي على نص بالفعل. هل تريد استبداله بالوصف المُولد بالذكاء الاصطناعي؟'
+      );
+      if (!confirmed) return;
+    }
+
+    setGeneratingAltTextId(image.id);
+    try {
+      const token = await getAccessToken();
+      const response = await fetch('/api/admin/ai/image-alt-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          productName: productData.name,
+          categoryName: productData.categoryName,
+          shortDescription: productData.shortDescription,
+          marketingTagline: productData.marketingTagline,
+          keyFeatures: productData.keyFeatures,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'تعذر توليد الوصف');
+      }
+
+      const data = await response.json();
+      if (!data.alt_text) {
+        throw new Error('لم يتم استلام وصف صالح');
+      }
+
+      // Update draft with generated alt text (doesn't save automatically)
+      setDrafts((current) => ({
+        ...current,
+        [image.id]: { ...draft, alt_text: data.alt_text },
+      }));
+
+      toast({
+        title: 'تم توليد الوصف',
+        description: 'راجع الوصف ثم اضغط "حفظ" لتطبيقه.',
+      });
+    } catch (error) {
+      toast({
+        title: 'تعذر توليد الوصف',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingAltTextId(null);
+    }
+  }
+
   const hasPrimaryImage = images.some((img) => img.is_primary);
 
   return (
@@ -562,11 +639,24 @@ export function ProductImagesManager({ productId, focusOnMount = false }: Produc
                   </div>
                 </div>
 
-                {/* Alt Text Input */}
+                {/* Alt Text Input with AI Button */}
                 <div className="mt-3">
-                  <Label htmlFor={`alt-${image.id}`} className="text-xs">
-                    وصف الصورة (Alt text)
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor={`alt-${image.id}`} className="text-xs">
+                      وصف الصورة (Alt text)
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleGenerateAiAltText(image, draft)}
+                      disabled={generatingAltTextId === image.id || !productData?.name}
+                      className="h-6 px-2 text-xs text-primary hover:text-primary"
+                    >
+                      <Sparkles className="ml-1 h-3 w-3" />
+                      {generatingAltTextId === image.id ? 'جاري التوليد...' : 'ولّد بالذكاء الاصطناعي'}
+                    </Button>
+                  </div>
                   <Input
                     id={`alt-${image.id}`}
                     size-alias={1}
