@@ -19,6 +19,13 @@ export const WHATSAPP_CLICK_SOURCE_LABELS_AR: Record<string, string> = {
   home_kitchen_hero_whatsapp: 'واتساب صفحة البيت والمطبخ',
   home_kitchen_bundle: 'باقات البيت والمطبخ',
   home_kitchen_empty_whatsapp: 'واتساب عدم توفر منتجات البيت والمطبخ',
+  cleaning_hero_whatsapp: 'واتساب صفحة المنظفات والورقيات',
+  cleaning_bundle: 'باقات المنظفات والورقيات',
+  cleaning_empty_whatsapp: 'واتساب عدم توفر منتجات التنظيف',
+  bulk_hero_whatsapp: 'واتساب صفحة الكميات',
+  bulk_section_whatsapp: 'طلب كمية من قسم',
+  bulk_bundle: 'باقات الكميات',
+  bulk_empty_whatsapp: 'واتساب عدم توفر منتجات الكميات',
   mobile_menu_whatsapp: 'واتساب القائمة الجانبية',
   footer_whatsapp: 'واتساب الفوتر',
 };

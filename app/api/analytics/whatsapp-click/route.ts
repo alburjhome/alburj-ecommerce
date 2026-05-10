@@ -22,6 +22,13 @@ const ALLOWED_SOURCES = [
   'home_kitchen_hero_whatsapp',
   'home_kitchen_bundle',
   'home_kitchen_empty_whatsapp',
+  'cleaning_hero_whatsapp',
+  'cleaning_bundle',
+  'cleaning_empty_whatsapp',
+  'bulk_hero_whatsapp',
+  'bulk_section_whatsapp',
+  'bulk_bundle',
+  'bulk_empty_whatsapp',
   'mobile_menu_whatsapp',
   'footer_whatsapp',
 ] as const;

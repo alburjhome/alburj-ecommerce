@@ -47,6 +47,8 @@ export function Footer({ settings }: FooterProps) {
       { href: '/packaging', label: 'التغليف' },
       { href: '/plastic-products', label: 'البلاستيكيات' },
       { href: '/home-kitchen', label: 'البيت والمطبخ' },
+      { href: '/cleaning', label: 'المنظفات والورقيات' },
+      { href: '/bulk', label: 'الكميات والجملة' },
     ],
     support: [
       { href: '/#contact', label: 'تواصل معنا' },
