@@ -12,13 +12,17 @@ import { formatPrice } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { JORDAN_GOVERNORATES } from '@/types';
 import { createOrder } from '@/app/actions/checkout';
+import { Truck, CreditCard, MessageCircle } from 'lucide-react';
 
 interface CartCheckoutProps {
   onBack: () => void;
 }
 
 export function CartCheckout({ onBack }: CartCheckoutProps) {
-  const { items, getTotalPrice, clearCart } = useCartStore();
+  // Use selectors for stable references
+  const items = useCartStore((state) => state.items);
+  const getTotalPrice = useCartStore((state) => state.getTotalPrice);
+  const clearCart = useCartStore((state) => state.clearCart);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -87,13 +91,36 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
     };
   }, [formData.governorate]);
 
+  const validateForm = () => {
+    const errors: string[] = [];
+    if (!formData.customer_name.trim()) {
+      errors.push('الاسم الكامل مطلوب');
+    }
+    if (!formData.customer_phone.trim()) {
+      errors.push('رقم الهاتف مطلوب');
+    } else if (!/^07[0-9]{8}$/.test(formData.customer_phone.trim())) {
+      errors.push('رقم الهاتف يجب أن يكون 10 أرقام ويبدأ بـ 07');
+    }
+    if (!formData.governorate) {
+      errors.push('المحافظة مطلوبة');
+    }
+    if (!formData.city.trim()) {
+      errors.push('المدينة مطلوبة');
+    }
+    if (!formData.address.trim()) {
+      errors.push('العنوان التفصيلي مطلوب');
+    }
+    return errors;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.customer_name || !formData.customer_phone || !formData.governorate || !formData.city || !formData.address) {
+
+    const validationErrors = validateForm();
+    if (validationErrors.length > 0) {
       toast({
-        title: 'تنبيه',
-        description: 'الرجاء ملء جميع الحقول المطلوبة',
+        title: 'الرجاء إكمال البيانات',
+        description: validationErrors.join(' • '),
         variant: 'destructive',
       });
       return;
@@ -101,8 +128,8 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
 
     if (items.length === 0) {
       toast({
-        title: 'تنبيه',
-        description: 'السلة فارغة',
+        title: 'السلة فارغة',
+        description: 'أضف منتجات للسلة قبل إتمام الطلب',
         variant: 'destructive',
       });
       return;
@@ -110,7 +137,7 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
 
     if (!hasValidShippingRate) {
       toast({
-        title: 'تعذر تحديد الشحن',
+        title: 'تعذر تحديد سعر الشحن',
         description: shippingError || 'اختر محافظة يتوفر لها سعر شحن قبل إرسال الطلب.',
         variant: 'destructive',
       });
@@ -140,7 +167,16 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
       });
 
       if (!result.success) {
-        throw new Error(result.error || 'Order creation failed');
+        if (result.error?.includes('whatsapp') || result.error?.includes('واتساب')) {
+          toast({
+            title: 'رقم واتساب المتجر غير مضبوط',
+            description: 'يرجى التواصل معنا مباشرة.',
+            variant: 'destructive',
+          });
+        } else {
+          throw new Error(result.error || 'فشل إنشاء الطلب');
+        }
+        return;
       }
 
       // Open WhatsApp with server-generated message
@@ -150,7 +186,7 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
 
       setIsSuccess(true);
       clearCart();
-      
+
       toast({
         title: 'تم إرسال الطلب',
         description: `رقم الطلب: ${result.order?.order_number}`,
@@ -196,6 +232,8 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
             id="name"
             value={formData.customer_name}
             onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
+            placeholder="الاسم الثلاثي"
+            className="text-base"
             required
           />
         </div>
@@ -205,11 +243,16 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
           <Input
             id="phone"
             type="tel"
+            inputMode="numeric"
             value={formData.customer_phone}
             onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
-            placeholder="07XXXXXXXX"
+            placeholder="مثال: 0791234567"
+            className="text-base"
             required
           />
+          <p className="text-[11px] text-muted-foreground mt-1">
+            يجب أن يكون 10 أرقام ويبدأ بـ 07
+          </p>
         </div>
 
         <div>
@@ -240,6 +283,8 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
             id="city"
             value={formData.city}
             onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+            placeholder="مثال: عبدون، شارع المدينة المنورة"
+            className="text-base"
             required
           />
         </div>
@@ -261,17 +306,19 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
             id="landmark"
             value={formData.landmark}
             onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
-            placeholder="بالقرب من..."
+            placeholder="بالقرب من مسجد/مدرسة/محل معروف"
+            className="text-base"
           />
         </div>
 
         <div>
-          <Label htmlFor="notes">ملاحظات (اختياري)</Label>
+          <Label htmlFor="notes">ملاحظات إضافية (اختياري)</Label>
           <Input
             id="notes"
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            placeholder="أي ملاحظات خاصة بالطلب"
+            placeholder="وقت توصيل مفضل، طلبات خاصة..."
+            className="text-base"
           />
         </div>
 
@@ -285,7 +332,7 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
             <span>الشحن:</span>
             <span>
               {isShippingLoading
-                ? 'جاري تحميل سعر الشحن...'
+                ? 'جاري تحميل...'
                 : shippingCost === null
                   ? 'اختر المحافظة'
                   : formatPrice(shippingCost)}
@@ -294,6 +341,23 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
           <div className="flex justify-between font-semibold text-lg">
             <span>الإجمالي:</span>
             <span className="text-primary">{formatPrice(total)}</span>
+          </div>
+        </div>
+
+        {/* Trust Box */}
+        <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            بعد إرسال الطلب عبر واتساب، سيتواصل معك فريق مؤسسة البرج لتأكيد التفاصيل.
+          </p>
+          <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1 bg-background px-2 py-1 rounded">
+              <Truck className="h-3 w-3" />
+              توصيل لجميع المحافظات
+            </span>
+            <span className="inline-flex items-center gap-1 bg-background px-2 py-1 rounded">
+              <CreditCard className="h-3 w-3" />
+              الدفع عند الاستلام
+            </span>
           </div>
         </div>
 
@@ -306,10 +370,13 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
           {isSubmitting ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              جاري إرسال الطلب...
+              جاري تجهيز الطلب...
             </>
           ) : (
-            'إتمام الطلب عبر واتساب'
+            <>
+              <MessageCircle className="h-4 w-4 mr-2" />
+              إرسال الطلب عبر واتساب
+            </>
           )}
         </Button>
       </form>
