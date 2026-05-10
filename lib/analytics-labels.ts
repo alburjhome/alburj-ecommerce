@@ -28,4 +28,7 @@ export const WHATSAPP_CLICK_SOURCE_LABELS_AR: Record<string, string> = {
   bulk_empty_whatsapp: 'واتساب عدم توفر منتجات الكميات',
   mobile_menu_whatsapp: 'واتساب القائمة الجانبية',
   footer_whatsapp: 'واتساب الفوتر',
+  categories_help_whatsapp: 'واتساب مساعدة صفحة الأقسام',
+  categories_hero_whatsapp: 'واتساب hero صفحة الأقسام',
+  categories_empty_whatsapp: 'واتساب صفحة الأقسام (فارغ)',
 };

@@ -31,6 +31,9 @@ const ALLOWED_SOURCES = [
   'bulk_empty_whatsapp',
   'mobile_menu_whatsapp',
   'footer_whatsapp',
+  'categories_help_whatsapp',
+  'categories_hero_whatsapp',
+  'categories_empty_whatsapp',
 ] as const;
 
 type AllowedSource = (typeof ALLOWED_SOURCES)[number];
