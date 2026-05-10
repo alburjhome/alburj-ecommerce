@@ -228,12 +228,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   تصفح كل المنتجات
                 </Link>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-col items-center gap-1 sm:flex-row sm:gap-4">
                 <Link
                   href="/restaurants"
                   className="text-sm text-primary hover:underline"
                 >
                   عروض المطاعم والكافيهات ←
+                </Link>
+                <Link
+                  href="/plastic-products"
+                  className="text-sm text-primary hover:underline"
+                >
+                  شاهد عروض البلاستيكيات ←
                 </Link>
               </div>
             </div>

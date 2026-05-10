@@ -45,6 +45,7 @@ export function Footer({ settings }: FooterProps) {
       { href: '/offers', label: 'العروض الخاصة' },
       { href: '/restaurants', label: 'للمطاعم والكافيهات' },
       { href: '/packaging', label: 'التغليف' },
+      { href: '/plastic-products', label: 'البلاستيكيات' },
     ],
     support: [
       { href: '/#contact', label: 'تواصل معنا' },
