@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowRight, Save } from 'lucide-react';
+import { ArrowLeft, Save, Sparkles, AlertCircle, Package, Tag, CheckCircle2, EyeOff, ImageIcon } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { normalizeSlug } from '@/lib/slug';
 import { ProductFormInput, parseTags, productSchema, slugify, tagsToString } from '@/lib/product-validation';
 import { INTENT_TAG_CONFIG } from '@/lib/product-intents';
+import { formatPrice } from '@/lib/utils';
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
@@ -115,6 +116,31 @@ function FieldError({ message }: { message?: string }) {
   return <p className="mt-1 text-xs text-destructive">{message}</p>;
 }
 
+function SectionHeader({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="mb-4">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+    </div>
+  );
+}
+
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <section className={`rounded-lg border bg-card p-5 shadow-sm ${className}`}>
+      {children}
+    </section>
+  );
+}
+
+const badgeOptions = [
+  { key: 'bestselling', label: 'الأكثر طلبًا', description: 'يظهر في قائمة الأكثر مبيعًا' },
+  { key: 'offer', label: 'عرض', description: 'يظهر شارة العروض الخاصة' },
+  { key: 'new', label: 'جديد', description: 'يظهر شارة جديد للمنتجات الجديدة' },
+  { key: 'wholesale', label: 'سعر جملة', description: 'يظهر للمنتجات بأسعار الجملة' },
+  { key: 'limited', label: 'كمية محدودة', description: 'يظهر للمنتجات ذات الكمية المحدودة' },
+] as const;
+
 export function ProductForm({ mode, productId }: ProductFormProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -152,6 +178,15 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const intentTags = watch('intent_tags');
   const productBadges = watch('product_badges');
   const keyFeatures = watch('key_features');
+  const price = watch('price');
+  const comparePrice = watch('compare_price');
+  const stockQuantity = watch('stock_quantity');
+
+  // Price validation warning
+  const hasInvalidComparePrice = useMemo(() => {
+    if (!comparePrice || comparePrice <= 0) return false;
+    return comparePrice <= price;
+  }, [comparePrice, price]);
 
   async function handleGenerateAi({ replace }: { replace: boolean }) {
     if (!formData) return;
@@ -419,103 +454,70 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {mode === 'create' ? 'إضافة منتج' : 'تعديل منتج'}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            أدخل بيانات المنتج الأساسية، الأسعار، المخزون، وبيانات SEO.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button asChild type="button" variant="outline">
-            <Link href="/admin/products">
-              <ArrowRight className="ml-2 h-4 w-4" />
-              رجوع
-            </Link>
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            <Save className="ml-2 h-4 w-4" />
-            {isSubmitting ? 'جاري الحفظ...' : 'حفظ المنتج'}
-          </Button>
-        </div>
-      </div>
-
-      <section className="rounded-lg border bg-card p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">البيانات الأساسية</h2>
-        <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <Label htmlFor="name">اسم المنتج *</Label>
-            <Input id="name" {...register('name')} />
-            <FieldError message={errors.name?.message} />
-          </div>
-
-          <div>
-            <Label htmlFor="slug">Slug *</Label>
-            <div className="flex gap-2">
-              <Input
-                id="slug"
-                dir="ltr"
-                value={currentSlug}
-                onChange={(event) => {
-                  setSlugTouched(true);
-                  setValue('slug', normalizeSlug(event.target.value), { shouldDirty: true, shouldValidate: true });
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setSlugTouched(true);
-                  setValue('slug', slugify(name), { shouldDirty: true, shouldValidate: true });
-                }}
-              >
-                إعادة توليد
-              </Button>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
-              /product/{currentSlug || 'product-slug'}
+            <h1 className="text-2xl font-bold tracking-tight">
+              {mode === 'create' ? 'إضافة منتج جديد' : 'تعديل المنتج'}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              أدخل بيانات المنتج الأساسية، الأسعار، المخزون، والتسويق.
             </p>
-            <FieldError message={errors.slug?.message} />
           </div>
-
-          <div className="md:col-span-2">
-            <Label htmlFor="short_description">وصف قصير</Label>
-            <Input id="short_description" {...register('short_description')} />
-          </div>
-
-          <div className="md:col-span-2">
-            <Label htmlFor="description">الوصف</Label>
-            <textarea
-              id="description"
-              rows={5}
-              className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              {...register('description')}
-            />
+          <div className="flex gap-2">
+            <Button asChild type="button" variant="outline">
+              <Link href="/admin/products">
+                <ArrowLeft className="ml-2 h-4 w-4" />
+                العودة للمنتجات
+              </Link>
+            </Button>
+            <Button type="submit" disabled={isSubmitting} size="lg">
+              <Save className="ml-2 h-4 w-4" />
+              {isSubmitting ? 'جاري الحفظ...' : 'حفظ المنتج'}
+            </Button>
           </div>
         </div>
-      </section>
 
-      <section className="rounded-lg border bg-card p-5 shadow-sm">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-semibold">معلومات تسويقية</h2>
+        {/* Inactive Warning */}
+        {!isActive && mode === 'edit' && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-amber-900">هذا المنتج غير ظاهر للعملاء</p>
+                <p className="text-sm text-amber-700">
+                  المنتج معطل حاليًا. تفعيله سيجعله يظهر في المتجر للعملاء.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AI Generator */}
+        <Card>
+          <SectionHeader
+            title="توليد المحتوى بالذكاء الاصطناعي"
+            description="سيتم اقتراح وصف ومميزات وSEO دون الحفظ التلقائي. راجع المقترحات قبل الحفظ."
+          />
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="secondary"
               size="sm"
-              disabled={isGeneratingAi}
+              disabled={isGeneratingAi || !name}
               onClick={() => handleGenerateAi({ replace: false })}
+              className="gap-2"
             >
+              <Sparkles className="h-4 w-4" />
               {isGeneratingAi ? 'جاري التوليد...' : 'ولّد بالذكاء الاصطناعي'}
             </Button>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={isGeneratingAi}
+              disabled={isGeneratingAi || !name}
               onClick={() => {
                 const ok = window.confirm('هل تريد استبدال الحقول التسويقية وSEO والتصنيف بالمقترح؟');
                 if (!ok) return;
@@ -525,269 +527,474 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
               استبدال بالمقترح
             </Button>
           </div>
-        </div>
-        {hasAiSuggestedTaxonomy && (
-          <p className="mb-4 text-xs text-muted-foreground">
-            تم اقتراح القسم والفئة بناءً على اسم المنتج، تأكد منها قبل الحفظ.
-          </p>
-        )}
-        <div className="grid gap-4">
-          <div>
-            <Label htmlFor="marketing_tagline">عبارة تسويقية قصيرة</Label>
-            <Input
-              id="marketing_tagline"
-              {...register('marketing_tagline')}
-              placeholder="مثال: رغوة عالية لتنظيف أعمق للسجاد والموكيت"
-            />
-            <FieldError message={(errors as any).marketing_tagline?.message} />
+          {hasAiSuggestedTaxonomy && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              تم اقتراح القسم والفئة بناءً على اسم المنتج، تأكد منها قبل الحفظ.
+            </p>
+          )}
+        </Card>
+
+        {/* Section 1: Basic Info */}
+        <Card>
+          <SectionHeader
+            title="معلومات المنتج الأساسية"
+            description="أدخل البيانات التي تظهر للعميل في صفحة المنتج."
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label htmlFor="name">اسم المنتج *</Label>
+              <Input id="name" {...register('name')} placeholder="مثال: سجاد تنظيف احترافي" />
+              <FieldError message={errors.name?.message} />
+            </div>
+
+            <div>
+              <Label htmlFor="slug">الرابط المختصر (Slug) *</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="slug"
+                  dir="ltr"
+                  value={currentSlug}
+                  onChange={(event) => {
+                    setSlugTouched(true);
+                    setValue('slug', normalizeSlug(event.target.value), { shouldDirty: true, shouldValidate: true });
+                  }}
+                  placeholder="professional-cleaning-carpet"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSlugTouched(true);
+                    setValue('slug', slugify(name), { shouldDirty: true, shouldValidate: true });
+                  }}
+                >
+                  توليد
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
+                /product/{currentSlug || 'product-slug'}
+              </p>
+              <FieldError message={errors.slug?.message} />
+            </div>
+
+            <div className="md:col-span-2">
+              <Label htmlFor="short_description">وصف قصير</Label>
+              <Input
+                id="short_description"
+                {...register('short_description')}
+                placeholder="وصف مختصر يظهر في صفحات القوائم (يُفضّل أقل من 100 حرف)"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <Label htmlFor="description">الوصف الكامل</Label>
+              <textarea
+                id="description"
+                rows={5}
+                className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                {...register('description')}
+                placeholder="اكتب وصفًا تفصيليًا للمنتج يظهر في صفحة المنتج..."
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="sku">رمز المنتج (SKU)</Label>
+              <Input id="sku" dir="ltr" {...register('sku')} placeholder="مثال: BUR-12345" />
+            </div>
+
+            <div>
+              <Label htmlFor="brand">العلامة التجارية</Label>
+              <Input id="brand" {...register('brand')} placeholder="مثال: البرج" />
+            </div>
+          </div>
+        </Card>
+
+        {/* Section 2: Classification */}
+        <Card>
+          <SectionHeader
+            title="التصنيف"
+            description="حدد القسم والفئة المناسبين للمنتج."
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label>القسم الرئيسي *</Label>
+              <Select
+                value={selectedCategoryId || undefined}
+                onValueChange={(value) => {
+                  setValue('category_id', value, { shouldValidate: true });
+                  setValue('subcategory_id', null);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر القسم" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(formData?.categories || []).map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldError message={errors.category_id?.message} />
+            </div>
+
+            <div>
+              <Label>الفئة الفرعية</Label>
+              <Select
+                value={selectedSubcategoryId || 'none'}
+                onValueChange={(value) => setValue('subcategory_id', value === 'none' ? null : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر الفئة (اختياري)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون فئة فرعية</SelectItem>
+                  {filteredSubcategories.map((subcategory) => (
+                    <SelectItem key={subcategory.id} value={subcategory.id}>
+                      {subcategory.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="key_features">مميزات المنتج</Label>
-            <textarea
-              id="key_features"
-              rows={6}
-              value={(keyFeatures || []).join('\n')}
-              onChange={(event) => {
-                const lines = event.target.value
-                  .split('\n')
-                  .map((line) => line.trim())
-                  .filter(Boolean)
-                  .slice(0, 6);
-                setValue('key_features', lines as ProductFormInput['key_features'], { shouldDirty: true });
-              }}
-              className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              placeholder="كل سطر يمثل ميزة (حتى 6)"
-            />
-            <FieldError message={(errors as any).key_features?.message} />
-          </div>
-
-          <div>
-            <Label>وسوم تسويقية</Label>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {[
-                { key: 'bestselling', label: 'الأكثر طلبًا' },
-                { key: 'offer', label: 'عرض' },
-                { key: 'new', label: 'جديد' },
-                { key: 'wholesale', label: 'سعر جملة' },
-                { key: 'limited', label: 'كمية محدودة' },
-              ].map((badge) => (
+          <div className="mt-4">
+            <Label className="mb-2 block">مناسب لـ (Intent Tags)</Label>
+            <div className="flex flex-wrap gap-2">
+              {INTENT_TAG_CONFIG.map((tag) => (
                 <label
-                  key={badge.key}
-                  className="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm transition-colors hover:bg-muted"
+                  key={tag.key}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-muted"
                 >
                   <input
                     type="checkbox"
-                    checked={productBadges?.includes(badge.key as any)}
+                    checked={intentTags?.includes(tag.key)}
                     onChange={(event) => {
-                      const current = productBadges || [];
+                      const current = intentTags || [];
                       const next = event.target.checked
-                        ? [...current, badge.key]
-                        : current.filter((b) => b !== badge.key);
-                      setValue('product_badges', next as ProductFormInput['product_badges'], { shouldDirty: true });
+                        ? [...current, tag.key]
+                        : current.filter((t) => t !== tag.key);
+                      setValue('intent_tags', next as ProductFormInput['intent_tags'], { shouldDirty: true });
                     }}
                   />
-                  {badge.label}
+                  {tag.label}
                 </label>
               ))}
             </div>
-            <FieldError message={(errors as any).product_badges?.message} />
+            <p className="mt-2 text-xs text-muted-foreground">
+              حدد الاستخدامات التي يناسبها هذا المنتج لتظهر في فلاتر "تسوق حسب احتياجك".
+            </p>
           </div>
-        </div>
-      </section>
+        </Card>
 
-      {mode === 'create' && (
-        <section className="rounded-lg border bg-card p-5 shadow-sm">
-          <h2 className="mb-2 text-lg font-semibold">صور المنتج</h2>
-          <p className="text-sm text-muted-foreground">احفظ المنتج أولًا حتى تتمكن من رفع الصور.</p>
-        </section>
-      )}
-
-      <section className="rounded-lg border bg-card p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">التسعير والمخزون</h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          <div>
-            <Label htmlFor="price">السعر *</Label>
-            <Input id="price" type="number" step="0.01" min="0" {...register('price')} />
-            <FieldError message={errors.price?.message} />
-          </div>
-          <div>
-            <Label htmlFor="compare_price">السعر قبل الخصم</Label>
-            <Input id="compare_price" type="number" step="0.01" min="0" {...register('compare_price')} />
-          </div>
-          <div>
-            <Label htmlFor="stock_quantity">المخزون</Label>
-            <Input id="stock_quantity" type="number" min="0" {...register('stock_quantity')} />
-            <FieldError message={errors.stock_quantity?.message} />
-          </div>
-          <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-            <input
-              type="checkbox"
-              checked={trackStock}
-              onChange={(event) => setValue('track_stock', event.target.checked)}
-            />
-            تتبع المخزون
-          </label>
-          <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-            <input
-              type="checkbox"
-              checked={allowBackorders}
-              onChange={(event) => setValue('allow_backorders', event.target.checked)}
-            />
-            السماح بالطلبات عند نفاد المخزون
-          </label>
-        </div>
-      </section>
-
-      <section className="rounded-lg border bg-card p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">التصنيف والتفاصيل</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <Label>القسم *</Label>
-            <Select
-              value={selectedCategoryId || undefined}
-              onValueChange={(value) => {
-                setValue('category_id', value, { shouldValidate: true });
-                setValue('subcategory_id', null);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="اختر القسم" />
-              </SelectTrigger>
-              <SelectContent>
-                {(formData?.categories || []).map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldError message={errors.category_id?.message} />
+        {/* Section 3: Price & Stock */}
+        <Card>
+          <SectionHeader
+            title="السعر والمخزون"
+            description="حدد الأسعار بالدينار الأردني، وإعدادات تتبع المخزون."
+          />
+          <div className="grid gap-4 md:grid-cols-3">
+            <div>
+              <Label htmlFor="price">السعر الحالي (دينار) *</Label>
+              <Input id="price" type="number" step="0.01" min="0" {...register('price')} placeholder="0.00" />
+              <FieldError message={errors.price?.message} />
+            </div>
+            <div>
+              <Label htmlFor="compare_price">السعر قبل الخصم (دينار)</Label>
+              <Input
+                id="compare_price"
+                type="number"
+                step="0.01"
+                min="0"
+                {...register('compare_price')}
+                placeholder="اتركه فارغًا إذا لا يوجد خصم"
+              />
+              {hasInvalidComparePrice && (
+                <p className="mt-1 text-xs text-amber-600">
+                  السعر القديم يجب أن يكون أعلى من السعر الحالي لاحتساب الخصم.
+                </p>
+              )}
+            </div>
+            <div className={trackStock ? '' : 'opacity-50 pointer-events-none'}>
+              <Label htmlFor="stock_quantity">الكمية المتاحة</Label>
+              <Input id="stock_quantity" type="number" min="0" {...register('stock_quantity')} />
+              <FieldError message={errors.stock_quantity?.message} />
+            </div>
           </div>
 
-          <div>
-            <Label>الفئة</Label>
-            <Select
-              value={selectedSubcategoryId || 'none'}
-              onValueChange={(value) => setValue('subcategory_id', value === 'none' ? null : value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="اختر الفئة" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">بدون فئة</SelectItem>
-                {filteredSubcategories.map((subcategory) => (
-                  <SelectItem key={subcategory.id} value={subcategory.id}>
-                    {subcategory.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="sku">SKU</Label>
-            <Input id="sku" dir="ltr" {...register('sku')} />
-          </div>
-          <div>
-            <Label htmlFor="barcode">Barcode</Label>
-            <Input id="barcode" dir="ltr" {...register('barcode')} />
-          </div>
-          <div>
-            <Label htmlFor="brand">العلامة التجارية</Label>
-            <Input id="brand" {...register('brand')} />
-          </div>
-          <div>
-            <Label htmlFor="tags">الوسوم</Label>
-            <Input
-              id="tags"
-              value={tagsText}
-              onChange={(event) => setTagsText(event.target.value)}
-              placeholder="وسم 1, وسم 2"
-            />
-          </div>
-          <div>
-            <Label htmlFor="weight">الوزن</Label>
-            <Input id="weight" type="number" step="0.01" min="0" {...register('weight')} />
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-lg border bg-card p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">مناسب لـ</h2>
-        <div className="flex flex-wrap gap-3">
-          {INTENT_TAG_CONFIG.map((tag) => (
-            <label
-              key={tag.key}
-              className="flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2.5 text-sm transition-colors hover:bg-muted"
-            >
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <label className="flex items-center gap-2 rounded-md border p-3 text-sm cursor-pointer hover:bg-muted/50 transition-colors">
               <input
                 type="checkbox"
-                checked={intentTags?.includes(tag.key)}
-                onChange={(event) => {
-                  const current = intentTags || [];
-                  const next = event.target.checked
-                    ? [...current, tag.key]
-                    : current.filter((t) => t !== tag.key);
-                  setValue('intent_tags', next as ProductFormInput['intent_tags'], { shouldDirty: true });
-                }}
+                checked={trackStock}
+                onChange={(event) => setValue('track_stock', event.target.checked)}
               />
-              {tag.label}
+              <span>تتبع المخزون</span>
             </label>
-          ))}
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          حدد الاستخدامات التي يناسبها هذا المنتج لتظهر في فلاتر "تسوق حسب احتياجك".
-        </p>
-      </section>
+            <label className={`flex items-center gap-2 rounded-md border p-3 text-sm cursor-pointer transition-colors ${trackStock ? 'hover:bg-muted/50' : 'opacity-50 pointer-events-none'}`}>
+              <input
+                type="checkbox"
+                checked={allowBackorders}
+                disabled={!trackStock}
+                onChange={(event) => setValue('allow_backorders', event.target.checked)}
+              />
+              <span>السماح بالطلب عند نفاد المخزون</span>
+            </label>
+            <label className="flex items-center gap-2 rounded-md border p-3 text-sm cursor-pointer hover:bg-muted/50 transition-colors">
+              <input
+                type="checkbox"
+                checked={isFeatured}
+                onChange={(event) => setValue('is_featured', event.target.checked)}
+              />
+              <span>منتج مميز</span>
+            </label>
+          </div>
 
-      <section className="rounded-lg border bg-card p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">الأبعاد والحالة</h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          <div>
-            <Label htmlFor="length">الطول</Label>
-            <Input id="length" type="number" step="0.01" min="0" {...register('dimensions.length')} />
+          {/* Stock tracking notes */}
+          <div className="mt-4 space-y-2">
+            {!trackStock && (
+              <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                لن يتم احتساب نفاد المخزون لهذا المنتج. العملاء سيمكنهم الطلب دائمًا.
+              </p>
+            )}
+            {allowBackorders && trackStock && (
+              <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                يمكن طلب المنتج حتى لو نفدت الكمية. سيتم تنفيذ الطلب لاحقًا عند توفر الكمية.
+              </p>
+            )}
           </div>
-          <div>
-            <Label htmlFor="width">العرض</Label>
-            <Input id="width" type="number" step="0.01" min="0" {...register('dimensions.width')} />
-          </div>
-          <div>
-            <Label htmlFor="height">الارتفاع</Label>
-            <Input id="height" type="number" step="0.01" min="0" {...register('dimensions.height')} />
-          </div>
-          <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-            <input
-              type="checkbox"
-              checked={isActive}
-              onChange={(event) => setValue('is_active', event.target.checked)}
-            />
-            المنتج نشط
-          </label>
-          <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
-            <input
-              type="checkbox"
-              checked={isFeatured}
-              onChange={(event) => setValue('is_featured', event.target.checked)}
-            />
-            منتج مميز
-          </label>
-        </div>
-      </section>
+        </Card>
 
-      <section className="rounded-lg border bg-card p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">SEO</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <Label htmlFor="meta_title">Meta title</Label>
-            <Input id="meta_title" {...register('meta_title')} />
+        {/* Section 4: Marketing */}
+        <Card>
+          <SectionHeader
+            title="التسويق والمميزات"
+            description="أضف عبارة تسويقية ومميزات المنتج والشارات."
+          />
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="marketing_tagline">العبارة التسويقية</Label>
+              <Input
+                id="marketing_tagline"
+                {...register('marketing_tagline')}
+                placeholder="مثال: رغوة عالية لتنظيف أعمق للسجاد والموكيت"
+              />
+              <FieldError message={(errors as any).marketing_tagline?.message} />
+            </div>
+
+            <div>
+              <Label htmlFor="key_features">مميزات المنتج الرئيسية</Label>
+              <textarea
+                id="key_features"
+                rows={6}
+                value={(keyFeatures || []).join('\n')}
+                onChange={(event) => {
+                  const lines = event.target.value
+                    .split('\n')
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .slice(0, 6);
+                  setValue('key_features', lines as ProductFormInput['key_features'], { shouldDirty: true });
+                }}
+                className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                placeholder="اكتب كل ميزة في سطر منفصل. مثال:&#10;مناسب للمطاعم والكافيهات&#10;جودة عالية ومتانة&#10;سهل الاستخدام والتنظيف"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                اكتب كل ميزة في سطر منفصل (حتى 6 مميزات). تظهر في صفحة المنتج كنقاط مرقمة.
+              </p>
+              <FieldError message={(errors as any).key_features?.message} />
+            </div>
+
+            <div>
+              <Label className="mb-2 block">شارات المنتج (Badges)</Label>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {badgeOptions.map((badge) => (
+                  <label
+                    key={badge.key}
+                    className="flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors hover:bg-muted"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={productBadges?.includes(badge.key as any)}
+                      onChange={(event) => {
+                        const current = productBadges || [];
+                        const next = event.target.checked
+                          ? [...current, badge.key]
+                          : current.filter((b) => b !== badge.key);
+                        setValue('product_badges', next as ProductFormInput['product_badges'], { shouldDirty: true });
+                      }}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <span className="font-medium text-sm">{badge.label}</span>
+                      <p className="text-xs text-muted-foreground">{badge.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <FieldError message={(errors as any).product_badges?.message} />
+            </div>
           </div>
-          <div>
-            <Label htmlFor="meta_description">Meta description</Label>
-            <Input id="meta_description" {...register('meta_description')} />
+        </Card>
+
+        {/* Section 5: Images (for create mode only) */}
+        {mode === 'create' && (
+          <Card>
+            <SectionHeader title="صور المنتج" />
+            <div className="rounded-md border border-dashed p-6 text-center">
+              <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+              <p className="text-sm font-medium">احفظ المنتج أولًا حتى تتمكن من رفع الصور</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                بعد الحفظ، سيتم تحويلك لصفحة التعديل حيث يمكنك إضافة الصور.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {/* Section 6: Additional Details */}
+        <Card>
+          <SectionHeader
+            title="تفاصيل إضافية"
+            description="بيانات إضافية للمنتج (اختياري)."
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label htmlFor="barcode">الباركود</Label>
+              <Input id="barcode" dir="ltr" {...register('barcode')} placeholder=" barcode number" />
+            </div>
+            <div>
+              <Label htmlFor="tags">الوسوم</Label>
+              <Input
+                id="tags"
+                value={tagsText}
+                onChange={(event) => setTagsText(event.target.value)}
+                placeholder="وسم 1, وسم 2, وسم 3"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">افصل بين الوسوم بفاصلة (,)</p>
+            </div>
+            <div>
+              <Label htmlFor="weight">الوزن (كغ)</Label>
+              <Input id="weight" type="number" step="0.01" min="0" {...register('weight')} placeholder="0.00" />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="mb-2 block">الأبعاد (سم)</Label>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label htmlFor="length" className="text-xs text-muted-foreground">الطول</Label>
+                  <Input id="length" type="number" step="0.01" min="0" {...register('dimensions.length')} placeholder="0" />
+                </div>
+                <div>
+                  <Label htmlFor="width" className="text-xs text-muted-foreground">العرض</Label>
+                  <Input id="width" type="number" step="0.01" min="0" {...register('dimensions.width')} placeholder="0" />
+                </div>
+                <div>
+                  <Label htmlFor="height" className="text-xs text-muted-foreground">الارتفاع</Label>
+                  <Input id="height" type="number" step="0.01" min="0" {...register('dimensions.height')} placeholder="0" />
+                </div>
+              </div>
+            </div>
           </div>
+        </Card>
+
+        {/* Section 7: SEO */}
+        <Card>
+          <SectionHeader
+            title="SEO"
+            description="تحسين الظهور في محركات البحث (اختياري)."
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label htmlFor="meta_title">عنوان الصفحة (Meta Title)</Label>
+              <Input id="meta_title" {...register('meta_title')} placeholder="يظهر في نتائج البحث" />
+            </div>
+            <div>
+              <Label htmlFor="meta_description">وصف الصفحة (Meta Description)</Label>
+              <Input id="meta_description" {...register('meta_description')} placeholder="وصف مختصر يظهر تحت العنوان في البحث" />
+            </div>
+          </div>
+        </Card>
+
+        {/* Save Button at bottom */}
+        <div className="flex justify-end pt-4 border-t">
+          <Button type="submit" disabled={isSubmitting} size="lg">
+            <Save className="ml-2 h-4 w-4" />
+            {isSubmitting ? 'جاري الحفظ...' : 'حفظ المنتج'}
+          </Button>
         </div>
-      </section>
-    </form>
+      </form>
+
+      {/* Sticky Summary Sidebar */}
+      <aside className="hidden lg:block">
+        <div className="sticky top-6 space-y-4">
+          <Card className="bg-muted/50">
+            <SectionHeader title="ملخص المنتج" />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium truncate" title={name || '—'}>
+                  {name || '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">السعر:</span>
+                <span className="font-semibold">{price ? formatPrice(Number(price)) : '—'}</span>
+              </div>
+              {comparePrice && comparePrice > price && (
+                <div className="flex items-center justify-between text-red-600">
+                  <span className="text-sm">السعر القديم:</span>
+                  <span className="line-through">{formatPrice(Number(comparePrice))}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 pt-2 border-t">
+                {isActive ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm text-green-600">المنتج نشط</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="h-4 w-4 text-slate-500" />
+                    <span className="text-sm text-slate-500">المنتج معطل</span>
+                  </>
+                )}
+              </div>
+              {isFeatured && (
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm text-purple-600">منتج مميز</span>
+                </div>
+              )}
+              {comparePrice && comparePrice > price && (
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-red-600" />
+                  <span className="text-sm text-red-600">عليه عرض</span>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card className="bg-muted/50">
+            <SectionHeader title="حالة المخزون" />
+            <div className="space-y-2">
+              {!trackStock ? (
+                <p className="text-sm text-muted-foreground">لا يتم تتبع المخزون</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">الكمية:</span>
+                    <span className="font-medium">{stockQuantity || 0} قطعة</span>
+                  </div>
+                  {allowBackorders && (
+                    <p className="text-xs text-muted-foreground">السماح بالطلب عند النفاد مفعل</p>
+                  )}
+                </>
+              )}
+            </div>
+          </Card>
+        </div>
+      </aside>
+    </div>
   );
 }
