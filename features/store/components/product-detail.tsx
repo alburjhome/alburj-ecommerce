@@ -139,6 +139,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
         <div className="space-y-4">
           <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
             <SafeImage
+              key={currentImage?.id || `img-${selectedImage}`}
               src={imageSrc}
               fallbackSrc={PLACEHOLDER_PRODUCT}
               alt={currentImage?.alt_text || product.name}
