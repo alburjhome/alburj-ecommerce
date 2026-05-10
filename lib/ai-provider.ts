@@ -60,6 +60,29 @@ export class AiProviderError extends Error {
 }
 
 /**
+ * Get user-friendly error message in Arabic based on error code
+ */
+export function getUserFriendlyErrorMessage(error: AiProviderError): string {
+  switch (error.code) {
+    case 'MISSING_API_KEY':
+      return error.provider === 'openai'
+        ? 'OpenAI API key is not configured.'
+        : 'Gemini API key is not configured.';
+    case 'CONFIG_ERROR':
+      return 'موديل OpenAI غير متاح لهذا الحساب. جرّب gpt-4.1-mini.';
+    case 'API_ERROR':
+      if (error.message.includes('billing') || error.message.includes('رصيد')) {
+        return 'رصيد OpenAI أو الفوترة غير مفعّلة.';
+      }
+      return 'حدث خطأ في الاتصال بمزود الذكاء الاصطناعي. حاول مرة أخرى لاحقًا.';
+    case 'INVALID_RESPONSE':
+      return 'لم يتمكن الذكاء الاصطناعي من إنشاء رد صالح. حاول مرة أخرى.';
+    default:
+      return 'حدث خطأ غير متوقع.';
+  }
+}
+
+/**
  * Get the active AI provider from store settings
  * Falls back to 'gemini' if not set
  */
@@ -251,21 +274,70 @@ async function generateWithOpenAI(
   const openai = new OpenAI({ apiKey });
   const model = getOpenAiModel();
 
-  const generate = async (p: string) => {
-    const response = await openai.chat.completions.create({
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a helpful assistant that generates structured JSON responses. Always return valid JSON without markdown formatting.',
-        },
-        { role: 'user', content: p },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.7,
-      max_tokens: 2000,
-    });
-    return response.choices[0]?.message?.content || '';
+  const generate = async (p: string): Promise<string> => {
+    try {
+      const response = await openai.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant that generates structured JSON responses. Always return valid JSON without markdown formatting.',
+          },
+          { role: 'user', content: p },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.7,
+        max_tokens: 2000,
+      });
+      return response.choices[0]?.message?.content || '';
+    } catch (error: any) {
+      // Log error details for debugging (without API key)
+      const errorCode = error?.code || error?.type || 'UNKNOWN';
+      const errorMessage = error?.message || 'Unknown error';
+      const errorStatus = error?.status || error?.statusCode || 'N/A';
+
+      console.error(`[OpenAI] Error - Code: ${errorCode}, Status: ${errorStatus}, Message: ${errorMessage.slice(0, 200)}`);
+
+      // Handle specific OpenAI errors
+      if (errorCode === 'model_not_found' || errorStatus === 404) {
+        throw new AiProviderError(
+          'موديل OpenAI غير متاح لهذا الحساب. جرّب gpt-4.1-mini.',
+          'openai',
+          'CONFIG_ERROR'
+        );
+      }
+
+      if (errorCode === 'insufficient_quota' || errorCode === 'billing_not_active' || errorMessage?.includes('billing')) {
+        throw new AiProviderError(
+          'رصيد OpenAI أو الفوترة غير مفعّلة.',
+          'openai',
+          'API_ERROR'
+        );
+      }
+
+      if (errorCode === 'invalid_api_key' || errorCode === 'authentication_error') {
+        throw new AiProviderError(
+          'OpenAI API key is not configured.',
+          'openai',
+          'MISSING_API_KEY'
+        );
+      }
+
+      if (errorCode === 'rate_limit_exceeded' || errorStatus === 429) {
+        throw new AiProviderError(
+          'تم تجاوز حد الطلبات لـ OpenAI. حاول مرة أخرى لاحقًا.',
+          'openai',
+          'API_ERROR'
+        );
+      }
+
+      // Re-throw as API_ERROR for other cases
+      throw new AiProviderError(
+        `OpenAI API error: ${errorMessage}`,
+        'openai',
+        'API_ERROR'
+      );
+    }
   };
 
   const rawText = await generate(prompt);

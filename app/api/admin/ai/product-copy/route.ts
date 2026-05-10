@@ -8,6 +8,7 @@ import {
   getMissingApiKeyMessage,
   generateProductCopy,
   AiProviderError,
+  getUserFriendlyErrorMessage,
   type ProductCopyInput,
 } from '@/lib/ai-provider';
 
@@ -200,30 +201,26 @@ export async function POST(request: Request) {
 
     // Handle AI provider specific errors
     if (error instanceof AiProviderError) {
-      const displayMessage =
-        error.provider === 'openai'
-          ? 'مزود الذكاء الاصطناعي (OpenAI) غير مضبوط. تحقق من إعدادات البيئة.'
-          : 'مزود الذكاء الاصطناعي (Gemini) غير مضبوط. تحقق من إعدادات البيئة.';
+      // Log error for debugging (without sensitive info)
+      console.error(
+        `[AI Product Copy] Provider: ${error.provider}, Code: ${error.code}, Message: ${error.message.slice(0, 100)}`
+      );
 
-      if (error.code === 'MISSING_API_KEY') {
-        return NextResponse.json(
-          { error: displayMessage, details: error.message },
-          { status: 500 }
-        );
-      }
-      if (error.code === 'INVALID_RESPONSE') {
-        return NextResponse.json(
-          { error: 'لم يتمكن الذكاء الاصطناعي من إنشاء رد صالح. حاول مرة أخرى.' },
-          { status: 502 }
-        );
-      }
-      if (error.code === 'API_ERROR') {
-        return NextResponse.json(
-          { error: 'حدث خطأ في الاتصال بمزود الذكاء الاصطناعي. حاول مرة أخرى لاحقًا.' },
-          { status: 502 }
-        );
-      }
+      const userMessage = getUserFriendlyErrorMessage(error);
+      const statusCode = error.code === 'MISSING_API_KEY' || error.code === 'CONFIG_ERROR' ? 500 : 502;
+
+      return NextResponse.json(
+        {
+          error: userMessage,
+          provider: error.provider,
+          code: error.code,
+        },
+        { status: statusCode }
+      );
     }
+
+    // Log unexpected errors
+    console.error('[AI Product Copy] Unexpected error:', message.slice(0, 200));
 
     return NextResponse.json({ error: 'Failed to generate product copy' }, { status: 500 });
   }
