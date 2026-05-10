@@ -5,6 +5,11 @@ export const WHATSAPP_CLICK_SOURCE_LABELS_AR: Record<string, string> = {
   quick_order: 'صفحة جهّز طلبك خلال دقيقة',
   homepage_shop_cta: 'زر واتساب في الرئيسية',
   homepage_bundle: 'باقات الصفحة الرئيسية',
+  offers_hero_whatsapp: 'واتساب صفحة العروض',
+  offers_bundle: 'باقات صفحة العروض',
+  restaurants_hero_whatsapp: 'واتساب صفحة المطاعم والكافيهات',
+  restaurants_bundle: 'باقات صفحة المطاعم والكافيهات',
+  restaurants_empty_whatsapp: 'واتساب صفحة المطاعم (الحالة الفارغة)',
   mobile_menu_whatsapp: 'واتساب القائمة الجانبية',
   footer_whatsapp: 'واتساب الفوتر',
 };

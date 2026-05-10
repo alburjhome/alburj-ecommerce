@@ -228,6 +228,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   تصفح كل المنتجات
                 </Link>
               </div>
+              <div className="mt-3">
+                <Link
+                  href="/restaurants"
+                  className="text-sm text-primary hover:underline"
+                >
+                  عروض المطاعم والكافيهات ←
+                </Link>
+              </div>
             </div>
           </div>
         </section>
