@@ -54,7 +54,6 @@ const positionOptions: Array<{ value: BannerPosition; label: string }> = [
 ];
 
 const linkPresetOptions: Array<{ value: string; label: string }> = [
-  { label: 'بدون رابط', value: '' },
   { label: 'الرئيسية', value: '/' },
   { label: 'كل المنتجات', value: '/products' },
   { label: 'الأقسام', value: '/categories' },
@@ -125,6 +124,7 @@ export function BannersClient() {
 
   const currentLinkPresetValue = useMemo(() => {
     const value = form.link_url.trim();
+    if (!value) return '__none__';
     const match = linkPresetOptions.some((option) => option.value === value);
     return match ? value : '__custom__';
   }, [form.link_url]);
@@ -326,6 +326,10 @@ export function BannersClient() {
             <Select
               value={currentLinkPresetValue}
               onValueChange={(value) => {
+                if (value === '__none__') {
+                  setForm((current) => ({ ...current, link_url: '' }));
+                  return;
+                }
                 if (value === '__custom__') return;
                 setForm((current) => ({ ...current, link_url: value }));
               }}
@@ -334,6 +338,7 @@ export function BannersClient() {
                 <SelectValue placeholder="اختر رابطًا" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">بدون رابط</SelectItem>
                 <SelectItem value="__custom__">رابط مخصص</SelectItem>
                 {linkPresetOptions.map((option) => (
                   <SelectItem key={option.label} value={option.value}>
