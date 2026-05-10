@@ -181,6 +181,9 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const price = watch('price');
   const comparePrice = watch('compare_price');
   const stockQuantity = watch('stock_quantity');
+  const metaTitle = watch('meta_title');
+  const metaDescription = watch('meta_description');
+  const shortDescription = watch('short_description');
 
   // Price validation warning
   const hasInvalidComparePrice = useMemo(() => {
@@ -335,6 +338,62 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       (subcategory) => subcategory.category_id === selectedCategoryId
     );
   }, [formData, selectedCategoryId]);
+
+  // SEO helpers
+  const getCharCountStatus = (count: number, min: number, max: number) => {
+    if (count === 0) return { label: '', color: '' };
+    if (count < min) return { label: 'قصير جدًا', color: 'text-amber-600' };
+    if (count > max) return { label: 'طويل', color: 'text-red-600' };
+    return { label: 'ممتاز', color: 'text-green-600' };
+  };
+
+  const metaTitleCount = (metaTitle || '').length;
+  const metaDescriptionCount = (metaDescription || '').length;
+  const metaTitleStatus = getCharCountStatus(metaTitleCount, 30, 60);
+  const metaDescriptionStatus = getCharCountStatus(metaDescriptionCount, 80, 155);
+
+  const displayTitle = metaTitle || name || 'عنوان المنتج';
+  const displayDescription = metaDescription || shortDescription || 'وصف المنتج';
+  const displaySlug = currentSlug || 'product-slug';
+
+  function handleCopyTitleFromName() {
+    if (!name) {
+      toast({
+        title: 'أدخل اسم المنتج أولًا',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (metaTitle && metaTitle.trim()) {
+      const confirmed = window.confirm('حقل عنوان SEO يحتوي على نص. هل تريد استبداله باسم المنتج؟');
+      if (!confirmed) return;
+    }
+    setValue('meta_title', name, { shouldDirty: true });
+    toast({
+      title: 'تم نسخ عنوان SEO',
+      description: 'تم نسخ اسم المنتج إلى حقل عنوان SEO.',
+    });
+  }
+
+  function handleCopyDescFromShort() {
+    if (!shortDescription) {
+      toast({
+        title: 'أدخل وصف مختصر أولًا',
+        description: 'يجب إدخال الوصف المختصر في قسم المعلومات الأساسية.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (metaDescription && metaDescription.trim()) {
+      const confirmed = window.confirm('حقل وصف SEO يحتوي على نص. هل تريد استبداله بالوصف المختصر؟');
+      if (!confirmed) return;
+    }
+    setValue('meta_description', shortDescription, { shouldDirty: true });
+    toast({
+      title: 'تم نسخ وصف SEO',
+      description: 'تم نسخ الوصف المختصر إلى حقل وصف SEO.',
+    });
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -903,17 +962,111 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         <Card>
           <SectionHeader
             title="SEO"
-            description="تحسين الظهور في محركات البحث (اختياري)."
+            description="تحسين الظهور في محركات البحث والمشاركات (اختياري)."
           />
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
+
+          {/* Meta Title */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between">
               <Label htmlFor="meta_title">عنوان الصفحة (Meta Title)</Label>
-              <Input id="meta_title" {...register('meta_title')} placeholder="يظهر في نتائج البحث" />
+              <div className="flex items-center gap-2">
+                <span className={`text-xs ${metaTitleStatus.color}`}>{metaTitleStatus.label}</span>
+                <span className="text-xs text-muted-foreground">{metaTitleCount} / 60</span>
+              </div>
             </div>
-            <div>
+            <Input
+              id="meta_title"
+              {...register('meta_title')}
+              placeholder="يظهر في نتائج البحث"
+              className="mt-1"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">يفضل أن يكون بين 30 و60 حرفًا.</p>
+          </div>
+
+          {/* Meta Description */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between">
               <Label htmlFor="meta_description">وصف الصفحة (Meta Description)</Label>
-              <Input id="meta_description" {...register('meta_description')} placeholder="وصف مختصر يظهر تحت العنوان في البحث" />
+              <div className="flex items-center gap-2">
+                <span className={`text-xs ${metaDescriptionStatus.color}`}>{metaDescriptionStatus.label}</span>
+                <span className="text-xs text-muted-foreground">{metaDescriptionCount} / 155</span>
+              </div>
             </div>
+            <Input
+              id="meta_description"
+              {...register('meta_description')}
+              placeholder="وصف مختصر يظهر تحت العنوان في البحث"
+              className="mt-1"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">يفضل أن يكون بين 80 و155 حرفًا.</p>
+          </div>
+
+          {/* Copy Buttons */}
+          <div className="mb-6 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCopyTitleFromName}
+              disabled={!name}
+            >
+              نسخ عنوان SEO من اسم المنتج
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCopyDescFromShort}
+              disabled={!shortDescription}
+            >
+              نسخ وصف SEO من الوصف المختصر
+            </Button>
+          </div>
+
+          {/* Google Search Preview */}
+          <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-muted-foreground">معاينة Google</h3>
+            <div className="rounded-lg bg-white p-4 shadow-sm">
+              <div className="text-base font-medium text-blue-600 hover:underline">
+                {displayTitle.slice(0, 60)}
+                {displayTitle.length > 60 ? '...' : ''}
+              </div>
+              <div className="mt-0.5 text-sm text-green-700">
+                alburj-ecommerce.vercel.app/product/{displaySlug}
+              </div>
+              <div className="mt-1 text-sm text-gray-600">
+                {displayDescription.slice(0, 155)}
+                {displayDescription.length > 155 ? '...' : ''}
+              </div>
+            </div>
+          </div>
+
+          {/* Social Sharing Preview */}
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-muted-foreground">معاينة المشاركة</h3>
+            <div className="flex gap-3 rounded-lg bg-white p-3 shadow-sm">
+              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-muted">
+                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                  <ImageIcon className="h-8 w-8" />
+                </div>
+              </div>
+              <div className="flex min-w-0 flex-col justify-center">
+                <div className="truncate text-sm font-semibold text-gray-900">
+                  {displayTitle.slice(0, 80)}
+                  {displayTitle.length > 80 ? '...' : ''}
+                </div>
+                <div className="mt-1 line-clamp-2 text-xs text-gray-600">
+                  {displayDescription.slice(0, 150)}
+                  {displayDescription.length > 150 ? '...' : ''}
+                </div>
+                <div className="mt-1 text-xs text-gray-500">alburj-ecommerce.vercel.app</div>
+              </div>
+            </div>
+            {mode === 'create' && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                ستظهر صورة المنتج بعد حفظه ورفع صورة رئيسية.
+              </p>
+            )}
           </div>
         </Card>
 
