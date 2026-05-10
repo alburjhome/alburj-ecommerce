@@ -12,6 +12,7 @@ interface CartActions {
   toggleCart: () => void;
   getTotalItems: () => number;
   getTotalPrice: () => number;
+  rehydrate: () => void;
 }
 
 const useCartStore = create<CartState & CartActions>()(
@@ -20,6 +21,7 @@ const useCartStore = create<CartState & CartActions>()(
       // State
       items: [],
       isOpen: false,
+      hasHydrated: false,
 
       // Actions
       addItem: (item) => {
@@ -87,10 +89,20 @@ const useCartStore = create<CartState & CartActions>()(
         const { items } = get();
         return items.reduce((total, item) => total + item.price * item.quantity, 0);
       },
+
+      rehydrate: () => {
+        // Rehydrate persisted state on the client after mount to avoid SSR/CSR mismatch.
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        (useCartStore as any).persist?.rehydrate?.();
+      },
     }),
     {
       name: 'alburj-cart',
       partialize: (state) => ({ items: state.items }),
+      skipHydration: true,
+      onRehydrateStorage: () => () => {
+        useCartStore.setState({ hasHydrated: true });
+      },
     }
   )
 );

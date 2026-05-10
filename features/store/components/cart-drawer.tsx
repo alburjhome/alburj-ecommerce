@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, X } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -11,9 +11,17 @@ import { formatPrice } from '@/lib/utils';
 import { CartCheckout } from './cart-checkout';
 
 export function CartDrawer() {
-  const { items, isOpen, closeCart, updateQuantity, removeItem, getTotalPrice } = useCartStore();
+  const { items, isOpen, closeCart, updateQuantity, removeItem, getTotalPrice, hasHydrated, rehydrate } =
+    useCartStore();
   const [showCheckout, setShowCheckout] = useState(false);
-  const total = getTotalPrice();
+  const hydratedItems = hasHydrated ? items : [];
+  const total = hasHydrated ? getTotalPrice() : 0;
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      rehydrate();
+    }
+  }, [hasHydrated, rehydrate]);
 
   if (showCheckout) {
     return (
@@ -35,7 +43,7 @@ export function CartDrawer() {
         <div className="flex items-center justify-between gap-4 border-b px-4 py-4">
           <div className="flex items-center gap-2">
             <ShoppingBag className="h-5 w-5" />
-            <h2 className="text-lg font-bold">سلة المشتريات ({items.length})</h2>
+            <h2 className="text-lg font-bold">سلة المشتريات ({hydratedItems.length})</h2>
           </div>
           <SheetClose asChild>
             <button
@@ -53,7 +61,7 @@ export function CartDrawer() {
           <SheetDescription>Review cart items, adjust quantities, or continue to checkout.</SheetDescription>
         </SheetHeader>
 
-        {items.length === 0 ? (
+        {hydratedItems.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
             <ShoppingBag className="h-16 w-16 text-muted-foreground mb-4" />
             <p className="text-muted-foreground">السلة فارغة</p>
@@ -65,7 +73,7 @@ export function CartDrawer() {
           <>
             {/* Cart Items */}
             <div className="flex-1 overflow-auto px-4 py-4 space-y-4">
-              {items.map((item) => (
+              {hydratedItems.map((item) => (
                 <div key={item.id} className="flex gap-3 p-3 bg-muted rounded-lg">
                   <div className="relative w-20 h-20 rounded-md overflow-hidden shrink-0">
                     <SafeImage
