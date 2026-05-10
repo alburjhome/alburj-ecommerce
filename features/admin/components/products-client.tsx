@@ -3,7 +3,27 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit, EyeOff, PackageOpen, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import {
+  Edit,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  PackageOpen,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  Tag,
+  Sparkles,
+  TrendingUp,
+  Boxes,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Store,
+  Filter,
+  Layers,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,17 +40,25 @@ import { PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
 import { getPrimaryProductImage } from '@/lib/product-image';
 import { formatPrice } from '@/lib/utils';
 
-const statusOptions = [
-  { value: 'all', label: 'كل الحالات' },
-  { value: 'active', label: 'نشط' },
-  { value: 'inactive', label: 'معطل' },
+const quickFilterOptions = [
+  { value: 'all', label: 'كل المنتجات', icon: Layers },
+  { value: 'active', label: 'النشطة', icon: CheckCircle2 },
+  { value: 'inactive', label: 'غير النشطة', icon: XCircle },
+  { value: 'offers', label: 'العروض', icon: Tag },
+  { value: 'out_of_stock', label: 'نفد المخزون', icon: AlertTriangle },
+  { value: 'featured', label: 'المميزة', icon: Sparkles },
+  { value: 'wholesale', label: 'سعر الجملة', icon: Boxes },
 ] as const;
 
-const featuredOptions = [
-  { value: 'all', label: 'الكل' },
-  { value: 'featured', label: 'مميز' },
-  { value: 'not_featured', label: 'غير مميز' },
-] as const;
+type QuickFilterValue = typeof quickFilterOptions[number]['value'];
+
+const productBadgesMap: Record<string, { label: string; color: string; icon?: React.ComponentType<{ className?: string }> }> = {
+  'offer': { label: 'عرض', color: 'bg-red-100 text-red-700', icon: Tag },
+  'new': { label: 'جديد', color: 'bg-green-100 text-green-700', icon: Sparkles },
+  'most-requested': { label: 'الأكثر طلبًا', color: 'bg-blue-100 text-blue-700', icon: TrendingUp },
+  'wholesale': { label: 'جملة', color: 'bg-purple-100 text-purple-700', icon: Boxes },
+  'limited-quantity': { label: 'كمية محدودة', color: 'bg-amber-100 text-amber-700', icon: AlertTriangle },
+};
 
 async function getAccessToken() {
   const {
@@ -42,6 +70,62 @@ async function getAccessToken() {
 
 function getPrimaryImage(product: ProductListRow) {
   return getPrimaryProductImage(product);
+}
+
+function getStockStatus(product: ProductListRow): { label: string; color: string } {
+  if (!product.track_stock) {
+    return { label: 'لا يتتبع', color: 'bg-slate-100 text-slate-600' };
+  }
+  if (product.stock_quantity <= 0) {
+    return { label: 'نفد المخزون', color: 'bg-red-100 text-red-700' };
+  }
+  if (product.stock_quantity <= 5) {
+    return { label: 'كمية محدودة', color: 'bg-amber-100 text-amber-700' };
+  }
+  return { label: 'متوفر', color: 'bg-green-100 text-green-700' };
+}
+
+function getActiveBadge(isActive: boolean) {
+  return isActive
+    ? { label: 'نشط', color: 'bg-green-100 text-green-700' }
+    : { label: 'معطل', color: 'bg-slate-100 text-slate-600' };
+}
+
+function hasOffer(product: ProductListRow): boolean {
+  return Boolean(product.compare_price && product.compare_price > product.price);
+}
+
+function productMatchesFilter(product: ProductListRow, filter: QuickFilterValue): boolean {
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'active':
+      return product.is_active;
+    case 'inactive':
+      return !product.is_active;
+    case 'offers':
+      return hasOffer(product);
+    case 'out_of_stock':
+      return product.track_stock && product.stock_quantity <= 0;
+    case 'featured':
+      return product.is_featured;
+    case 'wholesale':
+      // Check if product has wholesale badge
+      return false; // Will be updated when we fetch product_badges
+    default:
+      return true;
+  }
+}
+
+function calculateStats(products: ProductListRow[]) {
+  return {
+    total: products.length,
+    active: products.filter(p => p.is_active).length,
+    inactive: products.filter(p => !p.is_active).length,
+    offers: products.filter(p => hasOffer(p)).length,
+    outOfStock: products.filter(p => p.track_stock && p.stock_quantity <= 0).length,
+    featured: products.filter(p => p.is_featured).length,
+  };
 }
 
 export function ProductsClient() {
@@ -58,6 +142,7 @@ export function ProductsClient() {
   const [category, setCategory] = useState('all');
   const [status, setStatus] = useState<ProductListFilters['status']>('all');
   const [featured, setFeatured] = useState<ProductListFilters['featured']>('all');
+  const [quickFilter, setQuickFilter] = useState<QuickFilterValue>('all');
 
   const filters = useMemo<ProductListFilters>(
     () => ({
@@ -69,6 +154,30 @@ export function ProductsClient() {
     }),
     [category, featured, page, search, status]
   );
+
+  // Client-side filtering
+  const filteredProducts = useMemo(() => {
+    let result = products;
+
+    // Quick filter
+    if (quickFilter !== 'all') {
+      result = result.filter(p => productMatchesFilter(p, quickFilter));
+    }
+
+    // Search filter (client-side enhancement)
+    if (search.trim()) {
+      const term = search.trim().toLowerCase();
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(term) ||
+        (p.sku && p.sku.toLowerCase().includes(term)) ||
+        (p.category?.name && p.category.name.toLowerCase().includes(term))
+      );
+    }
+
+    return result;
+  }, [products, quickFilter, search]);
+
+  const stats = useMemo(() => calculateStats(products), [products]);
 
   const loadProducts = useCallback(async () => {
     setIsLoading(true);
@@ -173,6 +282,7 @@ export function ProductsClient() {
 
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">المنتجات</h1>
@@ -186,8 +296,61 @@ export function ProductsClient() {
         </Button>
       </div>
 
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground">الإجمالي</p>
+          <p className="text-2xl font-bold">{stats.total}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground text-green-600">النشطة</p>
+          <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground text-slate-500">غير النشطة</p>
+          <p className="text-2xl font-bold text-slate-500">{stats.inactive}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground text-red-600">العروض</p>
+          <p className="text-2xl font-bold text-red-600">{stats.offers}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground text-amber-600">نفد المخزون</p>
+          <p className="text-2xl font-bold text-amber-600">{stats.outOfStock}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground text-purple-600">المميزة</p>
+          <p className="text-2xl font-bold text-purple-600">{stats.featured}</p>
+        </div>
+      </div>
+
+      {/* Quick Filters */}
+      <div className="flex flex-wrap gap-2">
+        {quickFilterOptions.map((option) => {
+          const Icon = option.icon;
+          const isActive = quickFilter === option.value;
+          return (
+            <Button
+              key={option.value}
+              type="button"
+              variant={isActive ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setQuickFilter(option.value);
+                resetToFirstPage();
+              }}
+              className="gap-1.5"
+            >
+              <Icon className="h-4 w-4" />
+              {option.label}
+            </Button>
+          );
+        })}
+      </div>
+
+      {/* Search Bar */}
       <div className="rounded-lg border bg-card p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr_1fr_1fr_auto]">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -197,7 +360,7 @@ export function ProductsClient() {
                 resetToFirstPage();
               }}
               className="pr-9"
-              placeholder="بحث بالاسم أو SKU"
+              placeholder="ابحث باسم المنتج أو SKU أو القسم"
             />
           </div>
 
@@ -208,7 +371,7 @@ export function ProductsClient() {
               resetToFirstPage();
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="القسم" />
             </SelectTrigger>
             <SelectContent>
@@ -221,44 +384,6 @@ export function ProductsClient() {
             </SelectContent>
           </Select>
 
-          <Select
-            value={status}
-            onValueChange={(value) => {
-              setStatus(value as ProductListFilters['status']);
-              resetToFirstPage();
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="الحالة" />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={featured}
-            onValueChange={(value) => {
-              setFeatured(value as ProductListFilters['featured']);
-              resetToFirstPage();
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="مميز" />
-            </SelectTrigger>
-            <SelectContent>
-              {featuredOptions.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           <Button type="button" variant="outline" onClick={loadProducts} disabled={isLoading}>
             <RefreshCw className="ml-2 h-4 w-4" />
             تحديث
@@ -266,19 +391,24 @@ export function ProductsClient() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
+      {/* Results Count */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          عرض <span className="font-medium text-foreground">{filteredProducts.length}</span> من{' '}
+          <span className="font-medium text-foreground">{total}</span> منتج
+        </p>
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden md:block overflow-hidden rounded-lg border bg-card shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-sm">
+          <table className="w-full text-sm">
             <thead className="border-b bg-muted/60 text-muted-foreground">
               <tr>
-                <th className="px-4 py-3 text-right font-medium">الصورة</th>
-                <th className="px-4 py-3 text-right font-medium">الاسم</th>
+                <th className="px-4 py-3 text-right font-medium">المنتج</th>
                 <th className="px-4 py-3 text-right font-medium">السعر</th>
-                <th className="px-4 py-3 text-right font-medium">قبل الخصم</th>
-                <th className="px-4 py-3 text-right font-medium">القسم</th>
                 <th className="px-4 py-3 text-right font-medium">المخزون</th>
                 <th className="px-4 py-3 text-right font-medium">الحالة</th>
-                <th className="px-4 py-3 text-right font-medium">مميز</th>
                 <th className="px-4 py-3 text-left font-medium">إجراءات</th>
               </tr>
             </thead>
@@ -286,7 +416,7 @@ export function ProductsClient() {
               {isLoading &&
                 Array.from({ length: 5 }).map((_, index) => (
                   <tr key={index} className="border-b">
-                    {Array.from({ length: 9 }).map((__, cellIndex) => (
+                    {Array.from({ length: 5 }).map((__, cellIndex) => (
                       <td key={cellIndex} className="px-4 py-4">
                         <div className="h-5 w-full rounded bg-muted" />
                       </td>
@@ -295,45 +425,78 @@ export function ProductsClient() {
                 ))}
 
               {!isLoading &&
-                products.map((product) => {
+                filteredProducts.map((product) => {
                   const image = getPrimaryImage(product);
+                  const stockStatus = getStockStatus(product);
+                  const activeBadge = getActiveBadge(product.is_active);
+                  const isOnSale = hasOffer(product);
 
                   return (
-                    <tr key={product.id} className="border-b last:border-0">
+                    <tr key={product.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                       <td className="px-4 py-3">
-                        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md border bg-muted">
-                          <img
-                            src={image}
-                            alt={product.name}
-                            className="h-full w-full object-cover"
-                            onError={(event) => {
-                              event.currentTarget.src = PLACEHOLDER_PRODUCT;
-                            }}
-                          />
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+                            <img
+                              src={image}
+                              alt={product.name}
+                              className="h-full w-full object-cover"
+                              onError={(event) => {
+                                event.currentTarget.src = PLACEHOLDER_PRODUCT;
+                              }}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{product.name}</div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {product.sku && <span className="font-mono">{product.sku}</span>}
+                              {product.category?.name && (
+                                <>
+                                  <span>•</span>
+                                  <span>{product.category.name}</span>
+                                </>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {product.is_featured && (
+                                <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700">
+                                  <Sparkles className="h-3 w-3" />
+                                  مميز
+                                </span>
+                              )}
+                              {isOnSale && (
+                                <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs bg-red-100 text-red-700">
+                                  <Tag className="h-3 w-3" />
+                                  عرض
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-medium">{product.name}</div>
-                        <div className="text-xs text-muted-foreground">{product.sku || 'بدون SKU'}</div>
+                        <div className="font-semibold">{formatPrice(Number(product.price))}</div>
+                        {product.compare_price && product.compare_price > 0 && (
+                          <div className="text-xs text-muted-foreground line-through">
+                            {formatPrice(Number(product.compare_price))}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-4 py-3 font-medium">{formatPrice(Number(product.price))}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {product.compare_price ? formatPrice(Number(product.compare_price)) : '-'}
-                      </td>
-                      <td className="px-4 py-3">{product.category?.name || '-'}</td>
-                      <td className="px-4 py-3">{product.track_stock ? product.stock_quantity : 'غير متتبع'}</td>
                       <td className="px-4 py-3">
-                        <span
-                          className={
-                            product.is_active
-                              ? 'rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700'
-                              : 'rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-700'
-                          }
-                        >
-                          {product.is_active ? 'نشط' : 'معطل'}
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${stockStatus.color}`}>
+                          {stockStatus.label}
+                        </span>
+                        {product.track_stock && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {product.stock_quantity} قطعة
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${activeBadge.color}`}>
+                          {product.is_active ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                          {activeBadge.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3">{product.is_featured ? 'نعم' : 'لا'}</td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
                           <Button asChild variant="outline" size="sm">
@@ -342,22 +505,32 @@ export function ProductsClient() {
                               تعديل
                             </Link>
                           </Button>
+                          {product.slug && (
+                            <Button asChild variant="ghost" size="icon" className="h-8 w-8" title="عرض في المتجر">
+                              <Link href={`/product/${product.slug}`} target="_blank">
+                                <ExternalLink className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          )}
                           <Button
                             type="button"
-                            variant="secondary"
-                            size="sm"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
                             disabled={isMutating === product.id}
                             onClick={() => handleToggle(product)}
+                            title={product.is_active ? 'تعطيل' : 'تفعيل'}
                           >
-                            <EyeOff className="ml-1 h-4 w-4" />
-                            {product.is_active ? 'تعطيل' : 'تفعيل'}
+                            {product.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </Button>
                           <Button
                             type="button"
-                            variant="destructive"
-                            size="sm"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                             disabled={isMutating === product.id}
                             onClick={() => handleDelete(product)}
+                            title="حذف المنتج"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -370,11 +543,25 @@ export function ProductsClient() {
           </table>
         </div>
 
-        {!isLoading && products.length === 0 && (
+        {!isLoading && filteredProducts.length === 0 && (
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-            <PackageOpen className="h-10 w-10 text-muted-foreground" />
-            <h2 className="mt-3 text-lg font-semibold">لا توجد منتجات</h2>
-            <p className="mt-1 text-sm text-muted-foreground">غيّر الفلاتر أو أضف أول منتج في الكتالوج.</p>
+            <div className="rounded-full bg-muted p-4 mb-4">
+              <PackageOpen className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h2 className="text-lg font-semibold mb-2">
+              {search || quickFilter !== 'all' ? 'لا توجد منتجات مطابقة' : 'لا توجد منتجات حاليًا'}
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-xs mb-4">
+              {search || quickFilter !== 'all'
+                ? 'جرب تغيير البحث أو إزالة الفلاتر'
+                : 'أضف أول منتج في الكتالوج'}
+            </p>
+            <Button asChild>
+              <Link href="/admin/products/new">
+                <Plus className="ml-2 h-4 w-4" />
+                إضافة منتج جديد
+              </Link>
+            </Button>
           </div>
         )}
 
@@ -406,6 +593,133 @@ export function ProductsClient() {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {isLoading &&
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-lg border bg-card p-4 space-y-3">
+              <div className="flex gap-3">
+                <div className="h-16 w-16 rounded bg-muted" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-3/4 rounded bg-muted" />
+                  <div className="h-4 w-1/2 rounded bg-muted" />
+                </div>
+              </div>
+            </div>
+          ))}
+
+        {!isLoading &&
+          filteredProducts.map((product) => {
+            const image = getPrimaryImage(product);
+            const stockStatus = getStockStatus(product);
+            const activeBadge = getActiveBadge(product.is_active);
+            const isOnSale = hasOffer(product);
+
+            return (
+              <div key={product.id} className="rounded-lg border bg-card p-4 space-y-3">
+                <div className="flex gap-3">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+                    <img
+                      src={image}
+                      alt={product.name}
+                      className="h-full w-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.src = PLACEHOLDER_PRODUCT;
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{product.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {product.sku || 'بدون SKU'}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium ${activeBadge.color}`}>
+                        {activeBadge.label}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium ${stockStatus.color}`}>
+                        {stockStatus.label}
+                      </span>
+                      {isOnSale && (
+                        <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs bg-red-100 text-red-700">
+                          عرض
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <div>
+                    <span className="font-semibold">{formatPrice(Number(product.price))}</span>
+                    {product.compare_price && product.compare_price > 0 && (
+                      <span className="text-xs text-muted-foreground line-through mr-2">
+                        {formatPrice(Number(product.compare_price))}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                      <Link href={`/admin/products/${product.id}/edit`}>
+                        <Edit className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    {product.slug && (
+                      <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                        <Link href={`/product/${product.slug}`} target="_blank">
+                          <ExternalLink className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      disabled={isMutating === product.id}
+                      onClick={() => handleToggle(product)}
+                    >
+                      {product.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-red-600"
+                      disabled={isMutating === product.id}
+                      onClick={() => handleDelete(product)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+        {!isLoading && filteredProducts.length === 0 && (
+          <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
+            <div className="rounded-full bg-muted p-4 mb-4">
+              <PackageOpen className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h2 className="text-lg font-semibold mb-2">
+              {search || quickFilter !== 'all' ? 'لا توجد منتجات مطابقة' : 'لا توجد منتجات حاليًا'}
+            </h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              {search || quickFilter !== 'all'
+                ? 'جرب تغيير البحث أو إزالة الفلاتر'
+                : 'أضف أول منتج في الكتالوج'}
+            </p>
+            <Button asChild>
+              <Link href="/admin/products/new">
+                <Plus className="ml-2 h-4 w-4" />
+                إضافة منتج جديد
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
