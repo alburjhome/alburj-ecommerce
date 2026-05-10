@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,18 +16,28 @@ interface RecommendedAddonsProps {
 }
 
 export function RecommendedAddons({ products }: RecommendedAddonsProps) {
-  const { addItem, openCart } = useCartStore();
+  const cartStore = useCartStore();
+  const [hasHydrated, setHasHydrated] = useState(false);
+
+  // Prevent hydration mismatch with cart store
+  useEffect(() => {
+    const rehydrate = (cartStore as any).rehydrate;
+    if (typeof rehydrate === 'function') {
+      rehydrate();
+    }
+    setHasHydrated(true);
+  }, [cartStore]);
 
   if (!products.length) return null;
 
   return (
-    <section className="container mx-auto px-4 pb-10">
-      <div className="mb-4">
-        <h2 className="text-xl font-bold">يكمل معه</h2>
-        <p className="mt-1 text-sm text-muted-foreground">منتجات قد تحتاجها مع هذا المنتج</p>
+    <section className="container mx-auto px-4 py-8 md:py-12">
+      <div className="mb-4 md:mb-6">
+        <h2 className="text-lg font-bold md:text-xl">منتجات تكمل طلبك</h2>
+        <p className="mt-1 text-sm text-muted-foreground">اختيارات قريبة من نفس القسم أو تناسب نفس الاستخدام</p>
       </div>
 
-      <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 lg:grid-cols-4">
+      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 lg:grid-cols-4">
         {products.map((product) => {
           const imageSrc = getPrimaryProductImage(product);
           const href = `/product/${product.slug}`;
@@ -63,7 +74,8 @@ export function RecommendedAddons({ products }: RecommendedAddonsProps) {
                     type="button"
                     size="sm"
                     onClick={() => {
-                      addItem({
+                      if (!hasHydrated) return;
+                      cartStore.addItem({
                         product_id: product.id,
                         variant_id: null,
                         name: product.name,
@@ -72,9 +84,9 @@ export function RecommendedAddons({ products }: RecommendedAddonsProps) {
                         image: imageSrc,
                         stock_quantity: product.stock_quantity,
                       });
-                      openCart();
+                      cartStore.openCart();
                     }}
-                    disabled={product.track_stock && (product.stock_quantity ?? 0) <= 0 && !product.allow_backorders}
+                    disabled={!hasHydrated || (product.track_stock && (product.stock_quantity ?? 0) <= 0 && !product.allow_backorders)}
                   >
                     <ShoppingCart className="ml-2 h-4 w-4" />
                     أضف للسلة

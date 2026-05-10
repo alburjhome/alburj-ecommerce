@@ -34,4 +34,5 @@ export const WHATSAPP_CLICK_SOURCE_LABELS_AR: Record<string, string> = {
   products_empty_whatsapp: 'واتساب عدم وجود نتائج المنتجات',
   products_help_whatsapp: 'واتساب مساعدة صفحة المنتجات',
   products_hero_whatsapp: 'واتساب hero صفحة المنتجات',
+  product_availability_whatsapp: 'واتساب سؤال عن توفر المنتج',
 };

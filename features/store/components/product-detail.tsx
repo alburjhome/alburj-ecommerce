@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Minus, Plus, ShoppingCart, Award, MessageCircle, Package } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Minus, Plus, ShoppingCart, Award, MessageCircle, Package, Check, Truck, CreditCard, Boxes, HelpCircle } from 'lucide-react';
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
@@ -18,9 +18,19 @@ interface ProductDetailProps {
 }
 
 export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
-  const { addItem, openCart } = useCartStore();
+  const cartStore = useCartStore();
+  const [hasHydrated, setHasHydrated] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+
+  // Prevent hydration mismatch with cart store
+  useEffect(() => {
+    const rehydrate = (cartStore as any).rehydrate;
+    if (typeof rehydrate === 'function') {
+      rehydrate();
+    }
+    setHasHydrated(true);
+  }, [cartStore]);
 
   const images = useMemo(() => {
     const sortedImages = [...(product.images || [])].sort((a, b) => {
@@ -55,9 +65,9 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const isUnavailable = Boolean(product.track_stock && !product.allow_backorders && product.stock_quantity <= 0);
 
   function handleAddToCart() {
-    if (!canAddToCart) return;
+    if (!canAddToCart || !hasHydrated) return;
 
-    addItem({
+    cartStore.addItem({
       product_id: product.id,
       variant_id: null,
       name: product.name,
@@ -66,7 +76,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
       image: imageSrc,
       stock_quantity: product.stock_quantity,
     });
-    openCart();
+    cartStore.openCart();
   }
 
   const productUrl = typeof window !== 'undefined' ? window.location.href : '';
@@ -76,18 +86,18 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const inquiryUrl = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(inquiryText)}` : null;
   const orderUrl = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(orderText)}` : null;
 
-  const marketingBadgeLabel = (badge: string) => {
+  const marketingBadgeConfig = (badge: string) => {
     switch (badge) {
       case 'bestselling':
-        return 'الأكثر طلبًا';
+        return { label: 'الأكثر طلبًا', className: 'bg-amber-100 text-amber-700 border-amber-200' };
       case 'offer':
-        return 'عرض';
+        return { label: 'عرض', className: 'bg-red-100 text-red-700 border-red-200' };
       case 'new':
-        return 'جديد';
+        return { label: 'جديد', className: 'bg-green-100 text-green-700 border-green-200' };
       case 'wholesale':
-        return 'سعر جملة';
+        return { label: 'سعر جملة', className: 'bg-blue-100 text-blue-700 border-blue-200' };
       case 'limited':
-        return 'كمية محدودة';
+        return { label: 'كمية محدودة', className: 'bg-purple-100 text-purple-700 border-purple-200' };
       default:
         return null;
     }
@@ -177,14 +187,14 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
             {resolvedBadges.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {resolvedBadges.slice(0, 5).map((badge) => {
-                  const label = marketingBadgeLabel(badge);
-                  if (!label) return null;
+                  const config = marketingBadgeConfig(badge);
+                  if (!config) return null;
                   return (
                     <span
                       key={badge}
-                      className="inline-flex items-center rounded-full border bg-muted/50 px-3 py-1 text-xs font-medium"
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${config.className}`}
                     >
-                      {label}
+                      {config.label}
                     </span>
                   );
                 })}
@@ -202,24 +212,41 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
                 <span className="text-lg text-muted-foreground line-through">
                   {formatPrice(product.compare_price || 0)}
                 </span>
-                <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">
-                  خصم {discount}%
-                </span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">
+                    خصم {discount}%
+                  </span>
+                  <span className="text-xs text-red-600">
+                    وفر {formatPrice((product.compare_price || 0) - product.price)}
+                  </span>
+                </div>
               </>
             )}
           </div>
 
-          <div className="rounded-lg border bg-card p-4 text-sm">
+          <div className="rounded-lg border bg-card p-3 text-sm">
             {product.track_stock ? (
               product.stock_quantity > 0 ? (
-                <span className="text-green-700">متوفر في المخزون: {product.stock_quantity}</span>
+                <span className="inline-flex items-center gap-1.5 text-green-700">
+                  <span className="h-2 w-2 rounded-full bg-green-500"></span>
+                  متوفر في المخزون ({product.stock_quantity} قطعة)
+                </span>
               ) : product.allow_backorders ? (
-                <span className="text-amber-700">متاح للطلب المسبق</span>
+                <span className="inline-flex items-center gap-1.5 text-amber-700">
+                  <HelpCircle className="h-4 w-4" />
+                  متاح للطلب المسبق
+                </span>
               ) : (
-                <span className="text-red-700">غير متوفر حالياً</span>
+                <span className="inline-flex items-center gap-1.5 text-red-700">
+                  <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                  غير متوفر حالياً
+                </span>
               )
             ) : (
-              <span className="text-green-700">متوفر</span>
+              <span className="inline-flex items-center gap-1.5 text-green-700">
+                <span className="h-2 w-2 rounded-full bg-green-500"></span>
+                متوفر
+              </span>
             )}
           </div>
 
@@ -264,24 +291,24 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
               <h2 className="mb-3 font-semibold">مميزات المنتج</h2>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {resolvedFeatures.slice(0, 6).map((feature, idx) => (
-                  <li key={`${idx}-${feature}`} className="flex gap-2">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                    <span className="leading-7">{feature}</span>
+                  <li key={`${idx}-${feature}`} className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                    <span className="leading-6">{feature}</span>
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Why Choose This Product */}
+          {/* Trust Bar */}
           <div className="border-t pt-5">
-            <h2 className="mb-3 font-semibold">لماذا تختار هذا المنتج؟</h2>
+            <h2 className="mb-3 font-semibold">لماذا تختار مؤسسة البرج؟</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
-                { icon: Award, label: 'جودة ممتازة' },
-                { icon: Package, label: 'مناسب للاستخدام اليومي' },
-                { icon: ShoppingCart, label: 'سعر مناسب' },
-                { icon: Award, label: 'توصيل لجميع المحافظات' },
+                { icon: Truck, label: 'توصيل لجميع المحافظات' },
+                { icon: CreditCard, label: 'الدفع عند الاستلام' },
+                { icon: Boxes, label: 'إمكانية طلب كميات' },
+                { icon: MessageCircle, label: 'تواصل مباشر عبر واتساب' },
               ].map((item) => (
                 <div
                   key={item.label}
@@ -305,7 +332,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
                   return (
                     <span
                       key={key}
-                      className="inline-flex items-center rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium"
+                      className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary"
                     >
                       {label}
                     </span>
@@ -318,47 +345,79 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
           {/* WhatsApp CTA */}
           {whatsappUrl && (
             <div className="border-t pt-5">
-              <h2 className="mb-3 font-semibold">اطلب عبر واتساب</h2>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                {inquiryUrl && (
-                  <a
-                    href={inquiryUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => {
-                      trackWhatsAppClick('product_inquiry', {
-                        product_id: product.id,
-                        product_name: product.name,
-                        product_slug: product.slug,
-                        price: product.price,
-                      });
-                    }}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-green-600 bg-white px-4 py-2.5 text-sm font-semibold text-green-700 transition-colors hover:bg-green-50"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    اسألنا عن هذا المنتج
-                  </a>
-                )}
-                {orderUrl && (
-                  <a
-                    href={orderUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => {
-                      trackWhatsAppClick('product_direct_order', {
-                        product_id: product.id,
-                        product_name: product.name,
-                        product_slug: product.slug,
-                        price: product.price,
-                      });
-                    }}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    اطلبه مباشرة
-                  </a>
-                )}
-              </div>
+              {isUnavailable ? (
+                <>
+                  <h2 className="mb-3 font-semibold text-amber-700">المنتج غير متوفر حالياً</h2>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                    <p className="mb-3 text-sm text-amber-800">
+                      هذا المنتج نفدت كميته. يمكنك الاستفسار عن توفره قريبًا عبر واتساب.
+                    </p>
+                    {inquiryUrl && (
+                      <a
+                        href={inquiryUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          trackWhatsAppClick('product_availability_whatsapp', {
+                            product_id: product.id,
+                            product_name: product.name,
+                            product_slug: product.slug,
+                            price: product.price,
+                          });
+                        }}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        اسأل عن توفره عبر واتساب
+                      </a>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="mb-3 font-semibold">اطلب عبر واتساب</h2>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {inquiryUrl && (
+                      <a
+                        href={inquiryUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          trackWhatsAppClick('product_inquiry', {
+                            product_id: product.id,
+                            product_name: product.name,
+                            product_slug: product.slug,
+                            price: product.price,
+                          });
+                        }}
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-green-600 bg-white px-4 py-2.5 text-sm font-semibold text-green-700 transition-colors hover:bg-green-50"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        اسألنا عن هذا المنتج
+                      </a>
+                    )}
+                    {orderUrl && (
+                      <a
+                        href={orderUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          trackWhatsAppClick('product_direct_order', {
+                            product_id: product.id,
+                            product_name: product.name,
+                            product_slug: product.slug,
+                            price: product.price,
+                          });
+                        }}
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        اطلبه مباشرة
+                      </a>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
