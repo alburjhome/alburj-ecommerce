@@ -168,12 +168,46 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
     : '';
   const inquiryText = `مرحبا، أريد الاستفسار عن المنتج:\n${product.name}${variantLines}\nالسعر: ${formatPrice(displayPrice)}\nالرابط: ${productUrl}`;
   const orderText = `مرحبا، أريد طلب:\n${product.name}${variantLines}\nالكمية: ${quantity}\nالسعر: ${formatPrice(displayPrice)}\nالرابط: ${productUrl}`;
-  const whatsappUrl = getWhatsAppLink(whatsappNumber);
-  const inquiryUrl = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(inquiryText)}` : null;
-  const orderUrl =
-    whatsappUrl && (!hasVariants || selectedVariant)
-      ? `${whatsappUrl}?text=${encodeURIComponent(orderText)}`
-      : null;
+  const inquiryUrl = useMemo(() => {
+    const base = getWhatsAppLink(whatsappNumber);
+    if (!base) return null;
+    return `${base}?text=${encodeURIComponent(inquiryText)}`;
+  }, [inquiryText, whatsappNumber]);
+
+  const orderUrl = useMemo(() => {
+    const base = getWhatsAppLink(whatsappNumber);
+    if (!base) return null;
+    return `${base}?text=${encodeURIComponent(orderText)}`;
+  }, [orderText, whatsappNumber]);
+
+  const whatsappUrl = orderUrl || inquiryUrl;
+
+  const normalizeForSimilarity = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[\u064B-\u065F]/g, '')
+      .replace(/[\.\,\!\?\:\;\-\_\(\)\[\]\{\}\"\'\<\>\|\+\=\*\/\\%\$\#\@\^\&\~\`\u060C\u061B\u061F\u2026]/g, '')
+      .trim();
+
+  const isDescriptionTooSimilar = useMemo(() => {
+    if (!product.short_description || !product.description) return false;
+    const a = normalizeForSimilarity(product.short_description);
+    const b = normalizeForSimilarity(product.description);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const aTokens = new Set(a.split(' ').filter(Boolean));
+    const bTokens = new Set(b.split(' ').filter(Boolean));
+    if (aTokens.size < 6 || bTokens.size < 6) return false;
+    let intersection = 0;
+    aTokens.forEach((t) => {
+      if (bTokens.has(t)) intersection += 1;
+    });
+    const similarity = intersection / Math.max(1, Math.min(aTokens.size, bTokens.size));
+    return similarity >= 0.8;
+  }, [product.description, product.short_description]);
+
+  const shouldShowFullDescription = Boolean(product.description) && !isDescriptionTooSimilar;
 
   const suitableForTags = (() => {
     const tags = getProductSuitableForTags(product);
@@ -386,15 +420,6 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
             </Button>
           </div>
 
-          {product.description && (
-            <div className="border-t pt-5">
-              <h2 className="mb-2 font-semibold">وصف المنتج</h2>
-              <p className="whitespace-pre-line break-words leading-7 text-muted-foreground">
-                {product.description}
-              </p>
-            </div>
-          )}
-
           {product.key_features && product.key_features.length > 0 && (
             <div className="border-t pt-5">
               <h2 className="mb-3 font-semibold">مميزات المنتج</h2>
@@ -407,6 +432,15 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
                 ))}
               </ul>
             </div>
+          )}
+
+          {shouldShowFullDescription && (
+            <details className="border-t pt-5">
+              <summary className="cursor-pointer font-semibold">تفاصيل المنتج</summary>
+              <p className="mt-3 whitespace-pre-line break-words leading-7 text-muted-foreground">
+                {product.description}
+              </p>
+            </details>
           )}
 
           <div className="border-t pt-5">

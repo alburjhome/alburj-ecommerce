@@ -194,7 +194,34 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const metaTitle = watch('meta_title');
   const metaDescription = watch('meta_description');
   const shortDescription = watch('short_description');
+  const fullDescription = watch('description');
   const focusTarget = searchParams.get('focus');
+
+  const normalizeForSimilarity = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[\u064B-\u065F]/g, '')
+      .replace(/[\.\,\!\?\:\;\-\_\(\)\[\]\{\}\"\'\<\>\|\+\=\*\/\\%\$\#\@\^\&\~\`\u060C\u061B\u061F\u2026]/g, '')
+      .trim();
+
+  const descriptionSimilarityWarning = useMemo(() => {
+    if (!shortDescription || !fullDescription) return null;
+    const a = normalizeForSimilarity(shortDescription);
+    const b = normalizeForSimilarity(fullDescription);
+    if (!a || !b) return null;
+    if (a === b) return 'الوصف الكامل مشابه للوصف القصير. يفضل تعديله لتجنب التكرار.';
+    const aTokens = new Set(a.split(' ').filter(Boolean));
+    const bTokens = new Set(b.split(' ').filter(Boolean));
+    if (aTokens.size < 6 || bTokens.size < 6) return null;
+    let intersection = 0;
+    aTokens.forEach((t) => {
+      if (bTokens.has(t)) intersection += 1;
+    });
+    const similarity = intersection / Math.max(1, Math.min(aTokens.size, bTokens.size));
+    if (similarity >= 0.8) return 'الوصف الكامل مشابه للوصف القصير. يفضل تعديله لتجنب التكرار.';
+    return null;
+  }, [fullDescription, shortDescription]);
 
   // Price validation warning
   const hasInvalidComparePrice = useMemo(() => {
@@ -298,9 +325,8 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         setValue('description', data.description, { shouldDirty: true });
       }
 
-      if (shouldSet('short_description') && data?.description) {
-        const short = String(data.description).split('\n').filter(Boolean)[0] || data.description;
-        setValue('short_description', short, { shouldDirty: true });
+      if (shouldSet('short_description') && data?.short_description) {
+        setValue('short_description', data.short_description, { shouldDirty: true });
       }
 
       if (shouldSet('meta_title') && data?.meta_title) {
@@ -974,12 +1000,20 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                 </div>
                 <div>
                   <Label htmlFor="description">وصف كامل</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    استخدم الوصف الكامل فقط لإضافة تفاصيل لا تظهر في الوصف القصير أو المميزات.
+                  </p>
                   <textarea
                     id="description"
                     rows={5}
                     className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     {...register('description')}
                   />
+                  {descriptionSimilarityWarning && (
+                    <p className="mt-2 text-xs text-amber-700 break-words whitespace-normal">
+                      {descriptionSimilarityWarning}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="key_features">المميزات</Label>

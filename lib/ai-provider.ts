@@ -722,8 +722,8 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
 
   return {
     name,
-    short_description,
-    marketing_tagline: marketing_tagline ? clampString(marketing_tagline, 120) : null,
+    short_description: short_description ? clampString(short_description, 180) : null,
+    marketing_tagline: marketing_tagline ? clampString(marketing_tagline, 60) : null,
     key_features,
     product_badges,
     intent_tags,
@@ -802,16 +802,24 @@ ${subcategoriesText}
 - إذا اخترت subcategory_id يجب أن تتبع category_id.
 - إذا كان الاسم غامض (مثل: "شامبو 1 لتر") لا تختار subcategory_id عشوائيًا.
 
+قواعد المحتوى لتجنب التكرار (مهم جدًا):
+- marketing_tagline: عبارة قصيرة جدًا من 3 إلى 7 كلمات، جذابة ومباشرة، بدون مبالغة، ولا تكرر نص short_description.
+- short_description: جملة واحدة أو جملتان فقط، تشرح المنتج وفائدته بسرعة، وحاول ألا تتجاوز 180 حرفًا قدر الإمكان. لا تكرر marketing_tagline.
+- key_features: من 4 إلى 6 نقاط. كل نقطة قصيرة وعملية. لا تكرر الوصف القصير حرفيًا.
+- description: لا يبدأ بنفس نص short_description، ويضيف تفاصيل جديدة فقط. ممنوع تكرار نفس الجمل الموجودة في short_description أو key_features.
+- إذا لا توجد معلومات إضافية حقيقية: اجعل description مختصرًا جدًا أو null بدل التكرار.
+- ممنوع أن يكون short_description و description متطابقين أو شبه متطابقين.
+
 Return ONLY valid JSON. No markdown. No explanation. No code fences.
 أرجع JSON صالح فقط بالشكل التالي تمامًا (لا تضف حقول أخرى):
 {
   "name": "اسم المنتج بالعربية أو null",
   "short_description": "وصف مختصر: جملتان فقط أو null",
-  "marketing_tagline": "عبارة تسويقية قصيرة أو null",
+  "marketing_tagline": "عبارة تسويقية قصيرة جدًا (3-7 كلمات) أو null",
   "key_features": ["ميزة 1", "ميزة 2", "ميزة 3", "ميزة 4"],
   "product_badges": ["bestselling"],
   "intent_tags": ["home"],
-  "description": "وصف تفصيلي 2-4 أسطر أو null",
+  "description": "تفاصيل إضافية غير مكررة (قد تكون null)",
   "meta_title": "عنوان SEO (max 60 حرف) أو null",
   "meta_description": "وصف SEO (max 155 حرف) أو null",
   "suggested_sku": "SKU مقترح بالإنجليزية أو null",
