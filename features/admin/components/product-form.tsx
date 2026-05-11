@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import {
   createAdminProduct,
+  createAdminProductDraft,
   getAdminProductFormData,
   updateAdminProduct,
 } from '@/app/actions/admin-products';
@@ -155,11 +156,17 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const [slugTouched, setSlugTouched] = useState(mode === 'edit');
   const [hasAiSuggestedTaxonomy, setHasAiSuggestedTaxonomy] = useState(false);
   const [aiTaxonomyWarning, setAiTaxonomyWarning] = useState<string | null>(null);
+  const [validationMessages, setValidationMessages] = useState<string[]>([]);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
+  const [isOpeningAdvanced, setIsOpeningAdvanced] = useState(false);
+  const [createVariantsIntent, setCreateVariantsIntent] = useState(false);
 
   const {
     register,
     handleSubmit,
     setValue,
+    setError,
+    clearErrors,
     getValues,
     watch,
     reset,
@@ -458,6 +465,193 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
     }
   }, [mode, name, setValue, slugTouched]);
 
+  function scrollToField(fieldId: string | undefined) {
+    if (!fieldId) return;
+    requestAnimationFrame(() => {
+      const element = document.getElementById(fieldId);
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        element.focus();
+      }
+    });
+  }
+
+  function showValidationSummary(items: Array<{ field?: string; message: string }>) {
+    const messages = items.map((item) => item.message);
+    setValidationMessages(messages);
+    toast({
+      title: 'لم يتم حفظ المنتج، يرجى إكمال الحقول المطلوبة.',
+      description: messages[0],
+      variant: 'destructive',
+    });
+    scrollToField(items[0]?.field);
+  }
+
+  function buildProductPayload(values: ProductFormInput, isActiveOverride?: boolean): ProductFormInput {
+    return {
+      ...values,
+      slug_was_manual: slugTouched,
+      description: values.description || null,
+      short_description: values.short_description || null,
+      compare_price: values.compare_price ?? null,
+      sku: values.sku || null,
+      barcode: values.barcode || null,
+      subcategory_id: values.subcategory_id || null,
+      brand: values.brand || null,
+      tags: parseTags(tagsText),
+      intent_tags: values.intent_tags,
+      marketing_tagline: values.marketing_tagline || null,
+      key_features: values.key_features,
+      product_badges: values.product_badges,
+      weight: values.weight ?? null,
+      dimensions: values.dimensions || { length: null, width: null, height: null },
+      is_active: isActiveOverride ?? values.is_active,
+      meta_title: values.meta_title || null,
+      meta_description: values.meta_description || null,
+    };
+  }
+
+  function validatePublishValues(values: ProductFormInput) {
+    clearErrors();
+    const items: Array<{ field?: string; message: string }> = [];
+    const priceValue = Number(values.price);
+    const stockValue = Number(values.stock_quantity);
+
+    if (!values.name?.trim()) {
+      setError('name', { type: 'manual', message: 'اسم المنتج مطلوب' });
+      items.push({ field: 'name', message: 'اسم المنتج مطلوب' });
+    }
+
+    if (!Number.isFinite(priceValue) || priceValue <= 0) {
+      setError('price', { type: 'manual', message: 'السعر مطلوب ويجب أن يكون أكبر من 0' });
+      items.push({ field: 'price', message: 'السعر مطلوب ويجب أن يكون أكبر من 0' });
+    }
+
+    if (!values.category_id) {
+      setError('category_id', { type: 'manual', message: 'يرجى اختيار القسم الرئيسي' });
+      items.push({ field: 'category_id', message: 'يرجى اختيار القسم الرئيسي' });
+    }
+
+    if (!values.subcategory_id) {
+      setError('subcategory_id', {
+        type: 'manual',
+        message: 'يرجى اختيار الفئة الفرعية حتى يظهر المنتج في المكان الصحيح',
+      });
+      items.push({
+        field: 'subcategory_id',
+        message: 'يرجى اختيار الفئة الفرعية حتى يظهر المنتج في المكان الصحيح',
+      });
+    }
+
+    if (values.track_stock && (!Number.isFinite(stockValue) || stockValue < 0)) {
+      setError('stock_quantity', { type: 'manual', message: 'المخزون مطلوب ولا يمكن أن يكون أقل من صفر' });
+      items.push({ field: 'stock_quantity', message: 'المخزون مطلوب ولا يمكن أن يكون أقل من صفر' });
+    }
+
+    if (createVariantsIntent) {
+      items.push({
+        field: 'variants-intent',
+        message: 'فعّلت المتغيرات لكن لم تنشئ أي خيار قابل للبيع.',
+      });
+    }
+
+    return items;
+  }
+
+  function handlePublishInvalid(formErrors: typeof errors) {
+    const manualItems = validatePublishValues(getValues());
+    if (manualItems.length > 0) {
+      showValidationSummary(manualItems);
+      return;
+    }
+
+    const items: Array<{ field?: string; message: string }> = [];
+    if (formErrors.name) items.push({ field: 'name', message: 'اسم المنتج مطلوب' });
+    if (formErrors.price) items.push({ field: 'price', message: 'السعر مطلوب ويجب أن يكون أكبر من 0' });
+    if (formErrors.category_id) items.push({ field: 'category_id', message: 'يرجى اختيار القسم الرئيسي' });
+    if (formErrors.subcategory_id) {
+      items.push({
+        field: 'subcategory_id',
+        message: 'يرجى اختيار الفئة الفرعية حتى يظهر المنتج في المكان الصحيح',
+      });
+    }
+    if (formErrors.stock_quantity) {
+      items.push({ field: 'stock_quantity', message: 'المخزون مطلوب ولا يمكن أن يكون أقل من صفر' });
+    }
+
+    showValidationSummary(items.length ? items : [{ message: 'يرجى مراجعة البيانات التالية قبل الحفظ' }]);
+  }
+
+  async function publishNewProduct(values: ProductFormInput) {
+    const validationItems = validatePublishValues(values);
+    if (validationItems.length > 0) {
+      showValidationSummary(validationItems);
+      return;
+    }
+
+    setValidationMessages([]);
+    setIsSubmitting(true);
+    try {
+      const token = await getAccessToken();
+      const result = await createAdminProduct(token, buildProductPayload(values, true));
+
+      if (!result.success) {
+        throw new Error(result.error || 'فشل حفظ المنتج');
+      }
+
+      const created = (result as { success: boolean; data?: { id: string; slug: string } }).data;
+      if (!created?.id) {
+        throw new Error('تعذر إنشاء المنتج');
+      }
+
+      toast({
+        title: 'تم نشر المنتج بنجاح.',
+        description: 'يفضل إضافة صورة رئيسية قبل الاعتماد النهائي للمنتج.',
+      });
+      router.refresh();
+      router.replace(`/admin/products/${created.id}/edit?focus=images`);
+    } catch (error) {
+      toast({
+        title: 'فشل حفظ المنتج',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function saveDraftFromCreate({ openAdvanced }: { openAdvanced: boolean }) {
+    const values = getValues();
+    const savingState = openAdvanced ? setIsOpeningAdvanced : setIsDraftSaving;
+    savingState(true);
+    setValidationMessages([]);
+
+    try {
+      const token = await getAccessToken();
+      const result = await createAdminProductDraft(token, buildProductPayload(values, false));
+
+      if (!result.success || !result.data?.id) {
+        throw new Error(result.error || 'فشل حفظ المنتج كمسودة');
+      }
+
+      toast({
+        title: openAdvanced ? 'تم حفظ المنتج كمسودة.' : 'تم حفظ المنتج كمسودة.',
+        description: 'تم حفظ المنتج كمسودة، لكنه غير جاهز للنشر.',
+      });
+      router.refresh();
+      router.replace(openAdvanced ? `/admin/products/${result.data.id}/edit` : '/admin/products');
+    } catch (error) {
+      toast({
+        title: 'فشل حفظ المنتج',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    } finally {
+      savingState(false);
+    }
+  }
+
   async function onSubmit(values: ProductFormInput) {
     setIsSubmitting(true);
     try {
@@ -531,6 +725,332 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
     );
   }
 
+  if (mode === 'create') {
+    const publishDisabled = isSubmitting || isDraftSaving || isOpeningAdvanced;
+
+    return (
+      <div className="mx-auto max-w-5xl pb-28 lg:pb-0">
+        <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">إضافة منتج جديد</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              ابدأ بالأساسيات، واحفظ كمسودة لرفع الصور والمتغيرات المتقدمة قبل النشر.
+            </p>
+          </div>
+          <Button asChild type="button" variant="outline" className="w-full md:w-auto">
+            <Link href="/admin/products">
+              <ArrowLeft className="ml-2 h-4 w-4" />
+              العودة للمنتجات
+            </Link>
+          </Button>
+        </div>
+
+        {validationMessages.length > 0 && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <h2 className="font-semibold">يرجى مراجعة البيانات التالية قبل الحفظ</h2>
+                <ul className="mt-2 list-disc space-y-1 pr-5 text-sm">
+                  {validationMessages.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <form className="min-w-0 space-y-5" onSubmit={(event) => event.preventDefault()}>
+            <Card>
+              <SectionHeader title="1. الأساسيات" description="الحقول التي لا يكتمل نشر المنتج بدونها." />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <Label htmlFor="name">اسم المنتج *</Label>
+                  <Input id="name" {...register('name')} placeholder="مثال: شامبو فاتيكا بالثوم" />
+                  <FieldError message={errors.name?.message} />
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="slug">الرابط المختصر *</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="slug"
+                      dir="ltr"
+                      value={currentSlug}
+                      onChange={(event) => {
+                        setSlugTouched(true);
+                        setValue('slug', normalizeSlug(event.target.value), { shouldDirty: true, shouldValidate: true });
+                      }}
+                      placeholder="vatika-garlic-shampoo"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setSlugTouched(true);
+                        setValue('slug', slugify(name), { shouldDirty: true, shouldValidate: true });
+                      }}
+                      className="w-full sm:w-auto"
+                    >
+                      إعادة توليد الرابط
+                    </Button>
+                  </div>
+                  <p className="mt-1 break-words text-xs text-muted-foreground" dir="ltr">
+                    /product/{currentSlug || 'product-slug'}
+                  </p>
+                  <FieldError message={errors.slug?.message} />
+                </div>
+                <div>
+                  <Label htmlFor="price">السعر الحالي *</Label>
+                  <Input id="price" type="number" step="0.01" min="0" {...register('price')} />
+                  <FieldError message={errors.price?.message} />
+                </div>
+                <div>
+                  <Label htmlFor="compare_price">السعر قبل الخصم</Label>
+                  <Input id="compare_price" type="number" step="0.01" min="0" {...register('compare_price')} />
+                  {hasInvalidComparePrice && (
+                    <p className="mt-1 text-xs text-amber-600">السعر قبل الخصم يجب أن يكون أعلى من السعر الحالي.</p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="sku">SKU</Label>
+                  <Input id="sku" dir="ltr" {...register('sku')} placeholder="BUR-12345" />
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <SectionHeader title="2. التصنيف" description="اختيار القسم والفئة يساعد ظهور المنتج في المكان الصحيح." />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div id="category_id">
+                  <Label>القسم الرئيسي *</Label>
+                  <Select
+                    value={selectedCategoryId || 'none'}
+                    onValueChange={(value) => {
+                      setValue('category_id', value === 'none' ? '' : value, { shouldValidate: true });
+                      setValue('subcategory_id', null, { shouldValidate: true });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر القسم" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">اختر القسم</SelectItem>
+                      {(formData?.categories || []).map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={errors.category_id?.message} />
+                </div>
+                <div id="subcategory_id">
+                  <Label>الفئة الفرعية *</Label>
+                  <Select
+                    value={selectedSubcategoryId || 'none'}
+                    onValueChange={(value) => setValue('subcategory_id', value === 'none' ? null : value, { shouldValidate: true })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر الفئة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">اختر الفئة</SelectItem>
+                      {filteredSubcategories.map((subcategory) => (
+                        <SelectItem key={subcategory.id} value={subcategory.id}>
+                          {subcategory.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={errors.subcategory_id?.message} />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    يرجى اختيار الفئة الفرعية حتى يظهر المنتج في المكان الصحيح.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <Label className="mb-2 block">Intent Tags</Label>
+                <div className="flex flex-wrap gap-2">
+                  {INTENT_TAG_CONFIG.map((tag) => (
+                    <label key={tag.key} className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={intentTags?.includes(tag.key)}
+                        onChange={(event) => {
+                          const current = intentTags || [];
+                          const next = event.target.checked ? [...current, tag.key] : current.filter((item) => item !== tag.key);
+                          setValue('intent_tags', next as ProductFormInput['intent_tags'], { shouldDirty: true });
+                        }}
+                      />
+                      {tag.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <SectionHeader title="3. الصور" description="الصور ترفع بعد إنشاء مسودة المنتج حتى ترتبط بسجل المنتج بأمان." />
+              <div className="rounded-md border border-dashed p-6 text-center">
+                <ImageIcon className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+                <p className="text-sm font-medium">احفظ كمسودة أو انشر المنتج، ثم ارفع الصورة الرئيسية والصور الإضافية من صفحة التعديل.</p>
+                <p className="mt-1 text-xs text-muted-foreground">الصورة لا تمنع النشر، لكن يفضل إضافة صورة رئيسية قبل اعتماد المنتج للعملاء.</p>
+              </div>
+            </Card>
+
+            <Card className="scroll-mt-24" >
+              <SectionHeader title="4. متغيرات المنتج" description="فعّلها للنكهة أو الحجم أو اللون. الإدارة الكاملة تتم بعد إنشاء المسودة." />
+              <label id="variants-intent" className="flex scroll-mt-24 items-center gap-2 rounded-md border p-3 text-sm">
+                <input type="checkbox" checked={createVariantsIntent} onChange={(event) => setCreateVariantsIntent(event.target.checked)} />
+                <span>هذا المنتج له متغيرات مثل نكهة / حجم / لون / مقاس</span>
+              </label>
+              {createVariantsIntent && (
+                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  فعّلت المتغيرات لكن لم تنشئ أي خيار قابل للبيع بعد. احفظ كمسودة وافتح التعديل المتقدم لإضافة variants قبل النشر النهائي.
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <SectionHeader title="5. الوصف والتسويق" description="نصوص تساعد العميل على فهم المنتج بسرعة." />
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="short_description">وصف قصير</Label>
+                  <Input id="short_description" {...register('short_description')} />
+                </div>
+                <div>
+                  <Label htmlFor="description">وصف كامل</Label>
+                  <textarea
+                    id="description"
+                    rows={5}
+                    className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    {...register('description')}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="key_features">المميزات</Label>
+                  <textarea
+                    id="key_features"
+                    rows={5}
+                    value={(keyFeatures || []).join('\n')}
+                    onChange={(event) => {
+                      const lines = event.target.value.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 6);
+                      setValue('key_features', lines as ProductFormInput['key_features'], { shouldDirty: true });
+                    }}
+                    className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    placeholder="كل ميزة في سطر"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-2 block">Badges</Label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {badgeOptions.map((badge) => (
+                      <label key={badge.key} className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
+                        <input
+                          type="checkbox"
+                          checked={productBadges?.includes(badge.key as any)}
+                          onChange={(event) => {
+                            const current = productBadges || [];
+                            const next = event.target.checked ? [...current, badge.key] : current.filter((item) => item !== badge.key);
+                            setValue('product_badges', next as ProductFormInput['product_badges'], { shouldDirty: true });
+                          }}
+                        />
+                        <div>
+                          <span className="text-sm font-medium">{badge.label}</span>
+                          <p className="text-xs text-muted-foreground">{badge.description}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <details className="rounded-lg border bg-card p-5 shadow-sm">
+              <summary className="cursor-pointer text-lg font-semibold">6. SEO المتقدم</summary>
+              <div className="mt-4 space-y-4">
+                <Input id="meta_title" {...register('meta_title')} placeholder="Meta Title" />
+                <Input id="meta_description" {...register('meta_description')} placeholder="Meta Description" />
+                <div className="rounded-lg border bg-muted/30 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-muted-foreground">Google Preview</h3>
+                  <div className="rounded-lg bg-white p-4 shadow-sm">
+                    <div className="break-words text-base font-medium text-blue-600">{displayTitle}</div>
+                    <div className="mt-0.5 break-words text-sm text-green-700" dir="ltr">
+                      alburj-ecommerce.vercel.app/product/{displaySlug}
+                    </div>
+                    <div className="mt-1 break-words text-sm text-gray-600">{displayDescription}</div>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details className="rounded-lg border bg-card p-5 shadow-sm">
+              <summary className="cursor-pointer text-lg font-semibold">تفاصيل إضافية اختيارية</summary>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <Input id="barcode" dir="ltr" {...register('barcode')} placeholder="Barcode" />
+                <Input id="brand" {...register('brand')} placeholder="العلامة التجارية" />
+                <Input id="tags" value={tagsText} onChange={(event) => setTagsText(event.target.value)} placeholder="الوسوم" />
+                <Input id="weight" type="number" step="0.01" min="0" {...register('weight')} placeholder="الوزن" />
+                <div className="md:col-span-2 grid gap-3 sm:grid-cols-3">
+                  <Input type="number" step="0.01" min="0" {...register('dimensions.length')} placeholder="الطول" />
+                  <Input type="number" step="0.01" min="0" {...register('dimensions.width')} placeholder="العرض" />
+                  <Input type="number" step="0.01" min="0" {...register('dimensions.height')} placeholder="الارتفاع" />
+                </div>
+                <div id="stock_quantity">
+                  <Input id="stock_quantity_input" type="number" min="0" {...register('stock_quantity')} placeholder="المخزون" />
+                  <FieldError message={errors.stock_quantity?.message} />
+                </div>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+                    <input type="checkbox" checked={trackStock} onChange={(event) => setValue('track_stock', event.target.checked)} />
+                    تتبع المخزون
+                  </label>
+                  <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+                    <input type="checkbox" checked={allowBackorders} disabled={!trackStock} onChange={(event) => setValue('allow_backorders', event.target.checked)} />
+                    السماح بالطلب عند نفاد المخزون
+                  </label>
+                  <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+                    <input type="checkbox" checked={isFeatured} onChange={(event) => setValue('is_featured', event.target.checked)} />
+                    منتج مميز
+                  </label>
+                </div>
+              </div>
+            </details>
+          </form>
+
+          <aside className="hidden lg:block">
+            <div className="sticky top-6 space-y-3 rounded-lg border bg-card p-4 shadow-sm">
+              <h2 className="font-semibold">إجراءات المنتج</h2>
+              <p className="text-sm text-muted-foreground">المسودة لا تظهر للعملاء. النشر فقط يجعل المنتج ظاهرًا.</p>
+              <Button type="button" variant="outline" className="w-full" disabled={publishDisabled} onClick={() => saveDraftFromCreate({ openAdvanced: false })}>
+                {isDraftSaving ? 'جاري الحفظ...' : 'حفظ كمسودة'}
+              </Button>
+              <Button type="button" className="w-full" disabled={publishDisabled} onClick={() => handleSubmit(publishNewProduct, handlePublishInvalid)()}>
+                {isSubmitting ? 'جاري النشر...' : 'نشر المنتج'}
+              </Button>
+              <Button type="button" variant="secondary" className="w-full" disabled={publishDisabled} onClick={() => saveDraftFromCreate({ openAdvanced: true })}>
+                {isOpeningAdvanced ? 'جاري الحفظ...' : 'حفظ وفتح التعديل المتقدم'}
+              </Button>
+            </div>
+          </aside>
+        </div>
+
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 shadow-lg backdrop-blur lg:hidden">
+          <div className="mx-auto grid max-w-5xl grid-cols-2 gap-2">
+            <Button type="button" variant="outline" disabled={publishDisabled} onClick={() => saveDraftFromCreate({ openAdvanced: false })}>
+              {isDraftSaving ? 'حفظ...' : 'حفظ كمسودة'}
+            </Button>
+            <Button type="button" disabled={publishDisabled} onClick={() => handleSubmit(publishNewProduct, handlePublishInvalid)()}>
+              {isSubmitting ? 'نشر...' : 'نشر'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_300px] max-w-full overflow-x-hidden">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-full min-w-0">
@@ -538,7 +1058,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0 max-w-full">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight min-w-0 break-words whitespace-normal">
-              {mode === 'create' ? 'إضافة منتج جديد' : 'تعديل المنتج'}
+              تعديل المنتج
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               أدخل بيانات المنتج الأساسية، الأسعار، المخزون، والتسويق.
@@ -931,22 +1451,8 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           </div>
         </Card>
 
-        {/* Section 5: Images (for create mode only) */}
-        {mode === 'create' && (
-          <Card>
-            <SectionHeader title="صور المنتج" />
-            <div className="rounded-md border border-dashed p-6 text-center">
-              <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-              <p className="text-sm font-medium">احفظ المنتج أولًا حتى تتمكن من رفع الصور</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                بعد الحفظ، سيتم تحويلك لصفحة التعديل حيث يمكنك إضافة الصور.
-              </p>
-            </div>
-          </Card>
-        )}
-
         <ProductVariantsManager
-          productId={mode === 'edit' ? productId : undefined}
+          productId={productId}
           basePrice={Number(price) || 0}
           baseComparePrice={comparePrice ? Number(comparePrice) : null}
           baseStockQuantity={Number(stockQuantity) || 0}
@@ -1102,11 +1608,6 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                 <div className="mt-1 text-xs text-gray-500">alburj-ecommerce.vercel.app</div>
               </div>
             </div>
-            {mode === 'create' && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                ستظهر صورة المنتج بعد حفظه ورفع صورة رئيسية.
-              </p>
-            )}
           </div>
         </Card>
 
@@ -1127,13 +1628,13 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Package className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium truncate" title={name || '—'}>
-                  {name || '—'}
+                <span className="text-sm font-medium truncate" title={name || 'â€”'}>
+                  {name || 'â€”'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">السعر:</span>
-                <span className="font-semibold">{price ? formatPrice(Number(price)) : '—'}</span>
+                <span className="font-semibold">{price ? formatPrice(Number(price)) : 'â€”'}</span>
               </div>
               {comparePrice && comparePrice > price && (
                 <div className="flex items-center justify-between text-red-600">

@@ -121,12 +121,30 @@ function validatePayload(payload: ProductVariantsPayload) {
 
   for (const variant of payload.variants) {
     if (variant.price < 0) throw new Error('سعر المتغير لا يمكن أن يكون أقل من صفر');
+    if (variant.is_active && variant.price <= 0) {
+      throw new Error('يوجد متغير نشط بدون سعر.');
+    }
     if (variant.compare_price !== null && variant.compare_price !== undefined && variant.compare_price < 0) {
       throw new Error('السعر قبل الخصم لا يمكن أن يكون أقل من صفر');
     }
     if (!Number.isInteger(variant.stock_quantity) || variant.stock_quantity < 0) {
       throw new Error('مخزون المتغير يجب أن يكون رقمًا صحيحًا غير سالب');
     }
+    if (
+      variant.is_active &&
+      payload.options.length > 0 &&
+      Object.keys(variant.option_value_ids || {}).length < payload.options.length
+    ) {
+      throw new Error('يوجد متغير نشط بدون خيار مكتمل.');
+    }
+  }
+
+  if (payload.options.length > 0 && payload.variants.length === 0) {
+    throw new Error('فعّلت المتغيرات لكن لم تنشئ أي خيار قابل للبيع.');
+  }
+
+  if (payload.variants.length > 0 && !payload.variants.some((variant) => variant.is_active)) {
+    throw new Error('لا يوجد أي متغير نشط، المنتج لن يكون قابلًا للبيع.');
   }
 }
 

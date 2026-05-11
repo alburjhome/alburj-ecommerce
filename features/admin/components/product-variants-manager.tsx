@@ -287,6 +287,25 @@ export function ProductVariantsManager({
 
     setIsSaving(true);
     try {
+      if (isEnabled && variants.length === 0) {
+        throw new Error('فعّلت المتغيرات لكن لم تنشئ أي خيار قابل للبيع.');
+      }
+      if (isEnabled && variants.length > 0 && variants.every((variant) => !variant.is_active)) {
+        throw new Error('لا يوجد أي متغير نشط، المنتج لن يكون قابلًا للبيع.');
+      }
+      if (variants.some((variant) => variant.is_active && Number(variant.price) <= 0)) {
+        throw new Error('يوجد متغير نشط بدون سعر.');
+      }
+      if (
+        variants.some(
+          (variant) =>
+            variant.is_active &&
+            options.some((option) => !variant.option_value_ids[option.id])
+        )
+      ) {
+        throw new Error('يوجد متغير نشط بدون خيار مكتمل.');
+      }
+
       const token = await getAccessToken();
       const payload = {
         options: isEnabled

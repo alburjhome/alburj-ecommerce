@@ -113,7 +113,7 @@ function normalizeNullable(value: string | null | undefined) {
 function normalizeProductInput(input: ProductFormInput) {
   const dimensions = input.dimensions;
   const hasDimensions =
-    dimensions?.length !== null || dimensions?.width !== null || dimensions?.height !== null;
+    dimensions?.length != null || dimensions?.width != null || dimensions?.height != null;
 
   return {
     name: input.name.trim(),
@@ -371,6 +371,70 @@ export async function createAdminProduct(
     };
   } catch (error) {
     logAdminActionError('createAdminProduct', error);
+    return { success: false, error: friendlyError(error) };
+  }
+}
+
+export async function createAdminProductDraft(
+  accessToken: string | null,
+  input: Partial<ProductFormInput>
+): Promise<ActionResult<{ id: string; slug: string }>> {
+  try {
+    const adminClient = await createAdminActionClient(accessToken);
+    const name = input.name?.trim() || 'منتج جديد';
+    const slug = await uniqueProductSlug(
+      normalizeSlug(input.slug || '') || createReadableSlug(name, 'product'),
+      accessToken
+    );
+
+    const dimensions = input.dimensions;
+    const hasDimensions =
+      dimensions?.length != null || dimensions?.width != null || dimensions?.height != null;
+    const comparePrice = Number(input.compare_price);
+    const weight = Number(input.weight);
+
+    const payload = {
+      name,
+      slug,
+      description: normalizeNullable(input.description),
+      short_description: normalizeNullable(input.short_description),
+      price: Number(input.price) > 0 ? Number(input.price) : 0,
+      compare_price: Number.isFinite(comparePrice) && comparePrice > 0 ? comparePrice : null,
+      sku: normalizeNullable(input.sku),
+      barcode: normalizeNullable(input.barcode),
+      stock_quantity: Math.max(0, Number(input.stock_quantity) || 0),
+      track_stock: input.track_stock ?? true,
+      allow_backorders: input.allow_backorders ?? false,
+      category_id: input.category_id || null,
+      subcategory_id: input.subcategory_id || null,
+      brand: normalizeNullable(input.brand),
+      tags: input.tags?.length ? input.tags : null,
+      intent_tags: input.intent_tags?.length ? input.intent_tags : null,
+      marketing_tagline: normalizeNullable(input.marketing_tagline),
+      key_features: input.key_features?.length ? input.key_features : null,
+      product_badges: input.product_badges?.length ? input.product_badges : null,
+      weight: Number.isFinite(weight) && weight > 0 ? weight : null,
+      dimensions: hasDimensions ? dimensions : null,
+      is_active: false,
+      is_featured: input.is_featured ?? false,
+      meta_title: normalizeNullable(input.meta_title),
+      meta_description: normalizeNullable(input.meta_description),
+    };
+
+    const { data, error } = await (adminClient.from('products') as any)
+      .insert(payload)
+      .select('id, slug')
+      .single();
+
+    if (error) throw error;
+
+    revalidatePath('/admin/products');
+    return {
+      success: true,
+      data: data ? ({ id: data.id, slug: data.slug } as { id: string; slug: string }) : undefined,
+    };
+  } catch (error) {
+    logAdminActionError('createAdminProductDraft', error);
     return { success: false, error: friendlyError(error) };
   }
 }
