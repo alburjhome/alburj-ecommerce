@@ -52,6 +52,7 @@ export interface ProductFromImagesInput {
   imageUrls: string[];
   categories: { id: string; name: string }[];
   subcategories: { id: string; name: string; category_id: string }[];
+  images?: { base64: string; mimeType: string }[];
 }
 
 export interface ProductFromImagesOutput {
@@ -68,6 +69,11 @@ export interface ProductFromImagesOutput {
   has_variants: boolean;
   variant_types: string[];
   image_alt_texts: Record<string, string>;
+  // New strict analysis fields
+  detected_product_type: string | null;
+  visible_text: string[];
+  confidence: 'high' | 'medium' | 'low';
+  uncertainty_reason: string | null;
 }
 
 export class AiProviderError extends Error {
@@ -98,7 +104,7 @@ export function getUserFriendlyErrorMessage(error: AiProviderError): string {
       }
       return 'حدث خطأ في الاتصال بمزود الذكاء الاصطناعي. حاول مرة أخرى لاحقًا.';
     case 'INVALID_RESPONSE':
-      return 'لم يتمكن الذكاء الاصطناعي من إنشاء رد صالح. حاول مرة أخرى.';
+      return 'لم أتمكن من قراءة الصورة بوضوح. يرجى إدخال اسم المنتج يدويًا.';
     default:
       return 'حدث خطأ غير متوقع.';
   }
@@ -279,6 +285,78 @@ async function generateWithGemini(
   }
 }
 
+// Multimodal version for Gemini with base64 images
+async function generateWithGeminiMultimodal(
+  prompt: string,
+  retryPrompt: string,
+  images: { base64: string; mimeType: string }[]
+): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new AiProviderError('Gemini API key is not configured.', 'gemini', 'MISSING_API_KEY');
+  }
+
+  const { GoogleGenAI } = await import('@google/genai');
+  const ai = new GoogleGenAI({ apiKey });
+
+  // Build parts with images and text
+  const parts: any[] = [];
+  for (const img of images) {
+    parts.push({
+      inline_data: {
+        mime_type: img.mimeType,
+        data: img.base64,
+      },
+    });
+  }
+  parts.push({ text: prompt });
+
+  const generate = async (p: string, imgParts: any[]) => {
+    return ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [...imgParts, { text: p }] }],
+      config: {
+        responseMimeType: 'application/json',
+      },
+    } as any);
+  };
+
+  const result = await generate(prompt, parts.slice(0, -1)); // Exclude the text part
+  const rawText = await readGeminiText(result);
+
+  if (!rawText) {
+    throw new AiProviderError('AI response was empty', 'gemini', 'INVALID_RESPONSE');
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[Gemini Multimodal] raw response:', rawText.slice(0, 500));
+  }
+
+  try {
+    extractJsonObject(rawText);
+    return rawText;
+  } catch {
+    // Try retry prompt
+    const retryResult = await generate(retryPrompt, parts.slice(0, -1));
+    const retryRawText = await readGeminiText(retryResult);
+
+    if (retryRawText && process.env.NODE_ENV !== 'production') {
+      console.error('[Gemini Multimodal] retry raw response:', retryRawText.slice(0, 500));
+    }
+
+    if (!retryRawText) {
+      throw new AiProviderError('AI retry response was empty', 'gemini', 'INVALID_RESPONSE');
+    }
+
+    try {
+      extractJsonObject(retryRawText);
+      return retryRawText;
+    } catch {
+      throw new AiProviderError('AI response was not valid JSON', 'gemini', 'INVALID_RESPONSE');
+    }
+  }
+}
+
 // ============================================
 // OPENAI IMPLEMENTATION
 // ============================================
@@ -381,6 +459,137 @@ async function generateWithOpenAI(
 
     if (retryRawText && process.env.NODE_ENV !== 'production') {
       console.error('[OpenAI] retry raw response:', retryRawText.slice(0, 500));
+    }
+
+    if (!retryRawText) {
+      throw new AiProviderError('AI retry response was empty', 'openai', 'INVALID_RESPONSE');
+    }
+
+    try {
+      extractJsonObject(retryRawText);
+      return retryRawText;
+    } catch {
+      throw new AiProviderError('AI response was not valid JSON', 'openai', 'INVALID_RESPONSE');
+    }
+  }
+}
+
+// Multimodal version for OpenAI with base64 images
+async function generateWithOpenAIMultimodal(
+  prompt: string,
+  retryPrompt: string,
+  images: { base64: string; mimeType: string }[]
+): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new AiProviderError('OpenAI API key is not configured.', 'openai', 'MISSING_API_KEY');
+  }
+
+  const { OpenAI } = await import('openai');
+  const openai = new OpenAI({ apiKey });
+  const model = getOpenAiModel();
+
+  // Build content with images and text
+  const content: any[] = [];
+  for (const img of images) {
+    content.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:${img.mimeType};base64,${img.base64}`,
+        detail: 'high',
+      },
+    });
+  }
+  content.push({ type: 'text', text: prompt });
+
+  const generate = async (p: string): Promise<string> => {
+    try {
+      const response = await openai.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant that generates structured JSON responses. Always return valid JSON without markdown formatting.',
+          },
+          {
+            role: 'user',
+            content: [...images.map((img) => ({
+              type: 'image_url' as const,
+              image_url: {
+                url: `data:${img.mimeType};base64,${img.base64}`,
+                detail: 'high' as const,
+              },
+            })), { type: 'text' as const, text: p }],
+          },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.5,
+        max_tokens: 2000,
+      });
+      return response.choices[0]?.message?.content || '';
+    } catch (error: any) {
+      // Log error details for debugging (without API key)
+      const errorCode = error?.code || error?.type || 'UNKNOWN';
+      const errorMessage = error?.message || 'Unknown error';
+      const errorStatus = error?.status || error?.statusCode || 'N/A';
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.error(`[OpenAI Multimodal] Error: ${errorCode} (${errorStatus}) - ${errorMessage.slice(0, 200)}`);
+      }
+
+      // Handle specific error cases
+      if (errorCode === 'insufficient_quota' || errorCode === 'billing_not_active' || errorMessage?.includes('billing')) {
+        throw new AiProviderError(
+          'رصيد OpenAI أو الفوترة غير مفعّلة.',
+          'openai',
+          'API_ERROR'
+        );
+      }
+
+      if (errorCode === 'invalid_api_key' || errorCode === 'authentication_error') {
+        throw new AiProviderError(
+          'OpenAI API key is not configured.',
+          'openai',
+          'MISSING_API_KEY'
+        );
+      }
+
+      if (errorCode === 'rate_limit_exceeded' || errorStatus === 429) {
+        throw new AiProviderError(
+          'تم تجاوز حد الطلبات لـ OpenAI. حاول مرة أخرى لاحقًا.',
+          'openai',
+          'API_ERROR'
+        );
+      }
+
+      // Re-throw as API_ERROR for other cases
+      throw new AiProviderError(
+        `OpenAI API error: ${errorMessage}`,
+        'openai',
+        'API_ERROR'
+      );
+    }
+  };
+
+  const rawText = await generate(prompt);
+
+  if (!rawText) {
+    throw new AiProviderError('AI response was empty', 'openai', 'INVALID_RESPONSE');
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[OpenAI Multimodal] raw response:', rawText.slice(0, 500));
+  }
+
+  try {
+    extractJsonObject(rawText);
+    return rawText;
+  } catch {
+    // Try retry prompt
+    const retryRawText = await generate(retryPrompt);
+
+    if (retryRawText && process.env.NODE_ENV !== 'production') {
+      console.error('[OpenAI Multimodal] retry raw response:', retryRawText.slice(0, 500));
     }
 
     if (!retryRawText) {
@@ -734,64 +943,84 @@ export async function generateImageAltText(
 }
 
 function buildProductFromImagesPrompts(
-  imageUrls: string[],
   categories: { id: string; name: string }[],
   subcategories: { id: string; name: string; category_id: string }[]
 ): { base: string; retry: string } {
-  const basePrompt = `أنت خبير في تحليل المنتجات وكتابة المحتوى التسويقي لمتجر "مؤسسة البرج" في الأردن.
+  const basePrompt = `حلّل الصورة فقط ولا تخمّن. اعتمد على النص الظاهر على العبوة والشكل المرئي. إذا لم تستطع تحديد نوع المنتج بثقة، أرجع product_type = 'غير واضح' ولا تولّد وصفًا تسويقيًا مخترعًا. ممنوع تحويل المنتج إلى منظفات أو سائل جلي أو شامبو أو أي منتج آخر إلا إذا كان ذلك ظاهرًا بوضوح في الصورة.
 
-المتجر يبيع: مستلزمات البيت والمحل، مثل المنظفات والورقيات، البلاستيكيات، التغليف، مستلزمات المطاعم والمحلات، الأدوات المنزلية، أدوات المطبخ، الأجهزة الكهربائية، المفروشات والبياضات.
+أنت محلل صور منتجات صارم. مهمتك هي تحليل الصور المرفقة وتحديد المنتج بدقة - لا تخمّن أبدًا.
 
-المطلوب: تحليل صور المنتج المرفقة واقتراح بيانات المنتج المناسبة.
+تعليمات صارمة - اقرأ بعناية:
+1. حلل الصور فقط، لا تستخدم معرفة مسبقة عن "مؤسسة البرج"
+2. اعتمد فقط على ما يظهر بوضوح في الصور:
+   - النص الظاهر على العبوة/المنتج
+   - الشكل والألوان المرئية
+   - العلامة التجارية المرئية
+3. ممنوع التخمين - إذا لم تكن متأكدًا، قل ذلك صراحة
 
-قائمة الأقسام المتاحة (استخدم id فقط من هذه القائمة أو null):
+قواعد منع الهلوسة (STRICT RULES):
+- ممنوع افتراض أن أي منتج هو "سائل جلي" أو "منظف" أو "شامبو" إلا إذا كانت هذه الكلمات ظاهرة بوضوح على العبوة
+- ممنوع توليد وصف عن منتج مختلف عما في الصورة
+- ممنوع استخدام fallback عام مثل "منتج منظف" أو "منتج عناية"
+- اكتب "غير واضح" في detected_product_type إذا لم تستطع التحديد
+
+قائمة الأقسام المتاحة (استخدم id فقط أو null):
 ${categories.map((c) => `- ${c.id} | ${c.name}`).join('\n')}
 
-قائمة الفئات المتاحة (استخدم id فقط من هذه القائمة أو null):
-${subcategories.map((s) => `- ${s.id} | ${s.name} | قسم: ${categories.find((c) => c.id === s.category_id)?.name || s.category_id}`).join('\n')}
-
-عدد الصور المرفقة: ${imageUrls.length}
+قائمة الفئات المتاحة (استخدم id فقط أو null):
+${subcategories.map((s) => `- ${s.id} | ${s.name}`).join('\n')}
 
 Return ONLY valid JSON. No markdown. No explanation. No code fences.
-أرجع JSON صالح فقط بالشكل التالي (لا تضف حقول أخرى):
+
+JSON schema المطلوب:
 {
-  "name": "اسم المنتج بالعربية (واضح ومختصر)",
-  "short_description": "وصف مختصر 1-2 جمل",
-  "description": "وصف تفصيلي 2-4 أسطر",
-  "brand": "العلامة التجارية إن ظهرت في الصور أو null",
-  "sku": "كود SKU مقترح قصير بالإنجليزية",
-  "key_features": ["ميزة 1", "ميزة 2", "ميزة 3"],
-  "meta_title": "عنوان SEO (max 60 حرف)",
-  "meta_description": "وصف SEO (max 155 حرف)",
-  "suggested_category_id": "id القسم المناسب من القائمة أو null",
-  "suggested_subcategory_id": "id الفئة المناسبة من القائمة أو null",
-  "has_variants": true/false (هل يبدو أن المنتج له متغيرات مثل نكهة/حجم/لون؟),
-  "variant_types": ["نكهة", "حجم"] (أنواع المتغيرات إن وجدت),
+  "detected_product_type": "نوع المنتج كما يظهر في الصورة - اكتب 'غير واضح' إذا غير واضح",
+  "visible_text": ["كل النصوص الظاهرة على العبوة/المنتج"],
+  "brand": "العلامة التجارية إن ظهرت بالضبط، وإلا null",
+  "confidence": "high | medium | low",
+  "uncertainty_reason": "سبب عدم التأكد إذا confidence ليست high، وإلا null",
+  "name": "اسم المنتج كما يظهر أو 'منتج غير محدد' إذا غير واضح",
+  "short_description": "وصف مختصر فقط إذا كانت الثقة high، وإلا null",
+  "description": "وصف تفصيلي فقط إذا كانت الثقة high، وإلا null",
+  "sku": "كود SKU مقترح بالإنجليزية أو null",
+  "key_features": ["الميزات المرئية فقط"],
+  "meta_title": "SEO title فقط إذا كانت الثقة high",
+  "meta_description": "SEO description فقط إذا كانت الثقة high",
+  "suggested_category_id": "id القسم أو null إذا غير واضح",
+  "suggested_subcategory_id": "id الفئة أو null إذا غير واضح",
+  "has_variants": false,
+  "variant_types": [],
   "image_alt_texts": {
-    "image_1": "وصف صورة 1 للSEO",
-    "image_2": "وصف صورة 2 للSEO"
+    "image_1": "وصف الصورة 1"
   }
 }
 
-ملاحظات:
-- اختر category_id و subcategory_id من القوائم المرسلة فقط أو null.
-- إذا اخترت subcategory_id يجب أن تكون مرتبطة بالcategory_id المختار.
-- has_variants: true فقط إذا واضح من الصور وجود نكهات/أحجام/ألوان مختلفة.
-- alt_texts: اكتب وصف قصير لكل صورة (6-14 كلمة) يساعد في SEO.
-- لا تستخدم ادعاءات طبية أو ضمانات غير حقيقية.
-- SKU يجب أن يكون قصيرًا ووصفيًا بالإنجليزية.`;
+قواعد الثقة (confidence):
+- "high": النص واضح، العلامة التجارية واضحة، نوع المنتج مؤكد من العبوة
+- "medium": بعض النصوص واضحة لكن هناك غموض في نوع المنتج بالضبط
+- "low": الصورة غير واضحة أو لا يمكن قراءة النص
 
-  const retryPrompt = `Return ONLY valid JSON. No markdown. No explanation. No code fences.
-اكتب JSON مختصر فقط لبيانات المنتج:
+ممنوعات صارمة:
+- لا تكتب "سائل جلي" إلا إذا كانت هذه الكلمة ظاهرة على العبوة
+- لا تكتب "منظف" إلا إذا كانت هذه الكلمة ظاهرة
+- لا تكتب "شامبو" إلا إذا كانت هذه الكلمة ظاهرة
+- لا تضع منتجًا في قسم المنظفات إلا إذا كان المنظف واضحًا في الصورة`;
+
+  const retryPrompt = `Return ONLY valid JSON. No markdown. No code fences.
+تحليل صارم للمنتج:
 {
-  "name": "اسم المنتج",
-  "short_description": "وصف مختصر",
-  "description": "وصف تفصيلي",
+  "detected_product_type": "غير واضح",
+  "visible_text": [],
   "brand": null,
-  "sku": "SKU",
+  "confidence": "low",
+  "uncertainty_reason": "لم أتمكن من قراءة الصورة بوضوح",
+  "name": "منتج غير محدد",
+  "short_description": null,
+  "description": null,
+  "sku": null,
   "key_features": [],
-  "meta_title": "SEO title",
-  "meta_description": "SEO description",
+  "meta_title": null,
+  "meta_description": null,
   "suggested_category_id": null,
   "suggested_subcategory_id": null,
   "has_variants": false,
@@ -808,9 +1037,33 @@ function normalizeProductFromImagesResponse(raw: unknown, imageUrls: string[]): 
     throw new Error('Invalid AI response structure');
   }
 
-  const name = normalizeString(obj.name);
-  if (!name) {
-    throw new Error('AI did not return a product name');
+  // Parse confidence level
+  const rawConfidence = normalizeString(obj.confidence);
+  const confidence: 'high' | 'medium' | 'low' =
+    rawConfidence === 'high' || rawConfidence === 'medium' || rawConfidence === 'low'
+      ? rawConfidence
+      : 'low';
+
+  // Parse detected product type
+  let detectedProductType = normalizeString(obj.detected_product_type);
+  if (!detectedProductType || detectedProductType === 'null') {
+    detectedProductType = null;
+  }
+
+  // Parse visible text
+  const visibleText = normalizeStringArray(obj.visible_text);
+
+  // Parse uncertainty reason
+  let uncertaintyReason = normalizeString(obj.uncertainty_reason);
+  if (!uncertaintyReason || uncertaintyReason === 'null') {
+    uncertaintyReason = null;
+  }
+
+  // Parse name
+  let name = normalizeString(obj.name) || '';
+  if (confidence === 'low') {
+    // Do not auto-fill a confident name when we are not confident.
+    name = '';
   }
 
   // Build alt texts map
@@ -826,19 +1079,29 @@ function normalizeProductFromImagesResponse(raw: unknown, imageUrls: string[]): 
     });
   }
 
+  const shortDescription = normalizeString(obj.short_description);
+  const description = normalizeString(obj.description);
+  const metaTitle = normalizeString(obj.meta_title);
+  const metaDescription = normalizeString(obj.meta_description);
+
+  const suggestedCategoryId = normalizeString(obj.suggested_category_id);
+  const suggestedSubcategoryId = normalizeString(obj.suggested_subcategory_id);
+
   return {
     name,
-    short_description: normalizeString(obj.short_description),
-    description: normalizeString(obj.description),
+    detected_product_type: detectedProductType,
+    visible_text: visibleText,
+    confidence,
+    uncertainty_reason: uncertaintyReason,
+    short_description: confidence === 'high' ? shortDescription : null,
+    description: confidence === 'high' ? description : null,
     brand: normalizeString(obj.brand),
     sku: normalizeString(obj.sku),
     key_features: normalizeStringArray(obj.key_features).slice(0, 6),
-    meta_title: normalizeString(obj.meta_title) ? clampString(normalizeString(obj.meta_title)!, 60) : null,
-    meta_description: normalizeString(obj.meta_description)
-      ? clampString(normalizeString(obj.meta_description)!, 155)
-      : null,
-    suggested_category_id: normalizeString(obj.suggested_category_id),
-    suggested_subcategory_id: normalizeString(obj.suggested_subcategory_id),
+    meta_title: confidence === 'high' && metaTitle ? clampString(metaTitle, 60) : null,
+    meta_description: confidence === 'high' && metaDescription ? clampString(metaDescription, 155) : null,
+    suggested_category_id: confidence === 'low' ? null : suggestedCategoryId,
+    suggested_subcategory_id: confidence === 'low' ? null : suggestedSubcategoryId,
     has_variants: Boolean(obj.has_variants),
     variant_types: normalizeStringArray(obj.variant_types).slice(0, 5),
     image_alt_texts: altTexts,
@@ -856,14 +1119,14 @@ export async function generateProductFromImages(
     throw new AiProviderError(getMissingApiKeyMessage(provider), provider, 'MISSING_API_KEY');
   }
 
-  const prompts = buildProductFromImagesPrompts(input.imageUrls, input.categories, input.subcategories);
+  const prompts = buildProductFromImagesPrompts(input.categories, input.subcategories);
 
   let rawText: string;
   try {
     if (provider === 'gemini') {
-      rawText = await generateWithGemini(prompts.base, prompts.retry);
+      rawText = await generateWithGeminiMultimodal(prompts.base, prompts.retry, input.images || []);
     } else {
-      rawText = await generateWithOpenAI(prompts.base, prompts.retry);
+      rawText = await generateWithOpenAIMultimodal(prompts.base, prompts.retry, input.images || []);
     }
   } catch (error) {
     if (error instanceof AiProviderError) {

@@ -71,6 +71,11 @@ interface AiProductSuggestion {
   has_variants: boolean;
   variant_types: string[];
   image_alt_texts: Record<string, string>;
+  // Analysis metadata
+  detected_product_type: string | null;
+  visible_text: string[];
+  confidence: 'high' | 'medium' | 'low';
+  uncertainty_reason: string | null;
 }
 
 async function getAccessToken(): Promise<string | null> {
@@ -263,8 +268,10 @@ export function QuickProductCreator() {
       const data = await response.json();
       setAiSuggestion(data);
 
+      const isLowConfidence = data?.confidence === 'low';
+
       setFormData({
-        name: data.name || '',
+        name: isLowConfidence ? '' : (data.name || ''),
         short_description: data.short_description || '',
         description: data.description || '',
         brand: data.brand || '',
@@ -272,8 +279,8 @@ export function QuickProductCreator() {
         price: 0,
         compare_price: null,
         stock_quantity: 0,
-        category_id: data.suggested_category_id || '',
-        subcategory_id: data.suggested_subcategory_id || '',
+        category_id: isLowConfidence ? '' : (data.suggested_category_id || ''),
+        subcategory_id: isLowConfidence ? '' : (data.suggested_subcategory_id || ''),
         meta_title: data.meta_title || '',
         meta_description: data.meta_description || '',
         marketing_tagline: '',
@@ -528,6 +535,88 @@ export function QuickProductCreator() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* AI Analysis Info */}
+        {aiSuggestion && (
+          <Card className="mb-6 p-6">
+            <CardHeader className="px-0 pt-0">
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                نتائج تحليل الذكاء الاصطناعي
+              </CardTitle>
+            </CardHeader>
+
+            <div className="space-y-4">
+              {/* Confidence Badge */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-muted-foreground">درجة الثقة:</span>
+                {aiSuggestion.confidence === 'high' && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    عالية
+                  </span>
+                )}
+                {aiSuggestion.confidence === 'medium' && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-800">
+                    <AlertCircle className="h-4 w-4" />
+                    متوسطة
+                  </span>
+                )}
+                {aiSuggestion.confidence === 'low' && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800">
+                    <AlertCircle className="h-4 w-4" />
+                    منخفضة - يرجى المراجعة
+                  </span>
+                )}
+              </div>
+
+              {/* Detected Product Type */}
+              {aiSuggestion.detected_product_type && (
+                <div className="rounded-lg bg-muted p-3">
+                  <span className="text-sm font-medium text-muted-foreground">نوع المنتج المكتشف:</span>
+                  <p className="mt-1 font-medium">{aiSuggestion.detected_product_type}</p>
+                </div>
+              )}
+
+              {/* Visible Text */}
+              {aiSuggestion.visible_text && aiSuggestion.visible_text.length > 0 && (
+                <div className="rounded-lg bg-muted p-3">
+                  <span className="text-sm font-medium text-muted-foreground">النصوص الظاهرة على العبوة:</span>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {aiSuggestion.visible_text.map((text, i) => (
+                      <span key={i} className="inline-block rounded bg-background px-2 py-1 text-sm">
+                        {text}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Uncertainty Reason */}
+              {aiSuggestion.uncertainty_reason && (
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-yellow-800">
+                  <span className="text-sm font-medium">سبب عدم التأكد:</span>
+                  <p className="mt-1 text-sm">{aiSuggestion.uncertainty_reason}</p>
+                </div>
+              )}
+
+              {/* Low Confidence Warning */}
+              {aiSuggestion.confidence === 'low' && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-semibold">لم يتمكن الذكاء الاصطناعي من تحديد المنتج بثقة</h4>
+                      <p className="mt-1 text-sm">
+                        راجع البيانات المقترحة وعدّلها يدويًا قبل الحفظ. لا تعتمد فقط على ما اقترحه AI.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
         )}
 
         <div className="grid gap-6 lg:grid-cols-2">

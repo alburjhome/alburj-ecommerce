@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/admin-auth';
+import { createAdminActionClient } from '@/lib/admin-auth';
 import {
   getActiveAiProvider,
   isApiKeyConfigured,
@@ -9,13 +9,57 @@ import {
   AiProviderError,
   getUserFriendlyErrorMessage,
   type ProductFromImagesInput,
+  type ProductFromImagesOutput,
 } from '@/lib/ai-provider';
+
+// Helper to extract storage path from public URL
+function getStoragePathFromUrl(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+    const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/public\/products\/(.+)$/);
+    return pathMatch ? pathMatch[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+// Fetch image from Supabase storage and convert to base64
+async function fetchImageAsBase64(adminClient: any, url: string): Promise<{ base64: string; mimeType: string } | null> {
+  try {
+    const path = getStoragePathFromUrl(url);
+    if (!path) {
+      console.error(`[AI Analysis] Could not extract path from URL: ${url}`);
+      return null;
+    }
+
+    const { data, error } = await adminClient.storage.from('products').download(path);
+    if (error || !data) {
+      console.error(`[AI Analysis] Failed to download image: ${error?.message || 'unknown'}`);
+      return null;
+    }
+
+    const buffer = Buffer.from(await data.arrayBuffer());
+    const mimeType = data.type || 'image/jpeg';
+    const base64 = buffer.toString('base64');
+
+    return { base64, mimeType };
+  } catch (error) {
+    console.error(`[AI Analysis] Error fetching image: ${error}`);
+    return null;
+  }
+}
 
 interface ProductFromImagesRequestBody {
   productId?: unknown;
   imageUrls?: unknown;
   categories?: unknown;
   subcategories?: unknown;
+}
+
+interface ImageData {
+  url: string;
+  base64: string;
+  mimeType: string;
 }
 
 function normalizeString(value: unknown): string | null {
@@ -76,7 +120,7 @@ export async function POST(request: Request) {
       ? authHeader.slice('bearer '.length).trim()
       : null;
 
-    await requireAdmin(token);
+    const adminClient = await createAdminActionClient(token);
 
     // Get the active AI provider from settings
     const provider = await getActiveAiProvider();
@@ -116,15 +160,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing categories list' }, { status: 400 });
     }
 
-    // Prepare input for AI provider
+    // Fetch images as base64 from Supabase storage
+    console.log(`[AI Analysis] Fetching ${imageUrls.length} images from storage...`);
+    const imageDataList: ImageData[] = [];
+    for (const url of imageUrls) {
+      const data = await fetchImageAsBase64(adminClient, url);
+      if (data) {
+        imageDataList.push({ url, ...data });
+      }
+    }
+
+    if (imageDataList.length === 0) {
+      return NextResponse.json(
+        { error: 'لم أتمكن من قراءة الصورة بوضوح. يرجى إدخال اسم المنتج يدويًا.' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[AI Analysis] Successfully fetched ${imageDataList.length} images`);
+
+    // Prepare input for AI provider with base64 images
     const input: ProductFromImagesInput = {
       imageUrls,
       categories,
       subcategories,
+      images: imageDataList.map((img) => ({
+        base64: img.base64,
+        mimeType: img.mimeType,
+      })),
     };
 
     // Generate using the active provider
-    const result = await generateProductFromImages(provider, input);
+    const result: ProductFromImagesOutput = await generateProductFromImages(provider, input);
+
+    // Log analysis results for debugging
+    console.log(`[AI Analysis] Product type detected: ${result.detected_product_type || 'unknown'}`);
+    console.log(`[AI Analysis] Confidence: ${result.confidence}`);
+    console.log(`[AI Analysis] Visible text: ${result.visible_text?.join(', ') || 'none'}`);
 
     return NextResponse.json(result);
   } catch (error: any) {
@@ -163,3 +235,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to analyze images' }, { status: 500 });
   }
 }
+
+export const runtime = 'nodejs';
+export const maxDuration = 60; // Allow up to 60 seconds for image analysis
