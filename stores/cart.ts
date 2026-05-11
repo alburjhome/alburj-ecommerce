@@ -15,6 +15,11 @@ interface CartActions {
   rehydrate: () => void;
 }
 
+const getQuantityLimit = (stockQuantity: number) => {
+  if (!Number.isFinite(stockQuantity) || stockQuantity <= 0) return 99;
+  return Math.min(stockQuantity, 99);
+};
+
 const useCartStore = create<CartState & CartActions>()(
   persist(
     (set, get) => ({
@@ -34,7 +39,7 @@ const useCartStore = create<CartState & CartActions>()(
           // Update quantity if item already exists
           const newQuantity = Math.min(
             existingItem.quantity + item.quantity,
-            item.stock_quantity
+            getQuantityLimit(item.stock_quantity)
           );
           
           set({
@@ -68,7 +73,7 @@ const useCartStore = create<CartState & CartActions>()(
         set({
           items: items.map((item) =>
             item.id === id
-              ? { ...item, quantity: Math.min(quantity, item.stock_quantity) }
+              ? { ...item, quantity: Math.min(quantity, getQuantityLimit(item.stock_quantity)) }
               : item
           ),
         });

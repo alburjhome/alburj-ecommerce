@@ -241,16 +241,74 @@ export interface Database {
           created_at?: string;
         };
       };
+      product_options: {
+        Row: {
+          id: string;
+          product_id: string;
+          name: string;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          name: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          name?: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      product_option_values: {
+        Row: {
+          id: string;
+          option_id: string;
+          value: string;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          option_id: string;
+          value: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          option_id?: string;
+          value?: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       product_variants: {
         Row: {
           id: string;
           product_id: string;
           name: string;
           sku: string | null;
+          barcode: string | null;
+          price: number;
+          compare_price: number | null;
           price_adjustment: number;
           stock_quantity: number;
+          track_stock: boolean;
           options: Json | null;
           is_active: boolean;
+          image_url: string | null;
+          sort_order: number;
           created_at: string;
           updated_at: string;
         };
@@ -259,10 +317,16 @@ export interface Database {
           product_id: string;
           name: string;
           sku?: string | null;
+          barcode?: string | null;
+          price: number;
+          compare_price?: number | null;
           price_adjustment?: number;
           stock_quantity?: number;
+          track_stock?: boolean;
           options?: Json | null;
           is_active?: boolean;
+          image_url?: string | null;
+          sort_order?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -271,12 +335,41 @@ export interface Database {
           product_id?: string;
           name?: string;
           sku?: string | null;
+          barcode?: string | null;
+          price?: number;
+          compare_price?: number | null;
           price_adjustment?: number;
           stock_quantity?: number;
+          track_stock?: boolean;
           options?: Json | null;
           is_active?: boolean;
+          image_url?: string | null;
+          sort_order?: number;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      product_variant_values: {
+        Row: {
+          id: string;
+          variant_id: string;
+          option_id: string;
+          option_value_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          variant_id: string;
+          option_id: string;
+          option_value_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          variant_id?: string;
+          option_id?: string;
+          option_value_id?: string;
+          created_at?: string;
         };
       };
       shipping_rates: {
@@ -392,7 +485,10 @@ export interface Database {
           product_id: string | null;
           product_name: string;
           product_sku: string | null;
+          variant_id: string | null;
           variant_name: string | null;
+          variant_options: Json | null;
+          variant_sku: string | null;
           quantity: number;
           unit_price: number;
           total_price: number;
@@ -404,7 +500,10 @@ export interface Database {
           product_id?: string | null;
           product_name: string;
           product_sku?: string | null;
+          variant_id?: string | null;
           variant_name?: string | null;
+          variant_options?: Json | null;
+          variant_sku?: string | null;
           quantity: number;
           unit_price: number;
           total_price: number;
@@ -416,7 +515,10 @@ export interface Database {
           product_id?: string | null;
           product_name?: string;
           product_sku?: string | null;
+          variant_id?: string | null;
           variant_name?: string | null;
+          variant_options?: Json | null;
+          variant_sku?: string | null;
           quantity?: number;
           unit_price?: number;
           total_price?: number;

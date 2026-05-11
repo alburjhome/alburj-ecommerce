@@ -8,6 +8,7 @@ import { RecommendedAddons } from '@/features/store/components/recommended-addon
 import { getWhatsAppLink } from '@/lib/store-settings';
 import { getPrimaryProductImage } from '@/lib/product-image';
 import { safeImageSrc, PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
+import { sortOptionValues, sortProductOptions, sortProductVariants } from '@/lib/product-variants';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -43,17 +44,57 @@ async function getSettings() {
 }
 
 async function getProduct(slug: string) {
+  const variantSelect = `
+    *,
+    images:product_images(*),
+    category:categories(*),
+    subcategory:subcategories(*),
+    options:product_options(
+      *,
+      values:product_option_values(*)
+    ),
+    variants:product_variants(
+      *,
+      values:product_variant_values(
+        *,
+        option:product_options(*),
+        option_value:product_option_values(*)
+      )
+    )
+  `;
+
   const { data, error } = await (supabase.from('products') as any)
+    .select(variantSelect)
+    .eq('slug', slug)
+    .eq('is_active', true)
+    .single();
+
+  if (!error && data) {
+    const options = sortProductOptions(data.options || []).map((option) => ({
+      ...option,
+      values: sortOptionValues(option.values || []),
+    }));
+
+    return {
+      ...data,
+      options,
+      variants: sortProductVariants(data.variants || []),
+      images: (data.images || []).sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order),
+    } as ProductWithDetails;
+  }
+
+  const { data: legacyData, error: legacyError } = await (supabase.from('products') as any)
     .select('*, images:product_images(*), category:categories(*), subcategory:subcategories(*)')
     .eq('slug', slug)
     .eq('is_active', true)
     .single();
 
-  if (error || !data) return null;
+  if (legacyError || !legacyData) return null;
   return {
-    ...data,
+    ...legacyData,
+    options: [],
     variants: [],
-    images: (data.images || []).sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order),
+    images: (legacyData.images || []).sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order),
   } as ProductWithDetails;
 }
 
@@ -89,6 +130,7 @@ async function getRecommendedAddons(product: ProductWithDetails) {
       if (!isAvailable(candidate)) continue;
       selected.push({
         ...candidate,
+        options: [],
         variants: [],
         images: [...(candidate.images || [])].sort((a, b) => a.sort_order - b.sort_order),
       });
@@ -104,6 +146,7 @@ async function getRecommendedAddons(product: ProductWithDetails) {
       if (!isAvailable(candidate)) continue;
       selected.push({
         ...candidate,
+        options: [],
         variants: [],
         images: [...(candidate.images || [])].sort((a, b) => a.sort_order - b.sort_order),
       });

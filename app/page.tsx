@@ -58,7 +58,7 @@ async function getHomeData() {
     getCategoriesWithProducts(),
     supabase
       .from('products')
-      .select('*, images:product_images(*), category:categories(*)')
+      .select('*, images:product_images(*), variants:product_variants(*), category:categories(*)')
       .eq('is_active', true)
       .eq('is_featured', true)
       .order('created_at', { ascending: false })

@@ -59,17 +59,53 @@ export interface ProductImage {
   created_at: string;
 }
 
+export interface ProductOptionValue {
+  id: string;
+  option_id: string;
+  value: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductOption {
+  id: string;
+  product_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  values?: ProductOptionValue[];
+}
+
+export interface ProductVariantValue {
+  id: string;
+  variant_id: string;
+  option_id: string;
+  option_value_id: string;
+  created_at: string;
+  option?: ProductOption;
+  option_value?: ProductOptionValue;
+}
+
 export interface ProductVariant {
   id: string;
   product_id: string;
   name: string;
   sku: string | null;
+  barcode: string | null;
+  price: number;
+  compare_price: number | null;
   price_adjustment: number;
   stock_quantity: number;
+  track_stock: boolean;
   options: Record<string, string> | null;
   is_active: boolean;
+  image_url: string | null;
+  sort_order: number;
   created_at: string;
   updated_at: string;
+  values?: ProductVariantValue[];
 }
 
 export interface Product {
@@ -108,7 +144,9 @@ export interface Product {
 
 export interface ProductWithDetails extends Product {
   images: ProductImage[];
+  options?: ProductOption[];
   variants: ProductVariant[];
+  variantValues?: ProductVariantValue[];
   category: Category | null;
   subcategory: Subcategory | null;
 }
@@ -126,6 +164,9 @@ export interface CartItem {
   quantity: number;
   image: string;
   variant_name?: string | null;
+  variant_label?: string | null;
+  selected_options?: Record<string, string> | null;
+  sku?: string | null;
   stock_quantity: number;
 }
 
@@ -148,7 +189,10 @@ export interface OrderItem {
   product_id: string | null;
   product_name: string;
   product_sku: string | null;
+  variant_id: string | null;
   variant_name: string | null;
+  variant_options: Record<string, string> | null;
+  variant_sku: string | null;
   quantity: number;
   unit_price: number;
   total_price: number;

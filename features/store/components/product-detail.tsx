@@ -1,7 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Minus, Plus, ShoppingCart, MessageCircle, Check, Truck, CreditCard, Boxes, HelpCircle } from 'lucide-react';
+import {
+  Boxes,
+  Check,
+  CreditCard,
+  HelpCircle,
+  MessageCircle,
+  Minus,
+  Plus,
+  ShoppingCart,
+  Truck,
+} from 'lucide-react';
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
@@ -9,8 +19,23 @@ import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
 import { calculateDiscountPercentage, formatPrice } from '@/lib/utils';
 import useCartStore from '@/stores/cart';
 import { getWhatsAppLink } from '@/lib/store-settings';
-import { getProductSuitableForTags, INTENT_TAG_CONFIG, type ProductIntentKey } from '@/lib/product-intents';
+import {
+  getProductSuitableForTags,
+  INTENT_TAG_CONFIG,
+  type ProductIntentKey,
+} from '@/lib/product-intents';
 import { trackWhatsAppClick } from '@/lib/analytics';
+import {
+  findMatchingVariant,
+  getVariantCartStock,
+  getVariantLabel,
+  getVariantSelectedOptions,
+  isOptionValueAvailable,
+  isVariantInStock,
+  sortOptionValues,
+  sortProductOptions,
+  sortProductVariants,
+} from '@/lib/product-variants';
 
 interface ProductDetailProps {
   product: ProductWithDetails;
@@ -18,7 +43,6 @@ interface ProductDetailProps {
 }
 
 export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
-  // Use selectors to avoid re-renders from changing store object
   const addItem = useCartStore((state) => state.addItem);
   const openCart = useCartStore((state) => state.openCart);
   const hasHydrated = useCartStore((state) => state.hasHydrated);
@@ -26,8 +50,8 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
 
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const [selectedOptionIds, setSelectedOptionIds] = useState<Record<string, string>>({});
 
-  // Rehydrate only once when not hydrated
   useEffect(() => {
     if (!hasHydrated && rehydrate) {
       rehydrate();
@@ -56,64 +80,96 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
         ];
   }, [product.id, product.images, product.name]);
 
+  const options = useMemo(() => {
+    return sortProductOptions(product.options || []).map((option) => ({
+      ...option,
+      values: sortOptionValues(option.values || []),
+    }));
+  }, [product.options]);
+
+  const activeVariants = useMemo(() => {
+    return sortProductVariants(product.variants || []).filter((variant) => variant.is_active);
+  }, [product.variants]);
+
+  const hasVariants = options.length > 0 && activeVariants.length > 0;
+  const isSelectionComplete = !hasVariants || options.every((option) => Boolean(selectedOptionIds[option.id]));
+  const selectedVariant =
+    hasVariants && isSelectionComplete
+      ? findMatchingVariant(activeVariants, selectedOptionIds)
+      : null;
+  const selectedVariantOptions = selectedVariant ? getVariantSelectedOptions(selectedVariant) : null;
+  const selectedVariantLabel = selectedVariant ? getVariantLabel(selectedVariant) : null;
+
   const currentImage = images[selectedImage] || images[0];
-  const imageSrc = safeImageSrc(currentImage?.url, PLACEHOLDER_PRODUCT);
-  const hasDiscount = Boolean(product.compare_price && product.compare_price > product.price);
+  const displayPrice = selectedVariant ? selectedVariant.price : product.price;
+  const displayComparePrice = selectedVariant ? selectedVariant.compare_price : product.compare_price;
+  const displayStockQuantity = selectedVariant ? selectedVariant.stock_quantity : product.stock_quantity;
+  const displayTrackStock = selectedVariant ? selectedVariant.track_stock : product.track_stock;
+  const displaySku = selectedVariant?.sku || product.sku;
+  const imageSrc = safeImageSrc(selectedVariant?.image_url || currentImage?.url, PLACEHOLDER_PRODUCT);
+  const hasDiscount = Boolean(displayComparePrice && displayComparePrice > displayPrice);
   const discount = hasDiscount
-    ? calculateDiscountPercentage(product.price, product.compare_price || product.price)
+    ? calculateDiscountPercentage(displayPrice, displayComparePrice || displayPrice)
     : 0;
-  const maxQuantity = product.track_stock && !product.allow_backorders ? product.stock_quantity : 99;
-  const canAddToCart = maxQuantity > 0 || product.allow_backorders;
-  const isUnavailable = Boolean(product.track_stock && !product.allow_backorders && product.stock_quantity <= 0);
+
+  const maxQuantity = selectedVariant
+    ? Math.min(getVariantCartStock(selectedVariant), 99)
+    : product.track_stock && !product.allow_backorders
+      ? product.stock_quantity
+      : 99;
+  const variantIsUnavailable = Boolean(selectedVariant && !isVariantInStock(selectedVariant));
+  const isUnavailable = hasVariants
+    ? Boolean(isSelectionComplete && (!selectedVariant || variantIsUnavailable))
+    : Boolean(product.track_stock && !product.allow_backorders && product.stock_quantity <= 0);
+  const canAddToCart =
+    hasHydrated &&
+    (hasVariants ? Boolean(isSelectionComplete && selectedVariant && !variantIsUnavailable) : !isUnavailable) &&
+    maxQuantity > 0;
+
+  useEffect(() => {
+    setQuantity((value) => Math.min(Math.max(1, value), Math.max(1, maxQuantity)));
+  }, [maxQuantity]);
+
+  function handleSelectOption(optionId: string, valueId: string) {
+    setSelectedOptionIds((current) => ({
+      ...current,
+      [optionId]: current[optionId] === valueId ? '' : valueId,
+    }));
+  }
 
   function handleAddToCart() {
-    if (!canAddToCart || !hasHydrated) return;
+    if (!canAddToCart) return;
 
     addItem({
       product_id: product.id,
-      variant_id: null,
+      variant_id: selectedVariant?.id || null,
       name: product.name,
-      price: product.price,
+      price: displayPrice,
       quantity,
       image: imageSrc,
-      stock_quantity: product.stock_quantity,
+      variant_name: selectedVariantLabel,
+      variant_label: selectedVariantLabel,
+      selected_options: selectedVariantOptions,
+      sku: displaySku,
+      stock_quantity: selectedVariant ? getVariantCartStock(selectedVariant) : maxQuantity,
     });
     openCart();
   }
 
   const productUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const inquiryText = `مرحبا، أريد الاستفسار عن المنتج:\n${product.name}\nالسعر: ${formatPrice(product.price)}\nالرابط: ${productUrl}`;
-  const orderText = `مرحبا، أريد طلب:\n${product.name}\nالكمية: ${quantity}\nالسعر: ${formatPrice(product.price)}\nالرابط: ${productUrl}`;
+  const variantLines = selectedVariantOptions
+    ? `\n${Object.entries(selectedVariantOptions)
+        .map(([name, value]) => `${name}: ${value}`)
+        .join('\n')}`
+    : '';
+  const inquiryText = `مرحبا، أريد الاستفسار عن المنتج:\n${product.name}${variantLines}\nالسعر: ${formatPrice(displayPrice)}\nالرابط: ${productUrl}`;
+  const orderText = `مرحبا، أريد طلب:\n${product.name}${variantLines}\nالكمية: ${quantity}\nالسعر: ${formatPrice(displayPrice)}\nالرابط: ${productUrl}`;
   const whatsappUrl = getWhatsAppLink(whatsappNumber);
   const inquiryUrl = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(inquiryText)}` : null;
-  const orderUrl = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(orderText)}` : null;
-
-  const marketingBadgeConfig = (badge: string) => {
-    switch (badge) {
-      case 'bestselling':
-        return { label: 'الأكثر طلبًا', className: 'bg-amber-100 text-amber-700 border-amber-200' };
-      case 'offer':
-        return { label: 'عرض', className: 'bg-red-100 text-red-700 border-red-200' };
-      case 'new':
-        return { label: 'جديد', className: 'bg-green-100 text-green-700 border-green-200' };
-      case 'wholesale':
-        return { label: 'سعر جملة', className: 'bg-blue-100 text-blue-700 border-blue-200' };
-      case 'limited':
-        return { label: 'كمية محدودة', className: 'bg-purple-100 text-purple-700 border-purple-200' };
-      default:
-        return null;
-    }
-  };
-
-  const marketingTagline = (product as any).marketing_tagline as string | null | undefined;
-  const keyFeatures = ((product as any).key_features as unknown[] | null | undefined) || [];
-  const productBadges = ((product as any).product_badges as unknown[] | null | undefined) || [];
-  const resolvedBadges = productBadges
-    .map((badge) => (typeof badge === 'string' ? badge : null))
-    .filter(Boolean) as string[];
-  const resolvedFeatures = keyFeatures
-    .map((feature) => (typeof feature === 'string' ? feature : null))
-    .filter(Boolean) as string[];
+  const orderUrl =
+    whatsappUrl && (!hasVariants || selectedVariant)
+      ? `${whatsappUrl}?text=${encodeURIComponent(orderText)}`
+      : null;
 
   const suitableForTags = (() => {
     const tags = getProductSuitableForTags(product);
@@ -129,8 +185,24 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
       'appliances',
       'furnishings',
     ];
-    const ordered = order.filter((key) => tags.includes(key));
-    return ordered.slice(0, 6);
+    return order.filter((key) => tags.includes(key)).slice(0, 6);
+  })();
+
+  const missingOptions = hasVariants
+    ? options.filter((option) => !selectedOptionIds[option.id]).map((option) => option.name)
+    : [];
+
+  const stockLabel = (() => {
+    if (hasVariants && !isSelectionComplete) {
+      return { tone: 'amber', text: `يرجى اختيار ${missingOptions.join(' و ')} أولًا` };
+    }
+    if (isUnavailable) {
+      return { tone: 'red', text: 'غير متوفر حاليًا' };
+    }
+    if (!displayTrackStock) {
+      return { tone: 'green', text: 'متوفر' };
+    }
+    return { tone: 'green', text: `متوفر في المخزون (${displayStockQuantity} قطعة)` };
   })();
 
   return (
@@ -139,7 +211,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
         <div className="space-y-4">
           <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
             <SafeImage
-              key={currentImage?.id || `img-${selectedImage}`}
+              key={selectedVariant?.image_url || currentImage?.id || `img-${selectedImage}`}
               src={imageSrc}
               fallbackSrc={PLACEHOLDER_PRODUCT}
               alt={currentImage?.alt_text || product.name}
@@ -179,76 +251,104 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
 
         <div className="space-y-5">
           <div>
-            {product.category && (
-              <p className="text-sm text-muted-foreground">{product.category.name}</p>
-            )}
-            <h1 className="mt-2 text-3xl font-bold tracking-tight">{product.name}</h1>
-            {Boolean(marketingTagline) && (
-              <p className="mt-2 text-sm font-medium text-muted-foreground">{marketingTagline}</p>
-            )}
-
-            {resolvedBadges.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {resolvedBadges.slice(0, 5).map((badge) => {
-                  const config = marketingBadgeConfig(badge);
-                  if (!config) return null;
-                  return (
-                    <span
-                      key={badge}
-                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${config.className}`}
-                    >
-                      {config.label}
-                    </span>
-                  );
-                })}
-              </div>
+            {product.category && <p className="text-sm text-muted-foreground">{product.category.name}</p>}
+            <h1 className="mt-2 break-words text-3xl font-bold tracking-tight">{product.name}</h1>
+            {product.marketing_tagline && (
+              <p className="mt-2 text-sm font-medium text-muted-foreground">{product.marketing_tagline}</p>
             )}
             {product.short_description && (
-              <p className="mt-3 text-muted-foreground">{product.short_description}</p>
+              <p className="mt-3 leading-7 text-muted-foreground">{product.short_description}</p>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-3xl font-bold text-primary">{formatPrice(product.price)}</span>
+            <span className="text-3xl font-bold text-primary">{formatPrice(displayPrice)}</span>
             {hasDiscount && (
               <>
                 <span className="text-lg text-muted-foreground line-through">
-                  {formatPrice(product.compare_price || 0)}
+                  {formatPrice(displayComparePrice || 0)}
                 </span>
                 <div className="flex flex-col gap-0.5">
                   <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">
                     خصم {discount}%
                   </span>
                   <span className="text-xs text-red-600">
-                    وفر {formatPrice((product.compare_price || 0) - product.price)}
+                    وفر {formatPrice((displayComparePrice || 0) - displayPrice)}
                   </span>
                 </div>
               </>
             )}
           </div>
 
+          {displaySku && (
+            <div className="text-sm text-muted-foreground">
+              SKU: <span className="font-medium text-foreground">{displaySku}</span>
+            </div>
+          )}
+
+          {hasVariants && (
+            <div className="space-y-4 rounded-lg border bg-card p-4">
+              <div>
+                <h2 className="text-base font-semibold">خيارات المنتج</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  اختر المتغير المطلوب قبل إضافة المنتج للسلة.
+                </p>
+              </div>
+              {options.map((option) => (
+                <div key={option.id} className="space-y-2">
+                  <div className="text-sm font-medium">{option.name}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {(option.values || []).map((value) => {
+                      const isSelected = selectedOptionIds[option.id] === value.id;
+                      const isAvailable = isOptionValueAvailable(
+                        activeVariants,
+                        selectedOptionIds,
+                        option.id,
+                        value.id
+                      );
+                      return (
+                        <button
+                          key={value.id}
+                          type="button"
+                          disabled={!isAvailable}
+                          aria-pressed={isSelected}
+                          onClick={() => handleSelectOption(option.id, value.id)}
+                          className={[
+                            'min-w-0 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                            'disabled:cursor-not-allowed disabled:opacity-40',
+                            isSelected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'bg-background hover:border-primary/60',
+                          ].join(' ')}
+                        >
+                          <span className="break-words">{value.value}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {hasVariants && !isSelectionComplete && (
+                <p className="text-sm text-amber-700">يرجى اختيار كل الخيارات قبل الإضافة للسلة.</p>
+              )}
+            </div>
+          )}
+
           <div className="rounded-lg border bg-card p-3 text-sm">
-            {product.track_stock ? (
-              product.stock_quantity > 0 ? (
-                <span className="inline-flex items-center gap-1.5 text-green-700">
-                  <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                  متوفر في المخزون ({product.stock_quantity} قطعة)
-                </span>
-              ) : product.allow_backorders ? (
-                <span className="inline-flex items-center gap-1.5 text-amber-700">
-                  <HelpCircle className="h-4 w-4" />
-                  متاح للطلب المسبق
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 text-red-700">
-                  <span className="h-2 w-2 rounded-full bg-red-500"></span>
-                  غير متوفر حالياً
-                </span>
-              )
-            ) : (
+            {stockLabel.tone === 'green' ? (
               <span className="inline-flex items-center gap-1.5 text-green-700">
                 <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                متوفر
+                {stockLabel.text}
+              </span>
+            ) : stockLabel.tone === 'amber' ? (
+              <span className="inline-flex items-center gap-1.5 text-amber-700">
+                <HelpCircle className="h-4 w-4" />
+                {stockLabel.text}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-red-700">
+                <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                {stockLabel.text}
               </span>
             )}
           </div>
@@ -269,7 +369,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
                 type="button"
                 variant="ghost"
                 size="icon"
-                disabled={quantity >= maxQuantity}
+                disabled={quantity >= maxQuantity || maxQuantity <= 0}
                 onClick={() => setQuantity((value) => Math.min(maxQuantity, value + 1))}
               >
                 <Plus className="h-4 w-4" />
@@ -285,25 +385,26 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
           {product.description && (
             <div className="border-t pt-5">
               <h2 className="mb-2 font-semibold">وصف المنتج</h2>
-              <p className="whitespace-pre-line leading-7 text-muted-foreground">{product.description}</p>
+              <p className="whitespace-pre-line break-words leading-7 text-muted-foreground">
+                {product.description}
+              </p>
             </div>
           )}
 
-          {resolvedFeatures.length > 0 && (
+          {product.key_features && product.key_features.length > 0 && (
             <div className="border-t pt-5">
               <h2 className="mb-3 font-semibold">مميزات المنتج</h2>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                {resolvedFeatures.slice(0, 6).map((feature, idx) => (
-                  <li key={`${idx}-${feature}`} className="flex items-start gap-2">
+                {product.key_features.slice(0, 6).map((feature, index) => (
+                  <li key={`${feature}-${index}`} className="flex items-start gap-2">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-                    <span className="leading-6">{feature}</span>
+                    <span className="break-words leading-6">{feature}</span>
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Trust Bar */}
           <div className="border-t pt-5">
             <h2 className="mb-3 font-semibold">لماذا تختار مؤسسة البرج؟</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -324,7 +425,6 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
             </div>
           </div>
 
-          {/* Suitable For */}
           {suitableForTags.length > 0 && (
             <div className="border-t pt-5">
               <h2 className="mb-3 font-semibold">مناسب لـ</h2>
@@ -345,37 +445,34 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
             </div>
           )}
 
-          {/* WhatsApp CTA */}
           {whatsappUrl && (
             <div className="border-t pt-5">
               {isUnavailable ? (
-                <>
-                  <h2 className="mb-3 font-semibold text-amber-700">المنتج غير متوفر حالياً</h2>
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                    <p className="mb-3 text-sm text-amber-800">
-                      هذا المنتج نفدت كميته. يمكنك الاستفسار عن توفره قريبًا عبر واتساب.
-                    </p>
-                    {inquiryUrl && (
-                      <a
-                        href={inquiryUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => {
-                          trackWhatsAppClick('product_availability_whatsapp', {
-                            product_id: product.id,
-                            product_name: product.name,
-                            product_slug: product.slug,
-                            price: product.price,
-                          });
-                        }}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
-                      >
-                        <MessageCircle className="h-4 w-4" />
-                        اسأل عن توفره عبر واتساب
-                      </a>
-                    )}
-                  </div>
-                </>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <h2 className="mb-2 font-semibold text-amber-800">المنتج غير متوفر حاليًا</h2>
+                  <p className="mb-3 text-sm text-amber-800">
+                    يمكنك الاستفسار عن توفره قريبًا عبر واتساب.
+                  </p>
+                  {inquiryUrl && (
+                    <a
+                      href={inquiryUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        trackWhatsAppClick('product_availability_whatsapp', {
+                          product_id: product.id,
+                          product_name: product.name,
+                          product_slug: product.slug,
+                          price: displayPrice,
+                        });
+                      }}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      اسأل عن توفره عبر واتساب
+                    </a>
+                  )}
+                </div>
               ) : (
                 <>
                   <h2 className="mb-3 font-semibold">اطلب عبر واتساب</h2>
@@ -390,7 +487,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
                             product_id: product.id,
                             product_name: product.name,
                             product_slug: product.slug,
-                            price: product.price,
+                            price: displayPrice,
                           });
                         }}
                         className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-green-600 bg-white px-4 py-2.5 text-sm font-semibold text-green-700 transition-colors hover:bg-green-50"
@@ -409,7 +506,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
                             product_id: product.id,
                             product_name: product.name,
                             product_slug: product.slug,
-                            price: product.price,
+                            price: displayPrice,
                           });
                         }}
                         className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
@@ -427,19 +524,17 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
-        <div className="mx-auto flex max-w-screen-sm items-center gap-3 px-4 py-3" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}>
+        <div
+          className="mx-auto flex max-w-screen-sm items-center gap-3 px-4 py-3"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}
+        >
           <div className="min-w-0">
             <div className="text-sm text-muted-foreground">السعر</div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-base font-bold text-primary">{formatPrice(product.price)}</span>
+              <span className="text-base font-bold text-primary">{formatPrice(displayPrice)}</span>
               {hasDiscount && (
                 <span className="text-xs text-muted-foreground line-through">
-                  {formatPrice(product.compare_price || 0)}
-                </span>
-              )}
-              {hasDiscount && (
-                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                  خصم {discount}%
+                  {formatPrice(displayComparePrice || 0)}
                 </span>
               )}
             </div>
@@ -454,26 +549,6 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
             <ShoppingCart className="ml-2 h-4 w-4" />
             أضف للسلة
           </Button>
-
-          {whatsappUrl && (isUnavailable ? inquiryUrl : orderUrl) && (
-            <a
-              href={(isUnavailable ? inquiryUrl : orderUrl) as string}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => {
-                trackWhatsAppClick('product_sticky_cta', {
-                  product_id: product.id,
-                  product_name: product.name,
-                  product_slug: product.slug,
-                  price: product.price,
-                });
-              }}
-              className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-green-700"
-            >
-              <MessageCircle className="ml-2 h-4 w-4" />
-              {isUnavailable ? 'اسألنا عن توفره' : 'اطلب عبر واتساب'}
-            </a>
-          )}
         </div>
       </div>
     </section>

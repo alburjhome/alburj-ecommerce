@@ -38,6 +38,7 @@ import {
   setAdminProductPrimaryImage,
 } from '@/app/actions/admin-product-images';
 import type { ProductImageRecord } from '@/app/actions/admin-product-images';
+import { ProductVariantsManager } from './product-variants-manager';
 
 // Local Card component (same as product-form.tsx)
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
@@ -1362,6 +1363,16 @@ export function QuickProductCreator() {
             </Link>
           </div>
         </Card>
+
+        <div className="mt-6">
+          <ProductVariantsManager
+            productId={productId}
+            basePrice={Number(formData.price) || 0}
+            baseComparePrice={formData.compare_price}
+            baseStockQuantity={Number(formData.stock_quantity) || 0}
+            baseTrackStock
+          />
+        </div>
       </div>
     );
   }

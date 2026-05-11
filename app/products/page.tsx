@@ -87,7 +87,7 @@ async function getSettings() {
 
 async function getProducts(search?: string) {
   let query = (supabase.from('products') as any)
-    .select('*, images:product_images(*), category:categories(*), subcategory:subcategories(*)')
+    .select('*, images:product_images(*), variants:product_variants(*), category:categories(*), subcategory:subcategories(*)')
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
@@ -96,7 +96,7 @@ async function getProducts(search?: string) {
   const { data } = await query;
   const products = ((data || []) as ProductWithDetails[]).map((product) => ({
     ...product,
-    variants: [],
+    variants: product.variants || [],
     images: [...(product.images || [])].sort((a, b) => a.sort_order - b.sort_order),
   }));
 

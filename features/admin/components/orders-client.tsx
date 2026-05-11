@@ -128,7 +128,32 @@ function getWhatsAppClickUrl(phone: string, message: string): string | null {
   return `https://wa.me/${formatted}?text=${encodeURIComponent(message)}`;
 }
 
+function formatItemVariantOptions(item: {
+  variant_options?: Record<string, string> | null;
+  variant_name?: string | null;
+}) {
+  if (item.variant_options && Object.keys(item.variant_options).length > 0) {
+    return Object.entries(item.variant_options)
+      .map(([name, value]) => `${name}: ${value}`)
+      .join('\n');
+  }
+
+  return item.variant_name || '';
+}
+
 function buildOrderSummary(order: OrderDetailsRecord) {
+  const itemsWithOptions = order.items
+    .map((item, idx) => {
+      const options = formatItemVariantOptions(item);
+      return [
+        `${idx + 1}. ${item.product_name} × ${item.quantity} — ${formatPrice(Number(item.unit_price))}`,
+        options,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    })
+    .join('\n');
+
   const items = order.items
     .map((item, idx) => `${idx + 1}. ${item.product_name} × ${item.quantity} — ${formatPrice(Number(item.unit_price))}`)
     .join('\n');
@@ -145,7 +170,7 @@ function buildOrderSummary(order: OrderDetailsRecord) {
     lines.push(`علامة مميزة: ${order.landmark}`);
   }
 
-  lines.push('', 'المنتجات:', items);
+  lines.push('', 'المنتجات:', itemsWithOptions || items);
   lines.push('', `المجموع: ${formatPrice(Number(order.total))}`);
 
   if (order.notes) {
@@ -708,6 +733,15 @@ export function OrdersClient() {
                             <tr key={item.id} className="border-b last:border-0">
                               <td className="py-3">
                                 <div className="font-medium">{item.product_name}</div>
+                                {item.variant_options && Object.keys(item.variant_options).length > 0 && (
+                                  <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                                    {Object.entries(item.variant_options).map(([name, value]) => (
+                                      <div key={`${item.id}-${name}`}>
+                                        <span className="font-medium">{name}:</span> {value}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                                 {item.variant_name && (
                                   <div className="text-xs text-muted-foreground">{item.variant_name}</div>
                                 )}
@@ -738,6 +772,15 @@ export function OrdersClient() {
                     selectedOrder.items.map((item) => (
                       <div key={item.id} className="rounded-lg border p-3">
                         <div className="font-medium mb-1">{item.product_name}</div>
+                        {item.variant_options && Object.keys(item.variant_options).length > 0 && (
+                          <div className="mb-2 space-y-0.5 text-xs text-muted-foreground">
+                            {Object.entries(item.variant_options).map(([name, value]) => (
+                              <div key={`${item.id}-${name}`}>
+                                <span className="font-medium">{name}:</span> {value}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {item.variant_name && (
                           <div className="text-xs text-muted-foreground mb-2">{item.variant_name}</div>
                         )}

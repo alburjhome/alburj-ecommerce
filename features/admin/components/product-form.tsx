@@ -22,6 +22,7 @@ import { normalizeSlug } from '@/lib/slug';
 import { ProductFormInput, parseTags, productSchema, slugify, tagsToString } from '@/lib/product-validation';
 import { INTENT_TAG_CONFIG } from '@/lib/product-intents';
 import { formatPrice } from '@/lib/utils';
+import { ProductVariantsManager } from './product-variants-manager';
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
@@ -943,6 +944,14 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             </div>
           </Card>
         )}
+
+        <ProductVariantsManager
+          productId={mode === 'edit' ? productId : undefined}
+          basePrice={Number(price) || 0}
+          baseComparePrice={comparePrice ? Number(comparePrice) : null}
+          baseStockQuantity={Number(stockQuantity) || 0}
+          baseTrackStock={Boolean(trackStock)}
+        />
 
         {/* Section 6: Additional Details */}
         <Card>

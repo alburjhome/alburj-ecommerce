@@ -1,14 +1,17 @@
 'use server';
 
-import { createServerClient } from '@/lib/supabase-server';
 import { revalidatePath } from 'next/cache';
+import { createServerClient } from '@/lib/supabase-server';
 
 export interface CheckoutItem {
   product_id: string;
+  variant_id?: string | null;
   name: string;
   quantity: number;
-  price: number; // Client price - for reference only
+  price: number;
   variant_name?: string | null;
+  selected_options?: Record<string, string> | null;
+  sku?: string | null;
 }
 
 export interface CheckoutData {
@@ -44,6 +47,50 @@ export interface CheckoutResult {
   };
 }
 
+type ServerClient = ReturnType<typeof createServerClient>;
+
+interface ProductRow {
+  id: string;
+  name: string;
+  sku: string | null;
+  price: number;
+  stock_quantity: number;
+  track_stock: boolean;
+  allow_backorders: boolean;
+  is_active: boolean;
+}
+
+interface VariantValueRow {
+  option?: { name: string | null } | null;
+  option_value?: { value: string | null } | null;
+}
+
+interface VariantRow {
+  id: string;
+  product_id: string;
+  name: string;
+  sku: string | null;
+  price: number;
+  stock_quantity: number;
+  track_stock: boolean;
+  is_active: boolean;
+  options: Record<string, string> | null;
+  values?: VariantValueRow[] | null;
+}
+
+interface VerifiedOrderItem {
+  product_id: string;
+  product_name: string;
+  product_sku: string | null;
+  variant_id: string | null;
+  variant_name: string | null;
+  variant_options: Record<string, string> | null;
+  variant_sku: string | null;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+}
+
 function isServerConfigurationError(error: unknown) {
   if (!(error instanceof Error)) return false;
 
@@ -63,13 +110,8 @@ function logCheckoutError(scope: string, error: unknown) {
   console.error(`[checkout:${scope}] ${message}`);
 }
 
-async function validateCheckoutServerConfiguration(
-  serverClient: ReturnType<typeof createServerClient>
-) {
-  const { error } = await serverClient
-    .from('shipping_rates')
-    .select('id')
-    .limit(1);
+async function validateCheckoutServerConfiguration(serverClient: ServerClient) {
+  const { error } = await serverClient.from('shipping_rates').select('id').limit(1);
 
   if (error) {
     throw error;
@@ -91,7 +133,7 @@ function normalizeWhatsAppNumber(value: string | null | undefined) {
   return normalized;
 }
 
-async function getCheckoutWhatsAppNumber(serverClient: ReturnType<typeof createServerClient>) {
+async function getCheckoutWhatsAppNumber(serverClient: ServerClient) {
   const { data, error } = await (serverClient.from('store_settings') as any)
     .select('whatsapp_number')
     .order('created_at', { ascending: true })
@@ -106,17 +148,39 @@ async function getCheckoutWhatsAppNumber(serverClient: ReturnType<typeof createS
   return normalizeWhatsAppNumber(data.whatsapp_number);
 }
 
-/**
- * Server-side checkout action that:
- * 1. Verifies all product prices from the database (prevents price tampering)
- * 2. Calculates totals server-side
- * 3. Looks up actual shipping rate for the governorate
- * 4. Creates order and order_items in a transaction
- * 5. Returns WhatsApp URL for completion
- */
+function getVariantOptions(variant: VariantRow) {
+  const values = Array.isArray(variant.values) ? variant.values : [];
+  const structuredOptions = values.reduce<Record<string, string>>((acc, value) => {
+    const name = value.option?.name;
+    const optionValue = value.option_value?.value;
+    if (name && optionValue) {
+      acc[name] = optionValue;
+    }
+    return acc;
+  }, {});
+
+  if (Object.keys(structuredOptions).length > 0) {
+    return structuredOptions;
+  }
+
+  return variant.options || null;
+}
+
+function getVariantName(variant: VariantRow) {
+  const options = getVariantOptions(variant);
+  if (!options || Object.keys(options).length === 0) return variant.name;
+  return Object.entries(options)
+    .map(([name, value]) => `${name}: ${value}`)
+    .join('، ');
+}
+
+function quantityKey(item: CheckoutItem) {
+  return `${item.product_id}:${item.variant_id || 'default'}`;
+}
+
 export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
   try {
-    let serverClient: ReturnType<typeof createServerClient>;
+    let serverClient: ServerClient;
 
     try {
       serverClient = createServerClient();
@@ -141,7 +205,9 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
 
     const sanitizedItems = data.items.map((item) => ({
       ...item,
+      variant_id: item.variant_id || null,
       quantity: Number(item.quantity),
+      price: Number(item.price),
     }));
 
     for (const item of sanitizedItems) {
@@ -154,19 +220,18 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       }
     }
 
-    const quantitiesByProduct = sanitizedItems.reduce<Record<string, number>>((acc, item) => {
-      acc[item.product_id] = (acc[item.product_id] || 0) + item.quantity;
+    const productIds = Array.from(new Set(sanitizedItems.map((item) => item.product_id)));
+    const quantitiesByKey = sanitizedItems.reduce<Record<string, number>>((acc, item) => {
+      const key = quantityKey(item);
+      acc[key] = (acc[key] || 0) + item.quantity;
       return acc;
     }, {});
 
-    // Step 1: Fetch all products from database to verify prices
-    const productIds = Object.keys(quantitiesByProduct);
-    
     const { data: products, error: productsError } = await serverClient
       .from('products')
-      .select('id, name, sku, price, stock_quantity, track_stock, is_active')
+      .select('id, name, sku, price, stock_quantity, track_stock, allow_backorders, is_active')
       .in('id', productIds)
-      .returns<Array<{ id: string; name: string; sku: string | null; price: number; stock_quantity: number; track_stock: boolean; is_active: boolean }>>();
+      .returns<ProductRow[]>();
 
     if (productsError) {
       if (isServerConfigurationError(productsError)) {
@@ -177,51 +242,112 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       return { success: false, error: 'Failed to fetch products' };
     }
 
-    // Step 2: Verify each product exists, is active, and price matches
+    const { data: variantsData, error: variantsError } = await (serverClient.from('product_variants') as any)
+      .select(`
+        id,
+        product_id,
+        name,
+        sku,
+        price,
+        stock_quantity,
+        track_stock,
+        is_active,
+        options,
+        values:product_variant_values(
+          option:product_options(name),
+          option_value:product_option_values(value)
+        )
+      `)
+      .in('product_id', productIds);
+
+    let variants = (variantsData || []) as VariantRow[];
+    if (variantsError) {
+      const variantErrorMessage = String(variantsError.message || variantsError);
+      if (
+        variantErrorMessage.includes('price') ||
+        variantErrorMessage.includes('schema cache') ||
+        variantErrorMessage.includes('column')
+      ) {
+        logCheckoutError('variants-query-fallback', variantsError);
+        variants = [];
+      } else {
+        logCheckoutError('variants-query', variantsError);
+        return { success: false, error: 'Failed to verify product variants' };
+      }
+    }
+
+    const activeVariantsByProduct = variants.reduce<Record<string, VariantRow[]>>((acc, variant) => {
+      if (!variant.is_active) return acc;
+      acc[variant.product_id] = acc[variant.product_id] || [];
+      acc[variant.product_id].push(variant);
+      return acc;
+    }, {});
+
     const priceDiscrepancies: Array<{ product_id: string; client_price: number; server_price: number }> = [];
     let subtotal = 0;
-    const verifiedItems: Array<{
-      product_id: string;
-      product_name: string;
-      product_sku: string | null;
-      variant_name: string | null;
-      quantity: number;
-      unit_price: number;
-      total_price: number;
-    }> = [];
+    const verifiedItems: VerifiedOrderItem[] = [];
 
     for (const item of sanitizedItems) {
-      const product = products?.find(p => p.id === item.product_id);
-      
+      const product = products?.find((candidate) => candidate.id === item.product_id);
+
       if (!product) {
-        return { 
-          success: false, 
+        return {
+          success: false,
           error: `Product not found: ${item.name}`,
-          details: { items_verified: false } as any
+          details: { items_verified: false } as any,
         };
       }
 
       if (!product.is_active) {
-        return { 
-          success: false, 
+        return {
+          success: false,
           error: `Product is no longer available: ${product.name}`,
-          details: { items_verified: false } as any
+          details: { items_verified: false } as any,
         };
       }
 
-      // Check stock if tracking is enabled
-      const requestedQuantity = quantitiesByProduct[item.product_id] || item.quantity;
-      if (product.track_stock && product.stock_quantity < requestedQuantity) {
-        return { 
-          success: false, 
+      const productVariants = activeVariantsByProduct[item.product_id] || [];
+      const productRequiresVariant = productVariants.length > 0;
+
+      if (productRequiresVariant && !item.variant_id) {
+        return {
+          success: false,
+          error: `Please choose product options for ${product.name}`,
+          details: { items_verified: false } as any,
+        };
+      }
+
+      const selectedVariant = item.variant_id
+        ? productVariants.find((variant) => variant.id === item.variant_id)
+        : null;
+
+      if (item.variant_id && !selectedVariant) {
+        return {
+          success: false,
+          error: `Selected variant is no longer available: ${product.name}`,
+          details: { items_verified: false } as any,
+        };
+      }
+
+      const requestedQuantity = quantitiesByKey[quantityKey(item)] || item.quantity;
+      if (selectedVariant) {
+        if (selectedVariant.track_stock && selectedVariant.stock_quantity < requestedQuantity) {
+          return {
+            success: false,
+            error: `Insufficient stock for ${product.name}. Available: ${selectedVariant.stock_quantity}`,
+            details: { items_verified: false } as any,
+          };
+        }
+      } else if (product.track_stock && !product.allow_backorders && product.stock_quantity < requestedQuantity) {
+        return {
+          success: false,
           error: `Insufficient stock for ${product.name}. Available: ${product.stock_quantity}`,
-          details: { items_verified: false } as any
+          details: { items_verified: false } as any,
         };
       }
 
-      // Use SERVER price, not client price (prevents tampering)
-      const serverPrice = product.price;
-      if (serverPrice !== item.price) {
+      const serverPrice = selectedVariant ? Number(selectedVariant.price) : Number(product.price);
+      if (Math.abs(serverPrice - item.price) > 0.001) {
         priceDiscrepancies.push({
           product_id: item.product_id,
           client_price: item.price,
@@ -236,14 +362,16 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
         product_id: item.product_id,
         product_name: product.name,
         product_sku: product.sku,
-        variant_name: item.variant_name || null,
+        variant_id: selectedVariant?.id || null,
+        variant_name: selectedVariant ? getVariantName(selectedVariant) : null,
+        variant_options: selectedVariant ? getVariantOptions(selectedVariant) : null,
+        variant_sku: selectedVariant?.sku || null,
         quantity: item.quantity,
         unit_price: serverPrice,
         total_price: itemTotal,
       });
     }
 
-    // Step 3: Fetch shipping rate from database (not hardcoded)
     const { data: shippingRate, error: shippingError } = await serverClient
       .from('shipping_rates')
       .select('rate')
@@ -252,19 +380,17 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       .single<{ rate: number }>();
 
     if (shippingError || !shippingRate) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: `Shipping not available for ${data.governorate}`,
-        details: { items_verified: false } as any
+        details: { items_verified: false } as any,
       };
     }
 
     const shippingCost = shippingRate.rate;
     const total = subtotal + shippingCost;
 
-    // Step 4: Create order (order_number auto-generated by DB)
-    const { data: order, error: orderError } = await (serverClient
-      .from('orders') as any)
+    const { data: order, error: orderError } = await (serverClient.from('orders') as any)
       .insert({
         customer_name: data.customer_name,
         customer_phone: data.customer_phone,
@@ -290,32 +416,39 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       return { success: false, error: 'Failed to create order' };
     }
 
-    // Step 5: Create order items linked to the order
-    const orderItems = verifiedItems.map(item => ({
-      order_id: order.id,
-      product_id: item.product_id,
-      product_name: item.product_name,
-      product_sku: item.product_sku,
-      variant_name: item.variant_name,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      total_price: item.total_price,
-    }));
+    const shouldPersistVariantColumns = verifiedItems.some(
+      (item) => item.variant_id || item.variant_options || item.variant_sku
+    );
+    const orderItems = verifiedItems.map((item) => {
+      const baseItem = {
+        order_id: order.id,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        product_sku: item.product_sku,
+        variant_name: item.variant_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+      };
 
-    const { error: itemsError } = await serverClient
-      .from('order_items')
-      .insert(orderItems as any);
+      if (!shouldPersistVariantColumns) return baseItem;
+
+      return {
+        ...baseItem,
+        variant_id: item.variant_id,
+        variant_options: item.variant_options,
+        variant_sku: item.variant_sku,
+      };
+    });
+
+    const { error: itemsError } = await serverClient.from('order_items').insert(orderItems as any);
 
     if (itemsError) {
       logCheckoutError('order-items-create', itemsError);
-      await serverClient
-        .from('orders')
-        .delete()
-        .eq('id', order.id);
+      await serverClient.from('orders').delete().eq('id', order.id);
       return { success: false, error: 'Failed to create order items' };
     }
 
-    // Step 6: Generate WhatsApp message
     const message = generateWhatsAppMessage(order.order_number, data, verifiedItems, subtotal, shippingCost, total);
     const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
 
@@ -327,7 +460,6 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       logCheckoutError('whatsapp-url-update', whatsappUrlError);
     }
 
-    // Revalidate relevant paths
     revalidatePath('/admin/orders');
 
     return {
@@ -345,7 +477,6 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
         price_discrepancies: priceDiscrepancies.length > 0 ? priceDiscrepancies : undefined,
       },
     };
-
   } catch (error) {
     if (isServerConfigurationError(error)) {
       logCheckoutError('server-configuration', error);
@@ -360,35 +491,54 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
 function generateWhatsAppMessage(
   orderNumber: string,
   data: CheckoutData,
-  items: Array<{ product_name: string; quantity: number; unit_price: number; total_price: number }>,
+  items: VerifiedOrderItem[],
   subtotal: number,
   shipping: number,
   total: number
 ): string {
-  const formatPrice = (price: number) => `${price.toFixed(2)} د.أ`;
+  const formatCurrency = (price: number) => `${price.toFixed(2)} د.أ`;
+  const itemsText = items
+    .map((item, index) => {
+      const optionLines = item.variant_options
+        ? Object.entries(item.variant_options)
+            .map(([name, value]) => `   ${name}: ${value}`)
+            .join('\n')
+        : '';
+
+      return [
+        `${index + 1}. ${item.product_name}`,
+        optionLines,
+        `   الكمية: ${item.quantity}`,
+        `   السعر: ${formatCurrency(item.unit_price)}`,
+        `   الإجمالي: ${formatCurrency(item.total_price)}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    })
+    .join('\n\n');
 
   return `
 طلب جديد #${orderNumber}
 
-👤 معلومات العميل:
+معلومات العميل:
 الاسم: ${data.customer_name}
 الهاتف: ${data.customer_phone}
 ${data.customer_email ? `البريد: ${data.customer_email}` : ''}
 
-📍 العنوان:
+العنوان:
 المحافظة: ${data.governorate}
 المدينة: ${data.city}
 العنوان: ${data.address}
 ${data.landmark ? `علامة مميزة: ${data.landmark}` : ''}
 
-🛒 المنتجات:
-${items.map(item => `- ${item.product_name} (${item.quantity}x) = ${formatPrice(item.total_price)}`).join('\n')}
+المنتجات:
+${itemsText}
 
-💰 المبالغ:
-المجموع الفرعي: ${formatPrice(subtotal)}
-الشحن: ${formatPrice(shipping)}
-الإجمالي: ${formatPrice(total)}
+المبالغ:
+المجموع الفرعي: ${formatCurrency(subtotal)}
+الشحن: ${formatCurrency(shipping)}
+الإجمالي: ${formatCurrency(total)}
 
-${data.notes ? `📝 ملاحظات: ${data.notes}` : ''}
+${data.notes ? `ملاحظات: ${data.notes}` : ''}
   `.trim();
 }

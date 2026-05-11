@@ -159,10 +159,13 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
         notes: formData.notes || null,
         items: items.map(item => ({
           product_id: item.product_id,
+          variant_id: item.variant_id,
           name: item.name,
           quantity: item.quantity,
           price: item.price, // Client price for reference - server verifies
           variant_name: item.variant_name || null,
+          selected_options: item.selected_options || null,
+          sku: item.sku || null,
         })),
       });
 

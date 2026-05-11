@@ -47,7 +47,10 @@ export interface OrderItemRecord {
   product_id: string | null;
   product_name: string;
   product_sku: string | null;
+  variant_id: string | null;
   variant_name: string | null;
+  variant_options: Record<string, string> | null;
+  variant_sku: string | null;
   quantity: number;
   unit_price: number;
   total_price: number;

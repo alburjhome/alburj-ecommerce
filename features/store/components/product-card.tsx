@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { ShoppingCart, Flame, Tag } from 'lucide-react';
+import { Flame, ShoppingCart, Tag } from 'lucide-react';
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
 import { PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
-import { getPrimaryProductImage, debugProductImage } from '@/lib/product-image';
-import { formatPrice, calculateDiscountPercentage } from '@/lib/utils';
+import { getPrimaryProductImage } from '@/lib/product-image';
+import { calculateDiscountPercentage, formatPrice } from '@/lib/utils';
+import { isVariantInStock } from '@/lib/product-variants';
 import useCartStore from '@/stores/cart';
 
 interface ProductCardProps {
@@ -16,17 +17,27 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, priority = false }: ProductCardProps) {
-  const { addItem, openCart } = useCartStore();
+  const addItem = useCartStore((state) => state.addItem);
+  const openCart = useCartStore((state) => state.openCart);
 
+  const productHref = `/product/${product.slug}`;
   const imageSrc = getPrimaryProductImage(product);
-  debugProductImage(product, 'ProductCard');
-
-  const hasDiscount = product.compare_price && product.compare_price > product.price;
+  const hasDiscount = Boolean(product.compare_price && product.compare_price > product.price);
   const discountPercentage = hasDiscount
-    ? calculateDiscountPercentage(product.price, product.compare_price!)
+    ? calculateDiscountPercentage(product.price, product.compare_price || product.price)
     : 0;
 
-  const handleAddToCart = () => {
+  const hasActiveVariants = (product.variants || []).some((variant) => variant.is_active);
+  const hasAvailableVariant = (product.variants || []).some(
+    (variant) => variant.is_active && isVariantInStock(variant)
+  );
+  const isAvailable = hasActiveVariants
+    ? hasAvailableVariant
+    : !product.track_stock || (product.stock_quantity ?? 0) > 0;
+
+  function handleAddToCart() {
+    if (hasActiveVariants || !isAvailable) return;
+
     addItem({
       product_id: product.id,
       variant_id: null,
@@ -34,12 +45,11 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
       price: product.price,
       quantity: 1,
       image: imageSrc,
-      stock_quantity: product.stock_quantity,
+      sku: product.sku,
+      stock_quantity: product.track_stock ? product.stock_quantity : 99,
     });
     openCart();
-  };
-
-  const isAvailable = !product.track_stock || (product.stock_quantity ?? 0) > 0;
+  }
 
   const marketingBadgeLabel = (badge: string) => {
     switch (badge) {
@@ -58,10 +68,13 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
     }
   };
 
+  const firstMarketingBadge = product.product_badges?.[0]
+    ? marketingBadgeLabel(product.product_badges[0])
+    : null;
+
   return (
-    <div className="group relative bg-card rounded-lg border overflow-hidden product-card">
-      {/* Badges Stack */}
-      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1.5">
+    <div className="group relative overflow-hidden rounded-lg border bg-card product-card">
+      <div className="absolute left-2 top-2 z-10 flex flex-col gap-1.5">
         {product.is_featured && (
           <span className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
             <Flame className="h-3 w-3" />
@@ -71,18 +84,14 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
         {hasDiscount && (
           <span className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
             <Tag className="h-3 w-3" />
-            عرض
+            خصم {discountPercentage}%
           </span>
         )}
-        {Array.isArray((product as any).product_badges) && (product as any).product_badges.length > 0 && (() => {
-          const label = marketingBadgeLabel((product as any).product_badges[0]);
-          if (!label) return null;
-          return (
-            <span className="inline-flex items-center rounded-md bg-slate-900 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
-              {label}
-            </span>
-          );
-        })()}
+        {firstMarketingBadge && (
+          <span className="inline-flex items-center rounded-md bg-slate-900 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
+            {firstMarketingBadge}
+          </span>
+        )}
         {isAvailable && (
           <span className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
             متوفر
@@ -91,7 +100,7 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
       </div>
 
       <div className="relative aspect-square overflow-hidden">
-        <Link href={`/product/${product.slug}`} className="relative block h-full w-full image-zoom">
+        <Link href={productHref} className="relative block h-full w-full image-zoom">
           <SafeImage
             src={imageSrc}
             fallbackSrc={PLACEHOLDER_PRODUCT}
@@ -102,53 +111,70 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
             priority={priority}
           />
         </Link>
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
-          <Button
-            variant="secondary"
-            size="icon"
-            className="rounded-full pointer-events-auto"
-            onClick={handleAddToCart}
-          >
-            <ShoppingCart className="h-4 w-4" />
-          </Button>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+          {hasActiveVariants ? (
+            <Button asChild variant="secondary" size="icon" className="pointer-events-auto rounded-full">
+              <Link href={productHref} aria-label="اختيار خيارات المنتج">
+                <ShoppingCart className="h-4 w-4" />
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              size="icon"
+              className="pointer-events-auto rounded-full"
+              onClick={handleAddToCart}
+              disabled={!isAvailable}
+              aria-label="إضافة للسلة"
+            >
+              <ShoppingCart className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
       <div className="p-4">
-        <Link href={`/product/${product.slug}`}>
-          <h3 className="font-medium text-sm line-clamp-2 hover:text-primary transition-colors">
+        <Link href={productHref}>
+          <h3 className="line-clamp-2 text-sm font-medium transition-colors hover:text-primary">
             {product.name}
           </h3>
         </Link>
 
-        {Boolean((product as any).marketing_tagline) && (
-          <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{(product as any).marketing_tagline}</p>
+        {product.marketing_tagline && (
+          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{product.marketing_tagline}</p>
         )}
 
         <div className="mt-2 flex items-center gap-2">
           <span className="price-current">{formatPrice(product.price)}</span>
           {hasDiscount && (
-            <span className="price-compare">{formatPrice(product.compare_price!)}</span>
+            <span className="price-compare">{formatPrice(product.compare_price || 0)}</span>
           )}
         </div>
 
-        {/* Out of stock warning only */}
         {!isAvailable && (
           <div className="mt-2 text-xs">
             <span className="out-of-stock">نفدت الكمية</span>
           </div>
         )}
 
-        {/* Add to Cart Button - Only disabled when truly out of stock */}
-        <Button
-          onClick={handleAddToCart}
-          disabled={product.track_stock && (product.stock_quantity ?? 0) <= 0}
-          className="w-full mt-3 md:hidden"
-          size="sm"
-        >
-          <ShoppingCart className="h-4 w-4 ml-2" />
-          أضف للسلة
-        </Button>
+        {hasActiveVariants ? (
+          <Button asChild className="mt-3 w-full md:hidden" size="sm">
+            <Link href={productHref}>
+              <ShoppingCart className="ml-2 h-4 w-4" />
+              اختيار الخيارات
+            </Link>
+          </Button>
+        ) : (
+          <Button
+            onClick={handleAddToCart}
+            disabled={!isAvailable}
+            className="mt-3 w-full md:hidden"
+            size="sm"
+          >
+            <ShoppingCart className="ml-2 h-4 w-4" />
+            أضف للسلة
+          </Button>
+        )}
       </div>
     </div>
   );

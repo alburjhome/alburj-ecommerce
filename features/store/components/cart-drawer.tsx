@@ -10,6 +10,11 @@ import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
 import { formatPrice } from '@/lib/utils';
 import { CartCheckout } from './cart-checkout';
 
+const getQuantityLimit = (stockQuantity: number) => {
+  if (!Number.isFinite(stockQuantity) || stockQuantity <= 0) return 99;
+  return Math.min(stockQuantity, 99);
+};
+
 export function CartDrawer() {
   // Use selectors for stable references and granular re-renders
   const items = useCartStore((state) => state.items);
@@ -107,6 +112,18 @@ export function CartDrawer() {
                   <div className="flex-1 min-w-0 flex flex-col justify-between">
                     <div>
                       <h4 className="font-medium text-sm line-clamp-2 leading-5">{item.name}</h4>
+                      {item.selected_options && Object.keys(item.selected_options).length > 0 && (
+                        <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                          {Object.entries(item.selected_options).map(([name, value]) => (
+                            <div key={`${item.id}-${name}`} className="break-words">
+                              <span className="font-medium text-foreground/80">{name}:</span> {value}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {item.sku && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">SKU: {item.sku}</p>
+                      )}
                       <p className="text-muted-foreground text-xs mt-0.5">
                         {formatPrice(item.price)} × {item.quantity}
                       </p>
@@ -127,7 +144,7 @@ export function CartDrawer() {
                           size="icon"
                           className="h-7 w-7 rounded-none rounded-l-md"
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          disabled={item.quantity >= item.stock_quantity}
+                          disabled={item.quantity >= getQuantityLimit(item.stock_quantity)}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
