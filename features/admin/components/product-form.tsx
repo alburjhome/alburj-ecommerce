@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Save, Sparkles, AlertCircle, Package, Tag, CheckCircle2, EyeOff, ImageIcon } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -145,6 +145,7 @@ const badgeOptions = [
 
 export function ProductForm({ mode, productId }: ProductFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -193,6 +194,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const metaTitle = watch('meta_title');
   const metaDescription = watch('meta_description');
   const shortDescription = watch('short_description');
+  const focusTarget = searchParams.get('focus');
 
   // Price validation warning
   const hasInvalidComparePrice = useMemo(() => {
@@ -465,6 +467,21 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
     }
   }, [mode, name, setValue, slugTouched]);
 
+  useEffect(() => {
+    if (isLoading || mode !== 'edit') return;
+    const targetId =
+      focusTarget === 'variants'
+        ? 'product-variants-section'
+        : focusTarget === 'images'
+          ? 'product-images'
+          : null;
+
+    if (!targetId) return;
+    requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [focusTarget, isLoading, mode]);
+
   function scrollToField(fieldId: string | undefined) {
     if (!fieldId) return;
     requestAnimationFrame(() => {
@@ -546,6 +563,11 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
     if (values.track_stock && (!Number.isFinite(stockValue) || stockValue < 0)) {
       setError('stock_quantity', { type: 'manual', message: 'المخزون مطلوب ولا يمكن أن يكون أقل من صفر' });
       items.push({ field: 'stock_quantity', message: 'المخزون مطلوب ولا يمكن أن يكون أقل من صفر' });
+    }
+
+    if (values.track_stock && stockValue === 0 && !values.allow_backorders) {
+      setError('stock_quantity', { type: 'manual', message: 'المخزون 0؛ سيظهر المنتج غير متوفر للعملاء.' });
+      items.push({ field: 'stock_quantity', message: 'المخزون 0؛ سيظهر المنتج غير متوفر للعملاء.' });
     }
 
     if (createVariantsIntent) {
@@ -640,7 +662,8 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         description: 'تم حفظ المنتج كمسودة، لكنه غير جاهز للنشر.',
       });
       router.refresh();
-      router.replace(openAdvanced ? `/admin/products/${result.data.id}/edit` : '/admin/products');
+      const advancedFocus = createVariantsIntent ? 'variants' : 'images';
+      router.replace(openAdvanced ? `/admin/products/${result.data.id}/edit?focus=${advancedFocus}` : '/admin/products');
     } catch (error) {
       toast({
         title: 'فشل حفظ المنتج',
@@ -805,6 +828,14 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                   <Label htmlFor="price">السعر الحالي *</Label>
                   <Input id="price" type="number" step="0.01" min="0" {...register('price')} />
                   <FieldError message={errors.price?.message} />
+                </div>
+                <div id="stock_quantity">
+                  <Label htmlFor="stock_quantity_input">الكمية المتاحة *</Label>
+                  <Input id="stock_quantity_input" type="number" min="0" step="1" {...register('stock_quantity')} />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    إذا بقيت 0 سيظهر المنتج غير متوفر، ويمكنك حفظه كمسودة ثم تعديلها لاحقًا.
+                  </p>
+                  <FieldError message={errors.stock_quantity?.message} />
                 </div>
                 <div>
                   <Label htmlFor="compare_price">السعر قبل الخصم</Label>
@@ -998,10 +1029,6 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                   <Input type="number" step="0.01" min="0" {...register('dimensions.width')} placeholder="العرض" />
                   <Input type="number" step="0.01" min="0" {...register('dimensions.height')} placeholder="الارتفاع" />
                 </div>
-                <div id="stock_quantity">
-                  <Input id="stock_quantity_input" type="number" min="0" {...register('stock_quantity')} placeholder="المخزون" />
-                  <FieldError message={errors.stock_quantity?.message} />
-                </div>
                 <div className="space-y-3">
                   <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
                     <input type="checkbox" checked={trackStock} onChange={(event) => setValue('track_stock', event.target.checked)} />
@@ -1031,7 +1058,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                 {isSubmitting ? 'جاري النشر...' : 'نشر المنتج'}
               </Button>
               <Button type="button" variant="secondary" className="w-full" disabled={publishDisabled} onClick={() => saveDraftFromCreate({ openAdvanced: true })}>
-                {isOpeningAdvanced ? 'جاري الحفظ...' : 'حفظ وفتح التعديل المتقدم'}
+                {isOpeningAdvanced ? 'جاري الحفظ...' : createVariantsIntent ? 'حفظ وفتح إدارة المتغيرات' : 'حفظ وفتح التعديل المتقدم'}
               </Button>
             </div>
           </aside>
@@ -1451,13 +1478,15 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           </div>
         </Card>
 
-        <ProductVariantsManager
-          productId={productId}
-          basePrice={Number(price) || 0}
-          baseComparePrice={comparePrice ? Number(comparePrice) : null}
-          baseStockQuantity={Number(stockQuantity) || 0}
-          baseTrackStock={Boolean(trackStock)}
-        />
+        <div id="product-variants-section" className="scroll-mt-24">
+          <ProductVariantsManager
+            productId={productId}
+            basePrice={Number(price) || 0}
+            baseComparePrice={comparePrice ? Number(comparePrice) : null}
+            baseStockQuantity={Number(stockQuantity) || 0}
+            baseTrackStock={Boolean(trackStock)}
+          />
+        </div>
 
         {/* Section 6: Additional Details */}
         <Card>

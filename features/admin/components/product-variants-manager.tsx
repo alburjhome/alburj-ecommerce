@@ -527,7 +527,99 @@ export function ProductVariantsManager({
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-md border">
+              <div className="grid gap-3 md:hidden">
+                {variants.map((variant) => (
+                  <div key={variant.id} className="rounded-md border bg-background p-3">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words font-semibold">{formatVariantLabel(options, variant)}</p>
+                        <p className="text-xs text-muted-foreground">متغير قابل للبيع</p>
+                      </div>
+                      <label className="flex shrink-0 items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={variant.is_active}
+                          onChange={(event) => updateVariant(variant.id, { is_active: event.target.checked })}
+                        />
+                        نشط
+                      </label>
+                    </div>
+
+                    <div className="grid gap-3">
+                      <div>
+                        <Label>SKU</Label>
+                        <Input
+                          value={variant.sku}
+                          onChange={(event) => updateVariant(variant.id, { sku: event.target.value })}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>السعر</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={variant.price}
+                            onChange={(event) => updateVariant(variant.id, { price: Number(event.target.value) })}
+                          />
+                        </div>
+                        <div>
+                          <Label>المخزون</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={variant.stock_quantity}
+                            onChange={(event) =>
+                              updateVariant(variant.id, { stock_quantity: Number(event.target.value) })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>قبل الخصم</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={variant.compare_price ?? ''}
+                            onChange={(event) =>
+                              updateVariant(variant.id, {
+                                compare_price: event.target.value ? Number(event.target.value) : null,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full"
+                            onClick={() =>
+                              setVariants((current) => current.filter((item) => item.id !== variant.id))
+                            }
+                          >
+                            <Trash2 className="ml-2 h-4 w-4" />
+                            حذف
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label>صورة اختيارية</Label>
+                        <Input
+                          value={variant.image_url}
+                          onChange={(event) => updateVariant(variant.id, { image_url: event.target.value })}
+                          placeholder="اختياري"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto rounded-md border md:block">
                 <table className="w-full min-w-[900px] text-sm">
                   <thead className="bg-muted/60 text-muted-foreground">
                     <tr>

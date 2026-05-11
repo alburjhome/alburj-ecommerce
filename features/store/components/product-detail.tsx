@@ -51,12 +51,17 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [selectedOptionIds, setSelectedOptionIds] = useState<Record<string, string>>({});
+  const [productUrl, setProductUrl] = useState('');
 
   useEffect(() => {
     if (!hasHydrated && rehydrate) {
       rehydrate();
     }
   }, [hasHydrated, rehydrate]);
+
+  useEffect(() => {
+    setProductUrl(window.location.href);
+  }, [product.slug]);
 
   const images = useMemo(() => {
     const sortedImages = [...(product.images || [])].sort((a, b) => {
@@ -156,7 +161,6 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
     openCart();
   }
 
-  const productUrl = typeof window !== 'undefined' ? window.location.href : '';
   const variantLines = selectedVariantOptions
     ? `\n${Object.entries(selectedVariantOptions)
         .map(([name, value]) => `${name}: ${value}`)
