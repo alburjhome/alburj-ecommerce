@@ -1,11 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
-  Upload,
   Sparkles,
   Save,
   Globe,
@@ -58,7 +57,7 @@ function CardTitle({ children, className = '' }: { children: React.ReactNode; cl
 }
 
 interface AiProductSuggestion {
-  name: string;
+  name: string | null;
   short_description: string | null;
   description: string | null;
   brand: string | null;
@@ -76,7 +75,32 @@ interface AiProductSuggestion {
   visible_text: string[];
   confidence: 'high' | 'medium' | 'low';
   uncertainty_reason: string | null;
+  // Name-based copy metadata
+  category_confidence?: 'high' | 'medium' | 'low';
 }
+
+type QuickTemplateKey =
+  | 'cleaning'
+  | 'personal_care'
+  | 'plastics'
+  | 'kitchen'
+  | 'packaging'
+  | 'furnishings'
+  | 'appliances'
+  | 'paper'
+  | 'restaurants_shops';
+
+const QUICK_TEMPLATES: { key: QuickTemplateKey; label: string; aiContext: string }[] = [
+  { key: 'cleaning', label: 'منظفات', aiContext: 'قالب: منظفات' },
+  { key: 'personal_care', label: 'عناية شخصية', aiContext: 'قالب: عناية شخصية' },
+  { key: 'plastics', label: 'بلاستيك', aiContext: 'قالب: بلاستيكيات' },
+  { key: 'kitchen', label: 'مطبخ', aiContext: 'قالب: أدوات مطبخ' },
+  { key: 'packaging', label: 'تغليف', aiContext: 'قالب: تغليف وعبوات' },
+  { key: 'furnishings', label: 'مفروشات', aiContext: 'قالب: مفروشات ومناشف' },
+  { key: 'appliances', label: 'أجهزة كهربائية', aiContext: 'قالب: أجهزة كهربائية' },
+  { key: 'paper', label: 'ورقيات', aiContext: 'قالب: ورقيات' },
+  { key: 'restaurants_shops', label: 'مستلزمات مطاعم ومحلات', aiContext: 'قالب: مستلزمات مطاعم ومحلات' },
+];
 
 async function getAccessToken(): Promise<string | null> {
   const {
@@ -89,11 +113,14 @@ export function QuickProductCreator() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [step, setStep] = useState<'initial' | 'uploading' | 'analyzing' | 'review' | 'saved'>('initial');
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [step, setStep] = useState<'initial' | 'review' | 'saved'>('initial');
   const [productId, setProductId] = useState<string | null>(null);
   const [productSlug, setProductSlug] = useState<string | null>(null);
   const [images, setImages] = useState<ProductImageRecord[]>([]);
   const [isCreatingDraft, setIsCreatingDraft] = useState(false);
+  const [isGeneratingFromName, setIsGeneratingFromName] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -103,6 +130,12 @@ export function QuickProductCreator() {
 
   const [aiSuggestion, setAiSuggestion] = useState<AiProductSuggestion | null>(null);
   const [showVariantWarning, setShowVariantWarning] = useState(false);
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
+  const [showImageAiSection, setShowImageAiSection] = useState(false);
+
+  const [nameSeed, setNameSeed] = useState('');
+  const [aiNotes, setAiNotes] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<QuickTemplateKey | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -139,7 +172,9 @@ export function QuickProductCreator() {
     return subcategories.filter((s) => s.category_id === formData.category_id);
   }, [formData.category_id, subcategories]);
 
-  const handleStartQuickCreate = async () => {
+  const ensureDraftProduct = useCallback(async (): Promise<{ id: string; slug: string } | null> => {
+    if (productId && productSlug) return { id: productId, slug: productSlug };
+
     setIsCreatingDraft(true);
     try {
       const token = await getAccessToken();
@@ -151,20 +186,143 @@ export function QuickProductCreator() {
 
       setProductId(result.data.id);
       setProductSlug(result.data.slug);
-      setStep('uploading');
-
-      toast({
-        title: 'تم إنشاء مسودة المنتج',
-        description: 'يمكنك الآن رفع صور المنتج',
-      });
+      return result.data;
     } catch (error) {
       toast({
         title: 'تعذر إنشاء المنتج',
         description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
         variant: 'destructive',
       });
+      return null;
     } finally {
       setIsCreatingDraft(false);
+    }
+  }, [productId, productSlug, toast]);
+
+  const handleGenerateFromName = async () => {
+    const trimmed = nameSeed.trim();
+    if (!trimmed) {
+      toast({
+        title: 'اسم المنتج مطلوب',
+        description: 'اكتب اسم المنتج أولًا ثم اضغط توليد البيانات',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsGeneratingFromName(true);
+    try {
+      const draft = await ensureDraftProduct();
+      if (!draft) return;
+
+      const token = await getAccessToken();
+      const templateContext = selectedTemplate
+        ? QUICK_TEMPLATES.find((t) => t.key === selectedTemplate)?.aiContext || ''
+        : '';
+
+      const response = await fetch('/api/admin/ai/product-copy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          name: trimmed,
+          notes: aiNotes.trim() || null,
+          template: templateContext || null,
+          price: null,
+          comparePrice: null,
+          existingDescription: null,
+          existingShortDescription: null,
+          existingMarketingTagline: null,
+          existingKeyFeatures: [],
+          existingProductBadges: [],
+          existingIntentTags: [],
+          sku: null,
+          metaTitle: null,
+          metaDescription: null,
+          currentCategoryId: null,
+          currentSubcategoryId: null,
+          categories: categories.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+          subcategories: subcategories.map((s) => ({
+            id: s.id,
+            name: s.name,
+            slug: s.slug,
+            category_id: s.category_id,
+          })),
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || 'فشل توليد بيانات المنتج');
+      }
+
+      const categoryConfidence = (data?.category_confidence ?? 'low') as 'high' | 'medium' | 'low';
+      const suggestedCategoryId = typeof data?.category_id === 'string' ? data.category_id : '';
+      const suggestedSubcategoryId = typeof data?.subcategory_id === 'string' ? data.subcategory_id : '';
+
+      if (categoryConfidence === 'low') {
+        toast({
+          title: 'تنبيه التصنيف',
+          description: 'لم يتمكن الذكاء الاصطناعي من تحديد القسم بثقة. يرجى اختيار القسم يدويًا.',
+          variant: 'destructive',
+        });
+      }
+
+      setAiSuggestion({
+        name: data?.name ?? null,
+        short_description: data?.short_description ?? null,
+        description: data?.description ?? null,
+        brand: null,
+        sku: data?.suggested_sku ?? null,
+        key_features: Array.isArray(data?.key_features) ? data.key_features : [],
+        meta_title: data?.meta_title ?? null,
+        meta_description: data?.meta_description ?? null,
+        suggested_category_id: suggestedCategoryId || null,
+        suggested_subcategory_id: suggestedSubcategoryId || null,
+        has_variants: false,
+        variant_types: [],
+        image_alt_texts: {},
+        detected_product_type: null,
+        visible_text: [],
+        confidence: 'high',
+        uncertainty_reason: null,
+        category_confidence: categoryConfidence,
+      });
+
+      setFormData((prev) => {
+        const nextCategoryId =
+          categoryConfidence === 'high' || categoryConfidence === 'medium' ? suggestedCategoryId : '';
+        const nextSubcategoryId = categoryConfidence === 'high' ? suggestedSubcategoryId : '';
+
+        return {
+          ...prev,
+          name: (data?.name || trimmed) as string,
+          short_description: data?.short_description || '',
+          description: data?.description || '',
+          sku: data?.suggested_sku || '',
+          meta_title: data?.meta_title || '',
+          meta_description: data?.meta_description || '',
+          key_features: Array.isArray(data?.key_features) ? data.key_features : [],
+          category_id: nextCategoryId || prev.category_id,
+          subcategory_id: nextSubcategoryId || '',
+        };
+      });
+
+      setStep('review');
+      toast({
+        title: 'تم توليد بيانات المنتج',
+        description: 'راجع البيانات، أضف السعر والصور، ثم انشر',
+      });
+    } catch (error) {
+      toast({
+        title: 'فشل توليد البيانات',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingFromName(false);
     }
   };
 
@@ -211,10 +369,10 @@ export function QuickProductCreator() {
   }, [productId]);
 
   useEffect(() => {
-    if (productId && step === 'uploading') {
+    if (productId) {
       loadImages();
     }
-  }, [productId, step, loadImages]);
+  }, [productId, loadImages]);
 
   const handleDeleteImage = async (imageId: string) => {
     const token = await getAccessToken();
@@ -371,140 +529,195 @@ export function QuickProductCreator() {
     }
   };
 
+  const resetForNewProduct = useCallback(() => {
+    setProductId(null);
+    setProductSlug(null);
+    setImages([]);
+    setAiSuggestion(null);
+    setNameSeed('');
+    setAiNotes('');
+    setSelectedTemplate(null);
+    setStep('initial');
+    setFormData({
+      name: '',
+      short_description: '',
+      description: '',
+      brand: '',
+      sku: '',
+      price: 0,
+      compare_price: null,
+      stock_quantity: 0,
+      category_id: '',
+      subcategory_id: '',
+      meta_title: '',
+      meta_description: '',
+      marketing_tagline: '',
+      key_features: [],
+      product_badges: [],
+    });
+    setTimeout(() => {
+      nameInputRef.current?.focus();
+    }, 0);
+  }, []);
+
+  const handlePublishAndNew = async () => {
+    if (!productId) return;
+
+    if (!formData.name.trim() || !formData.price || formData.price <= 0 || !formData.category_id) {
+      toast({
+        title: 'تعذر النشر',
+        description: 'تأكد من إدخال الاسم والسعر والقسم قبل النشر',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const hasPrimaryImage = images.some((img) => img.is_primary);
+    if (!hasPrimaryImage) {
+      toast({
+        title: 'تنبيه',
+        description: 'يفضل إضافة صورة رئيسية قبل النشر',
+      });
+    }
+
+    setIsPublishing(true);
+    try {
+      const token = await getAccessToken();
+      const result = await publishQuickProduct(token, productId, {
+        ...formData,
+        is_active: true,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'تعذر نشر المنتج');
+      }
+
+      toast({
+        title: 'تم نشر المنتج',
+        description: 'يمكنك الآن إضافة منتج جديد بسرعة',
+      });
+
+      resetForNewProduct();
+    } catch (error) {
+      toast({
+        title: 'تعذر النشر',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleSaveAndOpenAdvanced = async () => {
+    if (!productId) return;
+    setIsSaving(true);
+    try {
+      const token = await getAccessToken();
+      const result = await saveQuickDraft(token, productId, {
+        ...formData,
+        is_active: false,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'تعذر حفظ المسودة');
+      }
+
+      router.push(`/admin/products/${productId}/edit`);
+    } catch (error) {
+      toast({
+        title: 'تعذر الحفظ',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (step === 'initial') {
     return (
-      <div className="container mx-auto max-w-4xl py-8">
-        <div className="mb-6 flex items-center gap-4">
+      <div className="container mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 overflow-x-hidden">
+        <div className="mb-6 flex min-w-0 items-center gap-4">
           <Link href="/admin/products">
             <Button variant="outline" size="icon">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold">إضافة منتج سريعة بالصور</h1>
+          <h1 className="min-w-0 break-words text-2xl font-bold whitespace-normal">إضافة منتج سريعة بالاسم</h1>
         </div>
 
-        <Card className="p-12 text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-            <Upload className="h-10 w-10 text-primary" />
-          </div>
-          <h2 className="mb-4 text-xl font-semibold">ابدأ برفع صور المنتج</h2>
-          <p className="mb-8 text-muted-foreground">
-            سيتم إنشاء منتج مسودة تلقائيًا، ثم رفع الصور، ثم تحليلها بالذكاء الاصطناعي لاقتراح البيانات
-          </p>
-          <Button size="lg" onClick={handleStartQuickCreate} disabled={isCreatingDraft}>
-            {isCreatingDraft ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                جاري إنشاء المسودة...
-              </>
-            ) : (
-              <>
-                <Plus className="mr-2 h-4 w-4" />
-                بدء الإضافة السريعة
-              </>
-            )}
-          </Button>
-        </Card>
-      </div>
-    );
-  }
+        <Card className="p-6">
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="name_seed" className="mb-2 block text-lg font-medium">
+                اكتب اسم المنتج
+              </Label>
+              <Input
+                id="name_seed"
+                ref={nameInputRef}
+                value={nameSeed}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNameSeed(e.target.value)}
+                placeholder="مثال: شامبو أطفال برائحة اللافندر 500 مل"
+                className="w-full min-w-0"
+              />
+            </div>
 
-  if (step === 'uploading') {
-    return (
-      <div className="container mx-auto max-w-4xl py-8">
-        <div className="mb-6 flex items-center gap-4">
-          <Link href="/admin/products">
-            <Button variant="outline" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <h1 className="text-2xl font-bold">رفع صور المنتج</h1>
-        </div>
+            <div>
+              <Label htmlFor="ai_notes" className="mb-2 block font-medium">
+                ملاحظات تساعد الذكاء الاصطناعي
+              </Label>
+              <textarea
+                id="ai_notes"
+                value={aiNotes}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAiNotes(e.target.value)}
+                placeholder="مثال: هذا المنتج للعناية بالشعر وليس منظف"
+                rows={3}
+                className="mt-1 flex w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
 
-        <Card className="mb-6 p-6">
-          <div className="mb-6">
-            <Label htmlFor="images" className="mb-2 block text-lg font-medium">
-              اختر صور المنتج
-            </Label>
-            <Input
-              id="images"
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFileUpload}
-              className="cursor-pointer"
-            />
-            <p className="mt-2 text-sm text-muted-foreground">
-              يمكنك رفع عدة صور دفعة واحدة. الحد الأقصى لكل صورة 5MB.
-            </p>
-          </div>
-
-          {images.length > 0 && (
-            <div className="mt-6">
-              <h3 className="mb-4 font-medium">الصور المرفوعة ({images.length})</h3>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                {images.map((image) => (
-                  <div
-                    key={image.id}
-                    className={`relative aspect-square rounded-lg border-2 ${
-                      image.is_primary ? 'border-primary' : 'border-transparent'
+            <div>
+              <div className="mb-2 text-sm font-medium text-muted-foreground">قوالب سريعة</div>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_TEMPLATES.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setSelectedTemplate((prev) => (prev === t.key ? null : t.key))}
+                    className={`rounded-full border px-3 py-1 text-sm whitespace-normal break-words max-w-full ${
+                      selectedTemplate === t.key
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-input bg-background'
                     }`}
                   >
-                    <SafeImage
-                      src={image.url}
-                      alt={image.alt_text || ''}
-                      fill
-                      className="rounded-lg object-cover"
-                      fallbackSrc={PLACEHOLDER_PRODUCT}
-                    />
-                    {image.is_primary && (
-                      <span className="absolute left-2 top-2 rounded bg-primary px-2 py-1 text-xs text-white">
-                        رئيسية
-                      </span>
-                    )}
-                    <div className="absolute bottom-2 right-2 flex gap-1">
-                      {!image.is_primary && (
-                        <Button
-                          size="icon"
-                          variant="secondary"
-                          className="h-8 w-8"
-                          onClick={() => handleSetPrimary(image.id)}
-                        >
-                          <CheckCircle2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button
-                        size="icon"
-                        variant="destructive"
-                        className="h-8 w-8"
-                        onClick={() => handleDeleteImage(image.id)}
-                      >
-                        <span className="text-lg leading-none">×</span>
-                      </Button>
-                    </div>
-                  </div>
+                    {t.label}
+                  </button>
                 ))}
               </div>
-
-              {images.length >= 1 && (
-                <div className="mt-6 flex justify-center">
-                  <Button size="lg" onClick={handleAnalyzeImages} disabled={isAnalyzing}>
-                    {isAnalyzing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        جاري تحليل الصور...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        حلّل الصور وولّد بيانات المنتج
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
             </div>
-          )}
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-start">
+              <Button
+                size="lg"
+                onClick={handleGenerateFromName}
+                disabled={isCreatingDraft || isGeneratingFromName}
+                className="w-full sm:w-auto"
+              >
+                {isCreatingDraft || isGeneratingFromName ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    جاري التوليد...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    ولّد بيانات المنتج من الاسم
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </Card>
       </div>
     );
@@ -512,14 +725,14 @@ export function QuickProductCreator() {
 
   if (step === 'review') {
     return (
-      <div className="container mx-auto max-w-4xl py-8">
-        <div className="mb-6 flex items-center gap-4">
+      <div className="container mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 overflow-x-hidden">
+        <div className="mb-6 flex min-w-0 items-center gap-4">
           <Link href="/admin/products">
             <Button variant="outline" size="icon">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold">مراجعة بيانات المنتج</h1>
+          <h1 className="min-w-0 break-words text-2xl font-bold whitespace-normal">مراجعة بيانات المنتج</h1>
         </div>
 
         {showVariantWarning && (
@@ -619,180 +832,65 @@ export function QuickProductCreator() {
           </Card>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-2">
+
+        <div className="grid gap-6">
+          {/* Card 1: Basics */}
           <Card className="p-6">
             <CardHeader className="px-0 pt-0">
-              <CardTitle className="flex items-center gap-2">
-                <ImageIcon className="h-5 w-5" />
-                صور المنتج
+              <CardTitle className="flex min-w-0 items-center gap-2 whitespace-normal break-words">
+                <Package className="h-5 w-5 flex-shrink-0" />
+                الأساسيات
               </CardTitle>
             </CardHeader>
-            <div className="grid grid-cols-2 gap-3">
-              {images.map((image) => (
-                <div
-                  key={image.id}
-                  className={`relative aspect-square rounded-lg border-2 ${
-                    image.is_primary ? 'border-primary' : 'border-transparent'
-                  }`}
-                >
-                  <SafeImage
-                    src={image.url}
-                    alt={aiSuggestion?.image_alt_texts?.[image.id] || image.alt_text || ''}
-                    fill
-                    className="rounded-lg object-cover"
-                    fallbackSrc={PLACEHOLDER_PRODUCT}
-                  />
-                  {image.is_primary && (
-                    <span className="absolute left-2 top-2 rounded bg-primary px-2 py-1 text-xs text-white">
-                      رئيسية
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
 
-          <div className="space-y-6">
-            <Card className="p-6">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  معلومات أساسية
-                </CardTitle>
-              </CardHeader>
+            <div className="grid gap-4">
+              <div className="min-w-0">
+                <Label htmlFor="name">اسم المنتج *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setFormData((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  placeholder="اسم المنتج"
+                  className="w-full min-w-0"
+                />
+              </div>
 
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">اسم المنتج *</Label>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="min-w-0">
+                  <Label htmlFor="price">السعر *</Label>
                   <Input
-                    id="name"
-                    value={formData.name}
+                    id="price"
+                    type="number"
+                    value={formData.price || ''}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setFormData((prev) => ({ ...prev, name: e.target.value }))
+                      setFormData((prev) => ({ ...prev, price: Number(e.target.value) }))
                     }
-                    placeholder="اسم المنتج"
+                    placeholder="0.00"
+                    className="w-full min-w-0"
                   />
                 </div>
-
-                <div>
-                  <Label htmlFor="brand">العلامة التجارية</Label>
+                <div className="min-w-0">
+                  <Label htmlFor="compare_price">السعر قبل الخصم</Label>
                   <Input
-                    id="brand"
-                    value={formData.brand}
+                    id="compare_price"
+                    type="number"
+                    value={formData.compare_price || ''}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setFormData((prev) => ({ ...prev, brand: e.target.value }))
-                    }
-                    placeholder="العلامة التجارية"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="price">السعر *</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      value={formData.price || ''}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        setFormData((prev) => ({ ...prev, price: Number(e.target.value) }))
-                      }
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="compare_price">السعر قبل الخصم</Label>
-                    <Input
-                      id="compare_price"
-                      type="number"
-                      value={formData.compare_price || ''}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          compare_price: e.target.value ? Number(e.target.value) : null,
-                        }))
-                      }
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="category">القسم *</Label>
-                  <Select
-                    value={formData.category_id}
-                    onValueChange={(value: string) =>
                       setFormData((prev) => ({
                         ...prev,
-                        category_id: value,
-                        subcategory_id: '',
+                        compare_price: e.target.value ? Number(e.target.value) : null,
                       }))
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر القسم" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {availableSubcategories.length > 0 && (
-                  <div>
-                    <Label htmlFor="subcategory">الفئة</Label>
-                    <Select
-                      value={formData.subcategory_id}
-                      onValueChange={(value: string) =>
-                        setFormData((prev) => ({ ...prev, subcategory_id: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر الفئة" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableSubcategories.map((sub) => (
-                          <SelectItem key={sub.id} value={sub.id}>
-                            {sub.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div>
-                  <Label htmlFor="short_description">وصف مختصر</Label>
-                  <textarea
-                    id="short_description"
-                    value={formData.short_description}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                      setFormData((prev) => ({ ...prev, short_description: e.target.value }))
-                    }
-                    placeholder="وصف مختصر للمنتج"
-                    rows={2}
-                    className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    placeholder="0.00"
+                    className="w-full min-w-0"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <Label htmlFor="description">الوصف الكامل</Label>
-                  <textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                      setFormData((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                    placeholder="وصف تفصيلي للمنتج"
-                    rows={4}
-                    className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  />
-                </div>
-
-                <div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="min-w-0">
                   <Label htmlFor="sku">SKU</Label>
                   <Input
                     id="sku"
@@ -801,90 +899,389 @@ export function QuickProductCreator() {
                       setFormData((prev) => ({ ...prev, sku: e.target.value }))
                     }
                     placeholder="كود المنتج"
+                    className="w-full min-w-0"
                   />
                 </div>
-
-                <div>
-                  <Label htmlFor="stock_quantity">الكمية المتوفرة</Label>
-                  <Input
-                    id="stock_quantity"
-                    type="number"
-                    value={formData.stock_quantity}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setFormData((prev) => ({ ...prev, stock_quantity: Number(e.target.value) }))
-                    }
-                  />
+                <div className="min-w-0">
+                  <Label htmlFor="status">الحالة</Label>
+                  <div className="mt-2 text-sm text-muted-foreground">مسودة / نشر</div>
                 </div>
               </div>
-            </Card>
 
-            <Card className="p-6">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="flex items-center gap-2">
-                  <Globe className="h-5 w-5" />
-                  SEO
-                </CardTitle>
-              </CardHeader>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedDetails((v) => !v)}
+                  className="text-sm font-medium text-primary whitespace-normal break-words"
+                >
+                  {showAdvancedDetails ? 'إخفاء التفاصيل المتقدمة' : 'إظهار التفاصيل المتقدمة'}
+                </button>
 
-              <div className="space-y-4">
+                {showAdvancedDetails && (
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="min-w-0">
+                      <Label htmlFor="stock_quantity">الكمية المتوفرة</Label>
+                      <Input
+                        id="stock_quantity"
+                        type="number"
+                        value={formData.stock_quantity}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setFormData((prev) => ({ ...prev, stock_quantity: Number(e.target.value) }))
+                        }
+                        className="w-full min-w-0"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* Card 2: Classification */}
+          <Card className="p-6">
+            <CardHeader className="px-0 pt-0">
+              <CardTitle className="flex min-w-0 items-center gap-2 whitespace-normal break-words">
+                <Package className="h-5 w-5 flex-shrink-0" />
+                التصنيف
+              </CardTitle>
+            </CardHeader>
+
+            <div className="grid gap-4">
+              <div className="min-w-0">
+                <Label htmlFor="category">القسم *</Label>
+                <Select
+                  value={formData.category_id}
+                  onValueChange={(value: string) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      category_id: value,
+                      subcategory_id: '',
+                    }))
+                  }
+                >
+                  <SelectTrigger className="w-full min-w-0">
+                    <SelectValue placeholder="اختر القسم" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {availableSubcategories.length > 0 && (
+                <div className="min-w-0">
+                  <Label htmlFor="subcategory">الفئة</Label>
+                  <Select
+                    value={formData.subcategory_id}
+                    onValueChange={(value: string) =>
+                      setFormData((prev) => ({ ...prev, subcategory_id: value }))
+                    }
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="اختر الفئة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableSubcategories.map((sub) => (
+                        <SelectItem key={sub.id} value={sub.id}>
+                          {sub.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="min-w-0">
+                <Label htmlFor="product_badges">وسوم المنتج</Label>
+                <Input
+                  id="product_badges"
+                  value={formData.product_badges.join(', ')}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      product_badges: e.target.value
+                        .split(',')
+                        .map((v) => v.trim())
+                        .filter((v) => v.length > 0),
+                    }))
+                  }
+                  placeholder="مثال: new, offer"
+                  className="w-full min-w-0"
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Card 3: Images */}
+          <Card className="p-6">
+            <CardHeader className="px-0 pt-0">
+              <CardTitle className="flex min-w-0 items-center gap-2 whitespace-normal break-words">
+                <ImageIcon className="h-5 w-5 flex-shrink-0" />
+                الصور
+              </CardTitle>
+            </CardHeader>
+
+            <div className="space-y-4">
+              <div className="min-w-0">
+                <Label htmlFor="images" className="mb-2 block font-medium">
+                  رفع صورة رئيسية / صور إضافية
+                </Label>
+                <Input
+                  id="images"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="cursor-pointer w-full min-w-0"
+                />
+              </div>
+
+              {images.length > 0 && (
                 <div>
-                  <Label htmlFor="meta_title">عنوان الصفحة (Meta Title)</Label>
+                  <div className="mb-3 font-medium">الصور المرفوعة ({images.length})</div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {images.map((image) => (
+                      <div
+                        key={image.id}
+                        className={`relative aspect-square max-w-full overflow-hidden rounded-lg border-2 ${
+                          image.is_primary ? 'border-primary' : 'border-transparent'
+                        }`}
+                      >
+                        <SafeImage
+                          src={image.url}
+                          alt={image.alt_text || ''}
+                          fill
+                          className="rounded-lg object-cover"
+                          fallbackSrc={PLACEHOLDER_PRODUCT}
+                        />
+                        {image.is_primary && (
+                          <span className="absolute left-2 top-2 rounded bg-primary px-2 py-1 text-xs text-white">
+                            رئيسية
+                          </span>
+                        )}
+
+                        <div className="absolute bottom-2 right-2 flex gap-1">
+                          {!image.is_primary && (
+                            <Button
+                              size="icon"
+                              variant="secondary"
+                              className="h-8 w-8"
+                              onClick={() => handleSetPrimary(image.id)}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            className="h-8 w-8"
+                            onClick={() => handleDeleteImage(image.id)}
+                          >
+                            <span className="text-lg leading-none">×</span>
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowImageAiSection((v) => !v)}
+                  className="text-sm font-medium text-primary whitespace-normal break-words"
+                >
+                  {showImageAiSection
+                    ? 'إخفاء تحليل الصور بالذكاء الاصطناعي'
+                    : 'تحليل الصور بالذكاء الاصطناعي - يتطلب رصيد/مزود يدعم الصور'}
+                </button>
+
+                {showImageAiSection && (
+                  <div className="mt-4 rounded-lg border bg-muted/30 p-4">
+                    <div className="text-sm text-muted-foreground whitespace-normal break-words">
+                      هذا الخيار اختياري ومغلق افتراضيًا.
+                    </div>
+                    <div className="mt-3">
+                      <Button
+                        onClick={handleAnalyzeImages}
+                        disabled={isAnalyzing || images.length === 0}
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            جاري تحليل الصور...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            حلّل الصور (اختياري)
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* Card 4: Description & SEO */}
+          <Card className="p-6">
+            <CardHeader className="px-0 pt-0">
+              <CardTitle className="flex min-w-0 items-center gap-2 whitespace-normal break-words">
+                <Globe className="h-5 w-5 flex-shrink-0" />
+                الوصف و SEO
+              </CardTitle>
+            </CardHeader>
+
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="short_description">الوصف القصير</Label>
+                <textarea
+                  id="short_description"
+                  value={formData.short_description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setFormData((prev) => ({ ...prev, short_description: e.target.value }))
+                  }
+                  placeholder="جملتان فقط"
+                  rows={2}
+                  className="mt-1 flex w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="description">الوصف الكامل</Label>
+                <textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setFormData((prev) => ({ ...prev, description: e.target.value }))
+                  }
+                  placeholder="مقدمة قصيرة ثم أهم الميزات..."
+                  rows={5}
+                  className="mt-1 flex w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="key_features">المميزات (4 إلى 6 نقاط)</Label>
+                <textarea
+                  id="key_features"
+                  value={formData.key_features.join('\n')}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      key_features: e.target.value
+                        .split('\n')
+                        .map((v) => v.trim())
+                        .filter((v) => v.length > 0)
+                        .slice(0, 6),
+                    }))
+                  }
+                  placeholder="- ميزة\n- ميزة\n- ميزة"
+                  rows={5}
+                  className="mt-1 flex w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="min-w-0">
+                  <Label htmlFor="meta_title">Meta Title</Label>
                   <Input
                     id="meta_title"
                     value={formData.meta_title}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       setFormData((prev) => ({ ...prev, meta_title: e.target.value }))
                     }
-                    placeholder="عنوان SEO"
+                    placeholder="50-60 حرفًا"
+                    className="w-full min-w-0"
                   />
                 </div>
-
-                <div>
-                  <Label htmlFor="meta_description">وصف الصفحة (Meta Description)</Label>
+                <div className="min-w-0">
+                  <Label htmlFor="meta_description">Meta Description</Label>
                   <textarea
                     id="meta_description"
                     value={formData.meta_description}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                       setFormData((prev) => ({ ...prev, meta_description: e.target.value }))
                     }
-                    placeholder="وصف SEO"
+                    placeholder="120-155 حرفًا"
                     rows={2}
-                    className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="mt-1 flex w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   />
                 </div>
               </div>
-            </Card>
-          </div>
+            </div>
+          </Card>
         </div>
 
-        <div className="mt-8 flex flex-wrap justify-center gap-4">
-          <Button variant="outline" onClick={handleSaveDraft} disabled={isSaving || isPublishing}>
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                جاري الحفظ...
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                حفظ كمسودة
-              </>
-            )}
-          </Button>
+        {/* Sticky action bar */}
+        <div className="sticky bottom-0 mt-8 border-t bg-background/95 py-4 backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
+            <Button
+              variant="outline"
+              onClick={handleSaveDraft}
+              disabled={isSaving || isPublishing}
+              className="w-full sm:w-auto"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  جاري الحفظ...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  حفظ كمسودة
+                </>
+              )}
+            </Button>
 
-          <Button onClick={handlePublish} disabled={isSaving || isPublishing} variant="default">
-            {isPublishing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                جاري النشر...
-              </>
-            ) : (
-              <>
-                <Globe className="mr-2 h-4 w-4" />
-                نشر المنتج
-              </>
-            )}
-          </Button>
+            <Button
+              onClick={handlePublish}
+              disabled={isSaving || isPublishing}
+              variant="default"
+              className="w-full sm:w-auto"
+            >
+              {isPublishing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  جاري النشر...
+                </>
+              ) : (
+                <>
+                  <Globe className="mr-2 h-4 w-4" />
+                  نشر المنتج
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={handlePublishAndNew}
+              disabled={isSaving || isPublishing}
+              variant="secondary"
+              className="w-full sm:w-auto"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              نشر وإضافة منتج جديد
+            </Button>
+
+            <Button
+              onClick={handleSaveAndOpenAdvanced}
+              disabled={isSaving || isPublishing}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              حفظ وفتح التعديل المتقدم
+            </Button>
+          </div>
         </div>
       </div>
     );

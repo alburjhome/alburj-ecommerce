@@ -6,6 +6,8 @@ export type AiProvider = 'gemini' | 'openai';
 
 export interface ProductCopyInput {
   name: string;
+  notes?: string | null;
+  template?: string | null;
   price: number | null;
   comparePrice: number | null;
   existingDescription: string | null;
@@ -24,6 +26,8 @@ export interface ProductCopyInput {
 }
 
 export interface ProductCopyOutput {
+  name: string | null;
+  short_description: string | null;
   marketing_tagline: string | null;
   key_features: string[];
   product_badges: string[];
@@ -34,6 +38,7 @@ export interface ProductCopyOutput {
   suggested_sku: string | null;
   category_id: string | null;
   subcategory_id: string | null;
+  category_confidence: 'high' | 'medium' | 'low';
 }
 
 export interface ImageAltTextInput {
@@ -682,6 +687,15 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
   const obj = raw && typeof raw === 'object' ? (raw as any) : null;
   if (!obj) return null;
 
+  const name = normalizeString(obj.name);
+  const short_description = normalizeString(obj.short_description);
+
+  const rawCategoryConfidence = normalizeString(obj.category_confidence);
+  const category_confidence: 'high' | 'medium' | 'low' =
+    rawCategoryConfidence === 'high' || rawCategoryConfidence === 'medium' || rawCategoryConfidence === 'low'
+      ? rawCategoryConfidence
+      : 'low';
+
   const marketing_tagline = normalizeString(obj.marketing_tagline);
   const description = normalizeString(obj.description);
   const meta_title = normalizeString(obj.meta_title);
@@ -703,6 +717,8 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
     .slice(0, 10);
 
   return {
+    name,
+    short_description,
     marketing_tagline: marketing_tagline ? clampString(marketing_tagline, 120) : null,
     key_features,
     product_badges,
@@ -713,6 +729,7 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
     suggested_sku: suggested_sku ? sanitizeSku(suggested_sku) : null,
     category_id: category_id || null,
     subcategory_id: subcategory_id || null,
+    category_confidence,
   };
 }
 
@@ -732,6 +749,8 @@ function normalizeAltTextResponse(raw: unknown): ImageAltTextOutput | null {
 function buildProductCopyPrompts(input: ProductCopyInput): { base: string; retry: string } {
   const {
     name,
+    notes,
+    template,
     price,
     comparePrice,
     existingDescription,
@@ -749,7 +768,19 @@ function buildProductCopyPrompts(input: ProductCopyInput): { base: string; retry
     metaDescription,
   } = input;
 
-  const basePrompt = `أنت كاتب محتوى تسويقي عربي لمتجر "مؤسسة البرج" في الأردن.
+  const basePrompt = `أنت كاتب محتوى عربي لمتجر "مؤسسة البرج" في الأردن.
+
+مهم جدًا: ممنوع اختراع أي معلومات غير موجودة صراحة في (اسم المنتج/القالب/الملاحظات).
+قواعد صارمة ضد الاختراع:
+- ممنوع اختراع بلد منشأ.
+- ممنوع اختراع ضمان.
+- ممنوع اختراع وزن/حجم/عدد قطع غير مذكور.
+- ممنوع اختراع رائحة غير مذكورة.
+- ممنوع اختراع خامة غير مذكورة.
+- ممنوع اختراع علامة تجارية غير مذكورة.
+- ممنوع ادعاءات طبية.
+- ممنوع "يزيل 99.9%" إلا إذا مذكور صراحة.
+- ممنوع "آمن للأطفال" أو "ضد الحساسية" إلا إذا مذكور صراحة.
 
 سياق البراند:
 مؤسسة البرج متجر يبيع مستلزمات البيت والمحل، مثل المنظفات والورقيات، البلاستيكيات، التغليف، مستلزمات المطاعم والمحلات، الأدوات المنزلية، أدوات المطبخ، الأجهزة الكهربائية، المفروشات والبياضات.
@@ -757,6 +788,8 @@ function buildProductCopyPrompts(input: ProductCopyInput): { base: string; retry
 
 معلومات المنتج:
 - الاسم: ${name}
+- القالب المختار (إن وجد): ${template ?? ''}
+- ملاحظات تساعد الذكاء الاصطناعي (إن وجدت): ${notes ?? ''}
 - SKU الحالي: ${sku ?? ''}
 - Meta title الحالي: ${metaTitle ?? ''}
 - Meta description الحالي: ${metaDescription ?? ''}
@@ -783,6 +816,8 @@ ${subcategories.map((s) => `- ${s.id} | ${s.name} | ${s.slug} | category_id=${s.
 Return ONLY valid JSON. No markdown. No explanation. No code fences.
 أرجع JSON صالح فقط بدون Markdown أو شرح أو أسوار كود، وبالشكل التالي تمامًا (لا تضف حقول أخرى):
 {
+  "name": "Arabic product name (may refine input), or null if uncertain",
+  "short_description": "Arabic short description: EXACTLY 2 sentences. Sentence1: ما هو المنتج؟ Sentence2: لماذا يشتريه العميل؟ or null if uncertain",
   "marketing_tagline": "string max 120 chars",
   "key_features": ["max 6 items, each max 80 chars"],
   "product_badges": ["bestselling" | "offer" | "new" | "wholesale" | "limited"],
@@ -792,10 +827,15 @@ Return ONLY valid JSON. No markdown. No explanation. No code fences.
   "meta_description": "SEO description max 155 chars",
   "suggested_sku": "short uppercase SKU",
   "category_id": "one id from provided categories only, or null",
-  "subcategory_id": "one id from provided subcategories only, or null"
+  "subcategory_id": "one id from provided subcategories only, or null",
+  "category_confidence": "high | medium | low"
 }
 
 ملاحظات:
+- short_description: جملتان فقط.
+- key_features: 4 إلى 6 نقاط عملية فقط.
+- Meta Title: حاول أن يكون بين 50 و 60 حرفًا قدر الإمكان.
+- Meta Description: حاول أن يكون بين 120 و 155 حرفًا قدر الإمكان.
 - اختر intent_tags بشكل منطقي للمنتج.
 - لا تستخدم ادعاءات طبية أو ضمانات غير حقيقية.
 - إذا كان المنتج مناسب لـ intent واحد أو اثنين فقط، لا تملأ القائمة بلا داع.
@@ -809,7 +849,7 @@ Return ONLY valid JSON. No markdown. No explanation. No code fences.
 الاسم: ${name}
 السعر: ${price ?? ''}
 أرجع نفس الحقول تمامًا:
-marketing_tagline, key_features, product_badges, intent_tags, description, meta_title, meta_description, suggested_sku, category_id, subcategory_id
+name, short_description, marketing_tagline, key_features, product_badges, intent_tags, description, meta_title, meta_description, suggested_sku, category_id, subcategory_id, category_confidence
 تذكير: category_id/subcategory_id يجب أن تكون IDs من القوائم المرسلة فقط أو null.`;
 
   return { base: basePrompt, retry: retryPrompt };

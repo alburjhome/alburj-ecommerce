@@ -109,18 +109,6 @@ export async function publishQuickProduct(
       return { success: false, error: 'القسم مطلوب للنشر' };
     }
 
-    // Check if product has at least one image
-    const { data: images, error: imagesError } = await (adminClient.from('product_images') as any)
-      .select('id')
-      .eq('product_id', productId)
-      .limit(1);
-
-    if (imagesError) throw imagesError;
-
-    if (!images?.length) {
-      return { success: false, error: 'يجب إضافة صورة واحدة على الأقل' };
-    }
-
     const updatePayload = {
       name: productData.name.trim(),
       description: productData.description || null,

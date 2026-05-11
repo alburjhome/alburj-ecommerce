@@ -54,6 +54,8 @@ interface SubcategoryOption {
 
 interface ProductCopyRequestBody {
   name?: unknown;
+  notes?: unknown;
+  template?: unknown;
   price?: unknown;
   comparePrice?: unknown;
   existingDescription?: unknown;
@@ -138,6 +140,8 @@ export async function POST(request: Request) {
 
     const body = (await request.json()) as ProductCopyRequestBody;
     const name = normalizeString(body.name);
+    const notes = normalizeString(body.notes);
+    const template = normalizeString(body.template);
 
     if (!name) {
       return NextResponse.json({ error: 'Missing product name' }, { status: 400 });
@@ -168,6 +172,8 @@ export async function POST(request: Request) {
     // Prepare input for AI provider
     const input: ProductCopyInput = {
       name: name!,
+      notes,
+      template,
       price,
       comparePrice,
       existingDescription,
