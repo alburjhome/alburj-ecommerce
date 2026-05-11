@@ -69,13 +69,31 @@ async function getSettings() {
 }
 
 async function getCategories() {
+  // Get categories that have at least one active product
   const { data } = await supabase
     .from('categories')
     .select('*')
     .eq('is_active', true)
     .order('sort_order', { ascending: true });
 
-  return (data || []) as Category[];
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  // Filter to only include categories with active products
+  const categoriesWithProducts = await Promise.all(
+    (data as Category[]).map(async (category) => {
+      const { count } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('category_id', category.id)
+        .eq('is_active', true);
+
+      return { category, hasProducts: (count || 0) > 0 };
+    })
+  );
+
+  return categoriesWithProducts.filter((item) => item.hasProducts).map((item) => item.category);
 }
 
 const shopByNeedItems = [

@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import type { Category } from '@/types';
 import { HeroBanner } from '@/features/store/components/hero-banner';
 import { CategorySection } from '@/features/store/components/category-section';
 import { FeaturedProducts } from '@/features/store/components/featured-products';
@@ -19,6 +20,33 @@ export const metadata: Metadata = {
     'مؤسسة البرج توفر مستلزمات البيت والمحل من منظفات، ورقيات، بلاستيكيات، تغليف، أدوات منزلية ومطبخ، أجهزة كهربائية ومفروشات.',
 };
 
+async function getCategoriesWithProducts() {
+  const { data: categories } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+
+  if (!categories || categories.length === 0) {
+    return [];
+  }
+
+  // Filter to only include categories with active products
+  const categoriesWithProducts = await Promise.all(
+    categories.map(async (category: { id: string; [key: string]: unknown }) => {
+      const { count } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('category_id', category.id)
+        .eq('is_active', true);
+
+      return { category, hasProducts: (count || 0) > 0 };
+    })
+  );
+
+  return categoriesWithProducts.filter((item) => item.hasProducts).map((item) => item.category as unknown as Category);
+}
+
 async function getHomeData() {
   const [bannersResult, categoriesResult, featuredProductsResult, settingsResult] = await Promise.all([
     supabase
@@ -27,11 +55,7 @@ async function getHomeData() {
       .eq('is_active', true)
       .eq('position', 'home_hero')
       .order('sort_order', { ascending: true }),
-    supabase
-      .from('categories')
-      .select('*')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true }),
+    getCategoriesWithProducts(),
     supabase
       .from('products')
       .select('*, images:product_images(*), category:categories(*)')
@@ -49,7 +73,7 @@ async function getHomeData() {
 
   return {
     banners: bannersResult.data || [],
-    categories: categoriesResult.data || [],
+    categories: categoriesResult || [],
     featuredProducts: featuredProductsResult.data || [],
     settings: (settingsResult.data as any) || null,
   };

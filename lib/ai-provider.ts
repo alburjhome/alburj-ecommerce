@@ -48,6 +48,28 @@ export interface ImageAltTextOutput {
   alt_text: string;
 }
 
+export interface ProductFromImagesInput {
+  imageUrls: string[];
+  categories: { id: string; name: string }[];
+  subcategories: { id: string; name: string; category_id: string }[];
+}
+
+export interface ProductFromImagesOutput {
+  name: string;
+  short_description: string | null;
+  description: string | null;
+  brand: string | null;
+  sku: string | null;
+  key_features: string[];
+  meta_title: string | null;
+  meta_description: string | null;
+  suggested_category_id: string | null;
+  suggested_subcategory_id: string | null;
+  has_variants: boolean;
+  variant_types: string[];
+  image_alt_texts: Record<string, string>;
+}
+
 export class AiProviderError extends Error {
   constructor(
     message: string,
@@ -706,6 +728,171 @@ export async function generateImageAltText(
 
   if (!normalized) {
     throw new AiProviderError('AI response was not valid JSON', provider, 'INVALID_RESPONSE');
+  }
+
+  return normalized;
+}
+
+function buildProductFromImagesPrompts(
+  imageUrls: string[],
+  categories: { id: string; name: string }[],
+  subcategories: { id: string; name: string; category_id: string }[]
+): { base: string; retry: string } {
+  const basePrompt = `أنت خبير في تحليل المنتجات وكتابة المحتوى التسويقي لمتجر "مؤسسة البرج" في الأردن.
+
+المتجر يبيع: مستلزمات البيت والمحل، مثل المنظفات والورقيات، البلاستيكيات، التغليف، مستلزمات المطاعم والمحلات، الأدوات المنزلية، أدوات المطبخ، الأجهزة الكهربائية، المفروشات والبياضات.
+
+المطلوب: تحليل صور المنتج المرفقة واقتراح بيانات المنتج المناسبة.
+
+قائمة الأقسام المتاحة (استخدم id فقط من هذه القائمة أو null):
+${categories.map((c) => `- ${c.id} | ${c.name}`).join('\n')}
+
+قائمة الفئات المتاحة (استخدم id فقط من هذه القائمة أو null):
+${subcategories.map((s) => `- ${s.id} | ${s.name} | قسم: ${categories.find((c) => c.id === s.category_id)?.name || s.category_id}`).join('\n')}
+
+عدد الصور المرفقة: ${imageUrls.length}
+
+Return ONLY valid JSON. No markdown. No explanation. No code fences.
+أرجع JSON صالح فقط بالشكل التالي (لا تضف حقول أخرى):
+{
+  "name": "اسم المنتج بالعربية (واضح ومختصر)",
+  "short_description": "وصف مختصر 1-2 جمل",
+  "description": "وصف تفصيلي 2-4 أسطر",
+  "brand": "العلامة التجارية إن ظهرت في الصور أو null",
+  "sku": "كود SKU مقترح قصير بالإنجليزية",
+  "key_features": ["ميزة 1", "ميزة 2", "ميزة 3"],
+  "meta_title": "عنوان SEO (max 60 حرف)",
+  "meta_description": "وصف SEO (max 155 حرف)",
+  "suggested_category_id": "id القسم المناسب من القائمة أو null",
+  "suggested_subcategory_id": "id الفئة المناسبة من القائمة أو null",
+  "has_variants": true/false (هل يبدو أن المنتج له متغيرات مثل نكهة/حجم/لون؟),
+  "variant_types": ["نكهة", "حجم"] (أنواع المتغيرات إن وجدت),
+  "image_alt_texts": {
+    "image_1": "وصف صورة 1 للSEO",
+    "image_2": "وصف صورة 2 للSEO"
+  }
+}
+
+ملاحظات:
+- اختر category_id و subcategory_id من القوائم المرسلة فقط أو null.
+- إذا اخترت subcategory_id يجب أن تكون مرتبطة بالcategory_id المختار.
+- has_variants: true فقط إذا واضح من الصور وجود نكهات/أحجام/ألوان مختلفة.
+- alt_texts: اكتب وصف قصير لكل صورة (6-14 كلمة) يساعد في SEO.
+- لا تستخدم ادعاءات طبية أو ضمانات غير حقيقية.
+- SKU يجب أن يكون قصيرًا ووصفيًا بالإنجليزية.`;
+
+  const retryPrompt = `Return ONLY valid JSON. No markdown. No explanation. No code fences.
+اكتب JSON مختصر فقط لبيانات المنتج:
+{
+  "name": "اسم المنتج",
+  "short_description": "وصف مختصر",
+  "description": "وصف تفصيلي",
+  "brand": null,
+  "sku": "SKU",
+  "key_features": [],
+  "meta_title": "SEO title",
+  "meta_description": "SEO description",
+  "suggested_category_id": null,
+  "suggested_subcategory_id": null,
+  "has_variants": false,
+  "variant_types": [],
+  "image_alt_texts": {}
+}`;
+
+  return { base: basePrompt, retry: retryPrompt };
+}
+
+function normalizeProductFromImagesResponse(raw: unknown, imageUrls: string[]): ProductFromImagesOutput {
+  const obj = raw && typeof raw === 'object' ? (raw as any) : null;
+  if (!obj) {
+    throw new Error('Invalid AI response structure');
+  }
+
+  const name = normalizeString(obj.name);
+  if (!name) {
+    throw new Error('AI did not return a product name');
+  }
+
+  // Build alt texts map
+  const altTexts: Record<string, string> = {};
+  const rawAltTexts = obj.image_alt_texts;
+  if (rawAltTexts && typeof rawAltTexts === 'object') {
+    imageUrls.forEach((url, index) => {
+      const key = `image_${index + 1}`;
+      const altText = normalizeString(rawAltTexts[key]) || normalizeString(rawAltTexts[url]);
+      if (altText) {
+        altTexts[url] = altText.length > 150 ? altText.slice(0, 150) : altText;
+      }
+    });
+  }
+
+  return {
+    name,
+    short_description: normalizeString(obj.short_description),
+    description: normalizeString(obj.description),
+    brand: normalizeString(obj.brand),
+    sku: normalizeString(obj.sku),
+    key_features: normalizeStringArray(obj.key_features).slice(0, 6),
+    meta_title: normalizeString(obj.meta_title) ? clampString(normalizeString(obj.meta_title)!, 60) : null,
+    meta_description: normalizeString(obj.meta_description)
+      ? clampString(normalizeString(obj.meta_description)!, 155)
+      : null,
+    suggested_category_id: normalizeString(obj.suggested_category_id),
+    suggested_subcategory_id: normalizeString(obj.suggested_subcategory_id),
+    has_variants: Boolean(obj.has_variants),
+    variant_types: normalizeStringArray(obj.variant_types).slice(0, 5),
+    image_alt_texts: altTexts,
+  };
+}
+
+/**
+ * Generate product data from images using the active AI provider
+ */
+export async function generateProductFromImages(
+  provider: AiProvider,
+  input: ProductFromImagesInput
+): Promise<ProductFromImagesOutput> {
+  if (!isApiKeyConfigured(provider)) {
+    throw new AiProviderError(getMissingApiKeyMessage(provider), provider, 'MISSING_API_KEY');
+  }
+
+  const prompts = buildProductFromImagesPrompts(input.imageUrls, input.categories, input.subcategories);
+
+  let rawText: string;
+  try {
+    if (provider === 'gemini') {
+      rawText = await generateWithGemini(prompts.base, prompts.retry);
+    } else {
+      rawText = await generateWithOpenAI(prompts.base, prompts.retry);
+    }
+  } catch (error) {
+    if (error instanceof AiProviderError) {
+      throw error;
+    }
+    throw new AiProviderError(
+      error instanceof Error ? error.message : 'Unknown error',
+      provider,
+      'API_ERROR'
+    );
+  }
+
+  const parsed = extractJsonObject(rawText);
+  const normalized = normalizeProductFromImagesResponse(parsed, input.imageUrls);
+
+  // Validate category_id against provided list
+  const categoryIds = new Set(input.categories.map((c) => c.id));
+  if (normalized.suggested_category_id && !categoryIds.has(normalized.suggested_category_id)) {
+    normalized.suggested_category_id = null;
+  }
+
+  // Validate subcategory_id against provided list and category match
+  if (normalized.suggested_subcategory_id) {
+    const validSub = input.subcategories.find(
+      (s) => s.id === normalized.suggested_subcategory_id && s.category_id === normalized.suggested_category_id
+    );
+    if (!validSub) {
+      normalized.suggested_subcategory_id = null;
+    }
   }
 
   return normalized;
