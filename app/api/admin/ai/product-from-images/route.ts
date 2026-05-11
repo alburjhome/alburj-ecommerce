@@ -49,6 +49,10 @@ async function fetchImageAsBase64(adminClient: any, url: string): Promise<{ base
   }
 }
 
+function stripDataUrlPrefix(base64: string): string {
+  return base64.replace(/^data:image\/\w+;base64,/, '');
+}
+
 interface ProductFromImagesRequestBody {
   productId?: unknown;
   imageUrls?: unknown;
@@ -185,8 +189,8 @@ export async function POST(request: Request) {
       categories,
       subcategories,
       images: imageDataList.map((img) => ({
-        base64: img.base64,
-        mimeType: img.mimeType,
+        base64: stripDataUrlPrefix(img.base64),
+        mimeType: img.mimeType?.startsWith('image/') ? img.mimeType : 'image/jpeg',
       })),
     };
 
@@ -216,8 +220,19 @@ export async function POST(request: Request) {
         `[AI Product From Images] Provider: ${error.provider}, Code: ${error.code}, Message: ${error.message.slice(0, 100)}`
       );
 
+      if (error.provider === 'gemini' && message.toLowerCase().includes('required oneof')) {
+        return NextResponse.json(
+          {
+            error: 'تعذر إرسال الصورة إلى Gemini بسبب تنسيق غير صحيح. تمت معالجة المشكلة في الكود.',
+            provider: error.provider,
+            code: error.code,
+          },
+          { status: 500 }
+        );
+      }
+
       const userMessage = getUserFriendlyErrorMessage(error);
-      const statusCode = error.code === 'MISSING_API_KEY' || error.code === 'CONFIG_ERROR' ? 500 : 502;
+      const statusCode = 500;
 
       return NextResponse.json(
         {

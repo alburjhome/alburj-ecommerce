@@ -80,7 +80,7 @@ export class AiProviderError extends Error {
   constructor(
     message: string,
     public readonly provider: AiProvider,
-    public readonly code: 'MISSING_API_KEY' | 'API_ERROR' | 'INVALID_RESPONSE' | 'CONFIG_ERROR'
+    public readonly code: 'MISSING_API_KEY' | 'API_ERROR' | 'INVALID_RESPONSE' | 'CONFIG_ERROR' | 'INVALID_IMAGE'
   ) {
     super(message);
     this.name = 'AiProviderError';
@@ -299,29 +299,46 @@ async function generateWithGeminiMultimodal(
   const { GoogleGenAI } = await import('@google/genai');
   const ai = new GoogleGenAI({ apiKey });
 
-  // Build parts with images and text
-  const parts: any[] = [];
-  for (const img of images) {
-    parts.push({
-      inline_data: {
-        mime_type: img.mimeType,
-        data: img.base64,
-      },
-    });
-  }
-  parts.push({ text: prompt });
+  const sanitizedImages = images.map((img) => {
+    const base64 = typeof img.base64 === 'string' ? img.base64.trim() : '';
+    let mimeType = typeof img.mimeType === 'string' ? img.mimeType.trim() : '';
 
-  const generate = async (p: string, imgParts: any[]) => {
+    if (!mimeType || !mimeType.startsWith('image/')) {
+      mimeType = 'image/jpeg';
+    }
+
+    // Gemini expects raw base64 (no data URL prefix)
+    const base64NoPrefix = base64.replace(/^data:image\/\w+;base64,/, '');
+
+    if (!base64NoPrefix || base64NoPrefix.length < 100) {
+      throw new AiProviderError(
+        'لم أتمكن من قراءة الصورة بوضوح. يرجى إدخال اسم المنتج يدويًا.',
+        'gemini',
+        'INVALID_IMAGE'
+      );
+    }
+
+    return { base64: base64NoPrefix, mimeType };
+  });
+
+  const imageParts = sanitizedImages.map((image) => ({
+    inlineData: {
+      data: image.base64,
+      mimeType: image.mimeType || 'image/jpeg',
+    },
+  }));
+
+  const generate = async (p: string) => {
     return ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [...imgParts, { text: p }] }],
+      contents: [{ role: 'user', parts: [...imageParts, { text: p }] }],
       config: {
         responseMimeType: 'application/json',
       },
     } as any);
   };
 
-  const result = await generate(prompt, parts.slice(0, -1)); // Exclude the text part
+  const result = await generate(prompt);
   const rawText = await readGeminiText(result);
 
   if (!rawText) {
@@ -337,7 +354,7 @@ async function generateWithGeminiMultimodal(
     return rawText;
   } catch {
     // Try retry prompt
-    const retryResult = await generate(retryPrompt, parts.slice(0, -1));
+    const retryResult = await generate(retryPrompt);
     const retryRawText = await readGeminiText(retryResult);
 
     if (retryRawText && process.env.NODE_ENV !== 'production') {
