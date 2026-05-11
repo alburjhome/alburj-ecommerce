@@ -16,6 +16,7 @@ import {
   createAdminProductDraft,
   getAdminProductFormData,
   updateAdminProduct,
+  updateAdminProductDraft,
 } from '@/app/actions/admin-products';
 import type { ProductFormDataResult, ProductFormRecord } from '@/app/actions/admin-products';
 import { supabase } from '@/lib/supabase';
@@ -23,7 +24,8 @@ import { normalizeSlug } from '@/lib/slug';
 import { ProductFormInput, parseTags, productSchema, slugify, tagsToString } from '@/lib/product-validation';
 import { INTENT_TAG_CONFIG } from '@/lib/product-intents';
 import { formatPrice } from '@/lib/utils';
-import { ProductVariantsManager } from './product-variants-manager';
+import { ProductVariantsManager, type ProductVariantsSummary } from './product-variants-manager';
+import { ProductImagesManager } from './product-images-manager';
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
@@ -61,6 +63,16 @@ const emptyProduct: ProductFormInput = {
   is_featured: false,
   meta_title: null,
   meta_description: null,
+};
+
+const emptyVariantsSummary: ProductVariantsSummary = {
+  isEnabled: false,
+  optionCount: 0,
+  variantCount: 0,
+  activeVariantCount: 0,
+  activeWithoutPriceCount: 0,
+  activeWithoutStockCount: 0,
+  activeWithoutCompleteOptionsCount: 0,
 };
 
 async function getAccessToken() {
@@ -127,9 +139,9 @@ function SectionHeader({ title, description }: { title: string; description?: st
   );
 }
 
-function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function Card({ children, className = '', id }: { children: React.ReactNode; className?: string; id?: string }) {
   return (
-    <section className={`rounded-lg border bg-card p-5 shadow-sm ${className}`}>
+    <section id={id} className={`rounded-lg border bg-card p-5 shadow-sm ${className}`}>
       {children}
     </section>
   );
@@ -160,7 +172,12 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const [validationMessages, setValidationMessages] = useState<string[]>([]);
   const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [isOpeningAdvanced, setIsOpeningAdvanced] = useState(false);
-  const [createVariantsIntent, setCreateVariantsIntent] = useState(false);
+  const [isPublishingAndReset, setIsPublishingAndReset] = useState(false);
+  const [draftProductId, setDraftProductId] = useState<string | null>(null);
+  const [draftProductSlug, setDraftProductSlug] = useState<string | null>(null);
+  const [hasPublishedFromCreate, setHasPublishedFromCreate] = useState(false);
+  const [aiNotes, setAiNotes] = useState('');
+  const [variantsSummary, setVariantsSummary] = useState<ProductVariantsSummary>(emptyVariantsSummary);
 
   const {
     register,
@@ -245,6 +262,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         },
         body: JSON.stringify({
           name: currentValues.name,
+          notes: aiNotes,
           price: currentValues.price,
           comparePrice: currentValues.compare_price,
           existingDescription: currentValues.description,
@@ -351,18 +369,26 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         setHasAiSuggestedTaxonomy(true);
       }
 
-      if ((categoryConfidence === 'high' || categoryConfidence === 'medium') && aiSuggestedCategoryId && !aiSuggestedSubcategoryId) {
+      const subcategoriesForSuggestedCategory = formData.subcategories.filter(
+        (subcategory) => subcategory.category_id === aiSuggestedCategoryId
+      );
+      const singleSubcategoryForSuggestedCategory =
+        subcategoriesForSuggestedCategory.length === 1 ? subcategoriesForSuggestedCategory[0] : null;
+
+      if (categoryConfidence === 'high' && aiSuggestedCategoryId && !aiSuggestedSubcategoryId && !singleSubcategoryForSuggestedCategory) {
         setAiTaxonomyWarning('تم اختيار القسم، لكن الفئة تحتاج مراجعة.');
       } else {
         setAiTaxonomyWarning(null);
       }
 
-      if (shouldSetCategory() && (categoryConfidence === 'high' || categoryConfidence === 'medium') && aiSuggestedCategoryId) {
+      if (shouldSetCategory() && categoryConfidence === 'high' && aiSuggestedCategoryId) {
         setValue('category_id', aiSuggestedCategoryId, { shouldDirty: true, shouldValidate: true });
       }
 
       if (shouldSetSubcategory() && categoryConfidence === 'high' && subcategoryConfidence === 'high' && aiSuggestedSubcategoryId) {
         setValue('subcategory_id', aiSuggestedSubcategoryId, { shouldDirty: true });
+      } else if (shouldSetSubcategory() && categoryConfidence === 'high' && singleSubcategoryForSuggestedCategory) {
+        setValue('subcategory_id', singleSubcategoryForSuggestedCategory.id, { shouldDirty: true });
       }
 
       toast({
@@ -591,16 +617,40 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       items.push({ field: 'stock_quantity', message: 'المخزون مطلوب ولا يمكن أن يكون أقل من صفر' });
     }
 
-    if (values.track_stock && stockValue === 0 && !values.allow_backorders) {
+    if (variantsSummary.isEnabled) {
+      if (variantsSummary.optionCount === 0 || variantsSummary.variantCount === 0) {
+        items.push({
+          field: 'variants-intent',
+          message: 'فعّلت المتغيرات لكن لم تنشئ أي متغير قابل للبيع.',
+        });
+      }
+      if (variantsSummary.variantCount > 0 && variantsSummary.activeVariantCount === 0) {
+        items.push({
+          field: 'variants-intent',
+          message: 'لا يوجد أي متغير نشط، المنتج لن يكون قابلًا للبيع.',
+        });
+      }
+      if (variantsSummary.activeWithoutPriceCount > 0) {
+        items.push({
+          field: 'variants-intent',
+          message: 'يوجد متغير نشط بدون سعر.',
+        });
+      }
+      if (variantsSummary.activeWithoutCompleteOptionsCount > 0) {
+        items.push({
+          field: 'variants-intent',
+          message: 'يوجد متغير نشط بدون خيار مكتمل.',
+        });
+      }
+      if (variantsSummary.activeWithoutStockCount > 0 && !values.allow_backorders) {
+        items.push({
+          field: 'variants-intent',
+          message: 'يوجد متغير نشط بدون مخزون، أضف مخزونًا أو عطّله قبل النشر.',
+        });
+      }
+    } else if (values.track_stock && stockValue === 0 && !values.allow_backorders) {
       setError('stock_quantity', { type: 'manual', message: 'المخزون 0؛ سيظهر المنتج غير متوفر للعملاء.' });
       items.push({ field: 'stock_quantity', message: 'المخزون 0؛ سيظهر المنتج غير متوفر للعملاء.' });
-    }
-
-    if (createVariantsIntent) {
-      items.push({
-        field: 'variants-intent',
-        message: 'فعّلت المتغيرات لكن لم تنشئ أي خيار قابل للبيع.',
-      });
     }
 
     return items;
@@ -630,7 +680,38 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
     showValidationSummary(items.length ? items : [{ message: 'يرجى مراجعة البيانات التالية قبل الحفظ' }]);
   }
 
-  async function publishNewProduct(values: ProductFormInput) {
+  async function ensureDraftProduct({ silent = false }: { silent?: boolean } = {}) {
+    const values = getValues();
+    const token = await getAccessToken();
+    const payload = buildProductPayload(values, false);
+    const result = draftProductId
+      ? await updateAdminProductDraft(token, draftProductId, payload)
+      : await createAdminProductDraft(token, payload);
+
+    if (!result.success || !result.data?.id) {
+      throw new Error(result.error || 'فشل حفظ المنتج كمسودة');
+    }
+
+    setDraftProductId(result.data.id);
+    setDraftProductSlug(result.data.slug);
+    setHasPublishedFromCreate(false);
+    setValue('slug', result.data.slug, { shouldDirty: true, shouldValidate: true });
+    setSlugTouched(true);
+
+    if (!silent && !draftProductId) {
+      toast({
+        title: 'تم إنشاء مسودة تلقائيًا.',
+        description: 'المسودة غير ظاهرة للعملاء ويمكنك الآن رفع الصور أو حفظ المتغيرات.',
+      });
+    }
+
+    return result.data.id;
+  }
+
+  async function publishNewProduct(
+    values: ProductFormInput,
+    options: { resetAfter?: boolean } = {}
+  ) {
     const validationItems = validatePublishValues(values);
     if (validationItems.length > 0) {
       showValidationSummary(validationItems);
@@ -638,26 +719,52 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
     }
 
     setValidationMessages([]);
-    setIsSubmitting(true);
+    if (options.resetAfter) {
+      setIsPublishingAndReset(true);
+    } else {
+      setIsSubmitting(true);
+    }
     try {
       const token = await getAccessToken();
-      const result = await createAdminProduct(token, buildProductPayload(values, true));
+      const payload = buildProductPayload(values, true);
+      const result = draftProductId
+        ? await updateAdminProduct(token, draftProductId, payload)
+        : await createAdminProduct(token, payload);
 
       if (!result.success) {
         throw new Error(result.error || 'فشل حفظ المنتج');
       }
 
       const created = (result as { success: boolean; data?: { id: string; slug: string } }).data;
-      if (!created?.id) {
+      const savedProductId = draftProductId || created?.id;
+      const savedSlug = created?.slug || values.slug;
+      if (!savedProductId) {
         throw new Error('تعذر إنشاء المنتج');
       }
 
       toast({
-        title: 'تم نشر المنتج بنجاح.',
+        title: options.resetAfter ? 'تم نشر المنتج، يمكنك إضافة منتج جديد الآن.' : 'تم نشر المنتج بنجاح.',
         description: 'يفضل إضافة صورة رئيسية قبل الاعتماد النهائي للمنتج.',
       });
       router.refresh();
-      router.replace(`/admin/products/${created.id}/edit?focus=images`);
+      if (options.resetAfter) {
+        reset(emptyProduct);
+        setTagsText('');
+        setDraftProductId(null);
+        setDraftProductSlug(null);
+        setHasPublishedFromCreate(false);
+        setAiNotes('');
+        setSlugTouched(false);
+        setVariantsSummary(emptyVariantsSummary);
+        setValidationMessages([]);
+        requestAnimationFrame(() => document.getElementById('name')?.focus());
+      } else {
+        setDraftProductId(savedProductId);
+        setDraftProductSlug(savedSlug);
+        setHasPublishedFromCreate(true);
+        setValue('is_active', true, { shouldDirty: false });
+        setValue('slug', savedSlug, { shouldDirty: false, shouldValidate: true });
+      }
     } catch (error) {
       toast({
         title: 'فشل حفظ المنتج',
@@ -666,30 +773,41 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       });
     } finally {
       setIsSubmitting(false);
+      setIsPublishingAndReset(false);
     }
   }
 
   async function saveDraftFromCreate({ openAdvanced }: { openAdvanced: boolean }) {
-    const values = getValues();
     const savingState = openAdvanced ? setIsOpeningAdvanced : setIsDraftSaving;
     savingState(true);
     setValidationMessages([]);
 
     try {
-      const token = await getAccessToken();
-      const result = await createAdminProductDraft(token, buildProductPayload(values, false));
+      if (hasPublishedFromCreate && draftProductId) {
+        if (openAdvanced) {
+          router.replace(`/admin/products/${draftProductId}/edit?focus=images`);
+          return;
+        }
 
-      if (!result.success || !result.data?.id) {
-        throw new Error(result.error || 'فشل حفظ المنتج كمسودة');
+        toast({
+          title: 'المنتج منشور بالفعل.',
+          description: 'استخدم التعديل المتقدم إذا أردت تحويله إلى مسودة أو تعديل بياناته.',
+        });
+        return;
       }
+
+      const id = await ensureDraftProduct({ silent: true });
 
       toast({
         title: openAdvanced ? 'تم حفظ المنتج كمسودة.' : 'تم حفظ المنتج كمسودة.',
-        description: 'تم حفظ المنتج كمسودة، لكنه غير جاهز للنشر.',
+        description: openAdvanced
+          ? 'سيتم فتح التعديل المتقدم الآن.'
+          : 'تم حفظ المنتج كمسودة، ويمكنك متابعة الصور والمتغيرات من نفس الصفحة.',
       });
       router.refresh();
-      const advancedFocus = createVariantsIntent ? 'variants' : 'images';
-      router.replace(openAdvanced ? `/admin/products/${result.data.id}/edit?focus=${advancedFocus}` : '/admin/products');
+      if (openAdvanced) {
+        router.replace(`/admin/products/${id}/edit?focus=images`);
+      }
     } catch (error) {
       toast({
         title: 'فشل حفظ المنتج',
@@ -775,7 +893,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   }
 
   if (mode === 'create') {
-    const publishDisabled = isSubmitting || isDraftSaving || isOpeningAdvanced;
+    const publishDisabled = isSubmitting || isDraftSaving || isOpeningAdvanced || isPublishingAndReset;
 
     return (
       <div className="mx-auto max-w-5xl pb-28 lg:pb-0">
@@ -799,10 +917,33 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           <form className="min-w-0 space-y-5" onSubmit={(event) => event.preventDefault()}>
             <Card>
               <SectionHeader
-                title="توليد المحتوى بالذكاء الاصطناعي"
-                description="اكتب اسم المنتج أو استخدم البيانات الحالية لتوليد وصف ومميزات وSEO."
+                title="1. البداية السريعة"
+                description="اكتب اسم المنتج ثم ولّد البيانات، وبعدها راجع أهم الحقول من نفس الصفحة."
               />
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="name">اكتب اسم المنتج *</Label>
+                  <Input
+                    id="name"
+                    {...register('name')}
+                    placeholder="مثال: كاسات ورقية بيضاء دبل 12 أونصة عدد 50 كاسة"
+                    className="text-base"
+                  />
+                  <FieldError message={errors.name?.message} />
+                </div>
+                <div>
+                  <Label htmlFor="ai-notes">ملاحظات اختيارية للذكاء الاصطناعي</Label>
+                  <textarea
+                    id="ai-notes"
+                    rows={3}
+                    value={aiNotes}
+                    onChange={(event) => setAiNotes(event.target.value)}
+                    className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    placeholder="مثال: لا تذكر بلد المنشأ، المنتج للبيع بالجملة، العبوة تحتوي 50 قطعة"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="secondary"
@@ -828,19 +969,17 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                   استبدال بالمقترح
                 </Button>
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                الذكاء الاصطناعي يملأ المحتوى والتصنيف من القوائم الموجودة فقط. راجع السعر والفئة قبل النشر.
+              </p>
               {aiTaxonomyWarning && (
                 <p className="mt-2 text-xs text-amber-700 break-words whitespace-normal">{aiTaxonomyWarning}</p>
               )}
             </Card>
 
             <Card>
-              <SectionHeader title="1. الأساسيات" description="الحقول التي لا يكتمل نشر المنتج بدونها." />
+              <SectionHeader title="2. مراجعة أساسية" description="أهم حقول البيع والنشر، بدون تفاصيل غير ضرورية." />
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <Label htmlFor="name">اسم المنتج *</Label>
-                  <Input id="name" {...register('name')} placeholder="مثال: شامبو فاتيكا بالثوم" />
-                  <FieldError message={errors.name?.message} />
-                </div>
                 <div className="md:col-span-2">
                   <Label htmlFor="slug">الرابط المختصر *</Label>
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -899,7 +1038,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             </Card>
 
             <Card>
-              <SectionHeader title="2. التصنيف" description="اختيار القسم والفئة يساعد ظهور المنتج في المكان الصحيح." />
+              <SectionHeader title="3. التصنيف" description="اختيار القسم والفئة يساعد ظهور المنتج في المكان الصحيح." />
               <div className="grid gap-4 md:grid-cols-2">
                 <div id="category_id">
                   <Label>القسم الرئيسي *</Label>
@@ -970,29 +1109,42 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             </Card>
 
             <Card>
-              <SectionHeader title="3. الصور" description="الصور ترفع بعد إنشاء مسودة المنتج حتى ترتبط بسجل المنتج بأمان." />
-              <div className="rounded-md border border-dashed p-6 text-center">
-                <ImageIcon className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-                <p className="text-sm font-medium">احفظ كمسودة أو انشر المنتج، ثم ارفع الصورة الرئيسية والصور الإضافية من صفحة التعديل.</p>
-                <p className="mt-1 text-xs text-muted-foreground">الصورة لا تمنع النشر، لكن يفضل إضافة صورة رئيسية قبل اعتماد المنتج للعملاء.</p>
+              <SectionHeader title="4. الصور" description="ارفع الصورة الرئيسية والصور الإضافية هنا. أول رفع ينشئ مسودة غير منشورة تلقائيًا." />
+              <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                {draftProductId
+                  ? hasPublishedFromCreate
+                    ? `المنتج منشور الآن. الرابط: /product/${draftProductSlug || currentSlug || 'product-slug'}`
+                    : `المسودة جاهزة للصور والمتغيرات. الرابط الحالي: /product/${draftProductSlug || currentSlug || 'product-slug'}`
+                  : 'إذا رفعت صورة قبل الحفظ، سيُنشأ المنتج كمسودة غير ظاهرة للعملاء ثم تُرفع الصورة مباشرة.'}
               </div>
+              <ProductImagesManager
+                productId={draftProductId || undefined}
+                ensureProductId={() => ensureDraftProduct()}
+                productData={{
+                  name,
+                  categoryName: formData?.categories.find((category) => category.id === selectedCategoryId)?.name,
+                  shortDescription: shortDescription || undefined,
+                  marketingTagline: watch('marketing_tagline') || undefined,
+                  keyFeatures: keyFeatures || [],
+                }}
+              />
             </Card>
 
-            <Card className="scroll-mt-24" >
-              <SectionHeader title="4. متغيرات المنتج" description="فعّلها للنكهة أو الحجم أو اللون. الإدارة الكاملة تتم بعد إنشاء المسودة." />
-              <label id="variants-intent" className="flex scroll-mt-24 items-center gap-2 rounded-md border p-3 text-sm">
-                <input type="checkbox" checked={createVariantsIntent} onChange={(event) => setCreateVariantsIntent(event.target.checked)} />
-                <span>هذا المنتج له متغيرات مثل نكهة / حجم / لون / مقاس</span>
-              </label>
-              {createVariantsIntent && (
-                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  فعّلت المتغيرات لكن لم تنشئ أي خيار قابل للبيع بعد. احفظ كمسودة وافتح التعديل المتقدم لإضافة variants قبل النشر النهائي.
-                </div>
-              )}
+            <Card id="variants-intent" className="scroll-mt-24">
+              <SectionHeader title="5. متغيرات المنتج" description="أنشئ النكهات أو الأحجام من نفس الصفحة، واحفظها قبل النشر إذا كان المنتج متعدد الخيارات." />
+              <ProductVariantsManager
+                productId={draftProductId || undefined}
+                ensureProductId={() => ensureDraftProduct()}
+                onStateChange={setVariantsSummary}
+                basePrice={Number(price) || 0}
+                baseComparePrice={comparePrice || null}
+                baseStockQuantity={Number(stockQuantity) || 0}
+                baseTrackStock={trackStock}
+              />
             </Card>
 
             <Card>
-              <SectionHeader title="5. الوصف والتسويق" description="نصوص تساعد العميل على فهم المنتج بسرعة." />
+              <SectionHeader title="6. المحتوى والتسويق" description="نصوص تساعد العميل على فهم المنتج بسرعة." />
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="short_description">وصف قصير</Label>
@@ -1055,7 +1207,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             </Card>
 
             <details className="rounded-lg border bg-card p-5 shadow-sm">
-              <summary className="cursor-pointer text-lg font-semibold">6. SEO المتقدم</summary>
+              <summary className="cursor-pointer text-lg font-semibold">7. SEO المتقدم</summary>
               <div className="mt-4 space-y-4">
                 <Input id="meta_title" {...register('meta_title')} placeholder="Meta Title" />
                 <Input id="meta_description" {...register('meta_description')} placeholder="Meta Description" />
@@ -1105,27 +1257,57 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           <aside className="hidden lg:block">
             <div className="sticky top-6 space-y-3 rounded-lg border bg-card p-4 shadow-sm">
               <h2 className="font-semibold">إجراءات المنتج</h2>
-              <p className="text-sm text-muted-foreground">المسودة لا تظهر للعملاء. النشر فقط يجعل المنتج ظاهرًا.</p>
+              <p className="text-sm text-muted-foreground">
+                {hasPublishedFromCreate ? 'تم نشر المنتج من هذه الصفحة.' : 'المسودة لا تظهر للعملاء. النشر فقط يجعل المنتج ظاهرًا.'}
+              </p>
               <Button type="button" variant="outline" className="w-full" disabled={publishDisabled} onClick={() => saveDraftFromCreate({ openAdvanced: false })}>
                 {isDraftSaving ? 'جاري الحفظ...' : 'حفظ كمسودة'}
               </Button>
-              <Button type="button" className="w-full" disabled={publishDisabled} onClick={() => handleSubmit(publishNewProduct, handlePublishInvalid)()}>
+              <Button
+                type="button"
+                className="w-full"
+                disabled={publishDisabled}
+                onClick={() => handleSubmit((values) => publishNewProduct(values), handlePublishInvalid)()}
+              >
                 {isSubmitting ? 'جاري النشر...' : 'نشر المنتج'}
               </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                disabled={publishDisabled}
+                onClick={() =>
+                  handleSubmit((values) => publishNewProduct(values, { resetAfter: true }), handlePublishInvalid)()
+                }
+              >
+                {isPublishingAndReset ? 'جاري النشر...' : 'نشر وإضافة منتج جديد'}
+              </Button>
               <Button type="button" variant="secondary" className="w-full" disabled={publishDisabled} onClick={() => saveDraftFromCreate({ openAdvanced: true })}>
-                {isOpeningAdvanced ? 'جاري الحفظ...' : createVariantsIntent ? 'حفظ وفتح إدارة المتغيرات' : 'حفظ وفتح التعديل المتقدم'}
+                {isOpeningAdvanced ? 'جاري الحفظ...' : 'حفظ وفتح التعديل المتقدم'}
               </Button>
             </div>
           </aside>
         </div>
 
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 shadow-lg backdrop-blur lg:hidden">
-          <div className="mx-auto grid max-w-5xl grid-cols-2 gap-2">
+          <div className="mx-auto grid max-w-5xl grid-cols-3 gap-2">
             <Button type="button" variant="outline" disabled={publishDisabled} onClick={() => saveDraftFromCreate({ openAdvanced: false })}>
               {isDraftSaving ? 'حفظ...' : 'حفظ كمسودة'}
             </Button>
-            <Button type="button" disabled={publishDisabled} onClick={() => handleSubmit(publishNewProduct, handlePublishInvalid)()}>
+            <Button
+              type="button"
+              disabled={publishDisabled}
+              onClick={() => handleSubmit((values) => publishNewProduct(values), handlePublishInvalid)()}
+            >
               {isSubmitting ? 'نشر...' : 'نشر'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={publishDisabled}
+              onClick={() => handleSubmit((values) => publishNewProduct(values, { resetAfter: true }), handlePublishInvalid)()}
+            >
+              {isPublishingAndReset ? '...' : 'نشر + جديد'}
             </Button>
           </div>
         </div>

@@ -28,7 +28,8 @@ interface ProductData {
 }
 
 interface ProductImagesManagerProps {
-  productId: string;
+  productId?: string;
+  ensureProductId?: () => Promise<string | null>;
   focusOnMount?: boolean;
   productData?: ProductData;
 }
@@ -70,12 +71,17 @@ function validateImageFile(file: File) {
   return null;
 }
 
-export function ProductImagesManager({ productId, focusOnMount = false, productData }: ProductImagesManagerProps) {
+export function ProductImagesManager({
+  productId,
+  ensureProductId,
+  focusOnMount = false,
+  productData,
+}: ProductImagesManagerProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [images, setImages] = useState<ProductImageRecord[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ImageDraft>>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(Boolean(productId));
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
@@ -89,11 +95,11 @@ export function ProductImagesManager({ productId, focusOnMount = false, productD
     return Math.max(...images.map((image) => image.sort_order)) + 10;
   }, [images]);
 
-  const loadImages = useCallback(async () => {
+  const fetchImages = useCallback(async (targetProductId: string) => {
     setIsLoading(true);
     try {
       const token = await getAccessToken();
-      const result = await getAdminProductImages(token, productId);
+      const result = await getAdminProductImages(token, targetProductId);
 
       if (!result.success || !result.data) {
         throw new Error(result.error || 'تعذر تحميل صور المنتج');
@@ -111,7 +117,19 @@ export function ProductImagesManager({ productId, focusOnMount = false, productD
     } finally {
       setIsLoading(false);
     }
-  }, [productId, toast]);
+  }, [toast]);
+
+  const loadImages = useCallback(async () => {
+    if (!productId) {
+      setImages([]);
+      setDrafts({});
+      setUploadSortOrder('');
+      setIsLoading(false);
+      return;
+    }
+
+    await fetchImages(productId);
+  }, [fetchImages, productId]);
 
   useEffect(() => {
     loadImages();
@@ -180,6 +198,11 @@ export function ProductImagesManager({ productId, focusOnMount = false, productD
 
     setMutatingId('upload');
     try {
+      const effectiveProductId = productId || (ensureProductId ? await ensureProductId() : null);
+      if (!effectiveProductId) {
+        throw new Error('احفظ المنتج كمسودة أولًا حتى يمكن رفع الصور.');
+      }
+
       const token = await getAccessToken();
       const formData = new FormData();
       formData.append('file', uploadFile);
@@ -188,7 +211,7 @@ export function ProductImagesManager({ productId, focusOnMount = false, productD
         formData.append('sort_order', uploadSortOrder);
       }
 
-      const result = await uploadAdminProductImage(token, productId, formData);
+      const result = await uploadAdminProductImage(token, effectiveProductId, formData);
       if (!result.success) {
         throw new Error(result.error || 'تعذر رفع الصورة');
       }
@@ -204,7 +227,7 @@ export function ProductImagesManager({ productId, focusOnMount = false, productD
         setUploadPreviewUrl(null);
       }
       setFileInputKey((key) => key + 1);
-      await loadImages();
+      await fetchImages(effectiveProductId);
       router.refresh();
     } catch (error) {
       toast({
@@ -576,7 +599,7 @@ export function ProductImagesManager({ productId, focusOnMount = false, productD
               className="self-end"
             >
               <Upload className="ml-2 h-4 w-4" />
-              {mutatingId === 'upload' ? 'جاري الرفع...' : 'رفع'}
+              {mutatingId === 'upload' ? 'جاري الرفع...' : productId ? 'رفع' : 'إنشاء مسودة ورفع'}
             </Button>
           </div>
         </div>

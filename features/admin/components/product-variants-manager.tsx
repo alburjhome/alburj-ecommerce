@@ -16,10 +16,22 @@ import {
 
 interface ProductVariantsManagerProps {
   productId?: string;
+  ensureProductId?: () => Promise<string | null>;
+  onStateChange?: (summary: ProductVariantsSummary) => void;
   basePrice: number;
   baseComparePrice: number | null;
   baseStockQuantity: number;
   baseTrackStock: boolean;
+}
+
+export interface ProductVariantsSummary {
+  isEnabled: boolean;
+  optionCount: number;
+  variantCount: number;
+  activeVariantCount: number;
+  activeWithoutPriceCount: number;
+  activeWithoutStockCount: number;
+  activeWithoutCompleteOptionsCount: number;
 }
 
 interface OptionDraft {
@@ -105,6 +117,8 @@ const quickVariantTemplates = [
 
 export function ProductVariantsManager({
   productId,
+  ensureProductId,
+  onStateChange,
   basePrice,
   baseComparePrice,
   baseStockQuantity,
@@ -180,6 +194,27 @@ export function ProductVariantsManager({
   const allVariantsInactive = useMemo(() => {
     return isEnabled && variants.length > 0 && variants.every((variant) => !variant.is_active);
   }, [isEnabled, variants]);
+
+  const summary = useMemo<ProductVariantsSummary>(() => {
+    const activeVariants = variants.filter((variant) => variant.is_active);
+    return {
+      isEnabled,
+      optionCount: options.length,
+      variantCount: variants.length,
+      activeVariantCount: activeVariants.length,
+      activeWithoutPriceCount: activeVariants.filter((variant) => Number(variant.price) <= 0).length,
+      activeWithoutStockCount: activeVariants.filter(
+        (variant) => variant.track_stock && Number(variant.stock_quantity) <= 0
+      ).length,
+      activeWithoutCompleteOptionsCount: activeVariants.filter((variant) =>
+        options.some((option) => !variant.option_value_ids[option.id])
+      ).length,
+    };
+  }, [isEnabled, options, variants]);
+
+  useEffect(() => {
+    onStateChange?.(summary);
+  }, [onStateChange, summary]);
 
   function addOption() {
     setIsEnabled(true);
@@ -283,10 +318,13 @@ export function ProductVariantsManager({
   }
 
   async function handleSave() {
-    if (!productId) return;
-
     setIsSaving(true);
     try {
+      const effectiveProductId = productId || (ensureProductId ? await ensureProductId() : null);
+      if (!effectiveProductId) {
+        throw new Error('احفظ المنتج كمسودة أولًا حتى يمكن حفظ المتغيرات.');
+      }
+
       if (isEnabled && variants.length === 0) {
         throw new Error('فعّلت المتغيرات لكن لم تنشئ أي خيار قابل للبيع.');
       }
@@ -330,7 +368,7 @@ export function ProductVariantsManager({
           : [],
       };
 
-      const result = await saveAdminProductVariants(token, productId, payload);
+      const result = await saveAdminProductVariants(token, effectiveProductId, payload);
       if (!result.success || !result.data) {
         throw new Error(result.error || 'تعذر حفظ المتغيرات');
       }
@@ -370,7 +408,7 @@ export function ProductVariantsManager({
     }
   }
 
-  if (!productId) {
+  if (!productId && !ensureProductId) {
     return (
       <section className="rounded-lg border bg-card p-5 shadow-sm">
         <div className="flex items-start gap-3">
@@ -488,13 +526,13 @@ export function ProductVariantsManager({
 
           {variants.length > 0 && (
             <div className="space-y-3">
-              <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3 lg:flex-row lg:items-end">
-                <Button type="button" variant="outline" onClick={copyBaseToVariants}>
+              <div className="grid gap-3 rounded-md border bg-muted/30 p-3 xl:grid-cols-[1fr_auto_auto] xl:items-end">
+                <Button type="button" variant="outline" className="w-full min-w-0" onClick={copyBaseToVariants}>
                   <Copy className="ml-2 h-4 w-4" />
                   نسخ السعر والمخزون من المنتج الأساسي
                 </Button>
-                <div className="flex items-end gap-2">
-                  <div>
+                <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+                  <div className="min-w-0">
                     <Label>تطبيق سعر</Label>
                     <Input
                       type="number"
@@ -502,15 +540,15 @@ export function ProductVariantsManager({
                       step="0.01"
                       value={bulkPrice}
                       onChange={(event) => setBulkPrice(event.target.value)}
-                      className="w-28"
+                      className="w-full min-w-0"
                     />
                   </div>
                   <Button type="button" variant="outline" onClick={applyBulkPrice}>
                     تطبيق
                   </Button>
                 </div>
-                <div className="flex items-end gap-2">
-                  <div>
+                <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+                  <div className="min-w-0">
                     <Label>تطبيق مخزون</Label>
                     <Input
                       type="number"
@@ -518,7 +556,7 @@ export function ProductVariantsManager({
                       step="1"
                       value={bulkStock}
                       onChange={(event) => setBulkStock(event.target.value)}
-                      className="w-28"
+                      className="w-full min-w-0"
                     />
                   </div>
                   <Button type="button" variant="outline" onClick={applyBulkStock}>

@@ -798,9 +798,20 @@ ${subcategoriesText}
 
 قواعد صارمة (STRICT):
 - ممنوع اختراع أي معلومة غير موجودة في الاسم/الملاحظات/القالب.
+- ممنوع اختراع بلد منشأ أو ضمان أو خامة أو عدد قطع أو رائحة أو فوائد طبية غير مذكورة.
+- ممنوع استخدام عبارات مثل "آمن للأطفال" أو "يزيل 99.9%" إلا إذا كانت مذكورة صراحة في الاسم أو الملاحظات.
 - ممنوع اختراع category_id أو subcategory_id. اختر فقط IDs من القوائم أعلاه أو null.
 - إذا اخترت subcategory_id يجب أن تتبع category_id.
 - إذا كان الاسم غامض (مثل: "شامبو 1 لتر") لا تختار subcategory_id عشوائيًا.
+- إذا كان القسم واضحًا والفئة غير واضحة: اختر category_id بثقة high واجعل subcategory_id=null و subcategory_confidence=low.
+- إذا كان القسم يحتوي فئة واحدة فقط وكان المنتج مناسبًا للقسم: اختر هذه الفئة.
+
+أمثلة توجيهية للتصنيف:
+- "كاسات ورقية بيضاء دبل 12 أونصة عدد 50 كاسة": مستلزمات/تغليف/كافيهات حسب القوائم المتاحة.
+- "كاسات بلاستيك شفافة 50 حبة": البلاستيك والتغليف، وفئة الصحون/الكاسات إن وجدت.
+- "سائل جلي ليمون 1 لتر": المنظفات والورقيات، وفئة سوائل الجلي/الصابون إن وجدت.
+- "منشفة قطن وجه": المفروشات والبياضات، وفئة البشاكير/المناشف إن وجدت.
+- "خلاط كهربائي 2 لتر": الأجهزة الكهربائية، وفئة الخلاطات/العصارات إن وجدت.
 
 قواعد المحتوى لتجنب التكرار (مهم جدًا):
 - marketing_tagline: عبارة قصيرة جدًا من 3 إلى 7 كلمات، جذابة ومباشرة، بدون مبالغة، ولا تكرر نص short_description.
@@ -839,6 +850,71 @@ Return ONLY valid JSON. No markdown. No explanation. No code fences.
   return { base: basePrompt, retry: retryPrompt };
 }
 
+function normalizeArabicSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[\u064B-\u065F]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function includesAny(value: string, keywords: string[]) {
+  return keywords.some((keyword) => value.includes(normalizeArabicSearchText(keyword)));
+}
+
+function findSubcategoryBySignals(
+  subcategories: ProductCopyInput['subcategories'],
+  signals: string[]
+) {
+  return subcategories.find((subcategory) => {
+    const haystack = normalizeArabicSearchText(`${subcategory.name} ${subcategory.slug}`);
+    return includesAny(haystack, signals);
+  });
+}
+
+function inferTaxonomyFromProductName(input: ProductCopyInput) {
+  const name = normalizeArabicSearchText(`${input.name} ${input.notes ?? ''} ${input.template ?? ''}`);
+
+  const rules: Array<{
+    productSignals: string[];
+    subcategorySignals: string[];
+  }> = [
+    {
+      productSignals: ['سائل جلي', 'سائل الجلي', 'صابون جلي', 'صابون الصحون', 'جلي ليمون'],
+      subcategorySignals: ['سوائل الجلي', 'الجلي', 'dishwashing', 'soap-liquids'],
+    },
+    {
+      productSignals: ['كاسات بلاستيك', 'كاسات شفافه', 'اكواب بلاستيك', 'كوب بلاستيك'],
+      subcategorySignals: ['صحون وكاسات بلاستيك', 'plastic-plates-cups'],
+    },
+    {
+      productSignals: ['كاسات ورقيه', 'اكواب ورقيه', 'كوب ورقي'],
+      subcategorySignals: ['مستلزمات الكافيهات', 'مستلزمات المطاعم', 'صحون واكواب', 'paper-cups'],
+    },
+    {
+      productSignals: ['منشفه', 'مناشف', 'بشكير', 'بشاكير'],
+      subcategorySignals: ['مناشف', 'بشاكير', 'towels'],
+    },
+    {
+      productSignals: ['خلاط', 'عصاره', 'عصارة'],
+      subcategorySignals: ['خلاطات', 'عصارات', 'blenders', 'juicers'],
+    },
+  ];
+
+  for (const rule of rules) {
+    if (!includesAny(name, rule.productSignals)) continue;
+    const subcategory = findSubcategoryBySignals(input.subcategories, rule.subcategorySignals);
+    if (subcategory) {
+      return { category_id: subcategory.category_id, subcategory_id: subcategory.id };
+    }
+  }
+
+  return null;
+}
+
 export async function generateProductCopy(provider: AiProvider, input: ProductCopyInput): Promise<ProductCopyOutput> {
   if (!isApiKeyConfigured(provider)) {
     throw new AiProviderError(getMissingApiKeyMessage(provider), provider, 'MISSING_API_KEY');
@@ -875,11 +951,38 @@ export async function generateProductCopy(provider: AiProvider, input: ProductCo
   // Validate subcategory id + category match
   if (normalized.subcategory_id) {
     const sub = subcategoryById.get(normalized.subcategory_id);
-    const matchesCategory = Boolean(sub && normalized.category_id && sub.category_id === normalized.category_id);
+    const matchesCategory = Boolean(sub && (!normalized.category_id || sub.category_id === normalized.category_id));
     if (!sub || !matchesCategory) {
       normalized.subcategory_id = null;
       normalized.subcategory_confidence = 'low';
+    } else {
+      normalized.category_id = sub.category_id;
+      if (normalized.category_confidence === 'low' && normalized.subcategory_confidence === 'high') {
+        normalized.category_confidence = 'high';
+      }
     }
+  }
+
+  if (
+    normalized.category_id &&
+    normalized.category_confidence === 'high' &&
+    !normalized.subcategory_id
+  ) {
+    const subcategoriesForCategory = input.subcategories.filter(
+      (subcategory) => subcategory.category_id === normalized.category_id
+    );
+    if (subcategoriesForCategory.length === 1) {
+      normalized.subcategory_id = subcategoriesForCategory[0]!.id;
+      normalized.subcategory_confidence = 'high';
+    }
+  }
+
+  const deterministicTaxonomy = inferTaxonomyFromProductName(input);
+  if (deterministicTaxonomy) {
+    normalized.category_id = deterministicTaxonomy.category_id;
+    normalized.subcategory_id = deterministicTaxonomy.subcategory_id;
+    normalized.category_confidence = 'high';
+    normalized.subcategory_confidence = 'high';
   }
 
   return normalized;
