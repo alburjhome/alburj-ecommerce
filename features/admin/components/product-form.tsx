@@ -753,21 +753,6 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
 
     return (
       <div className="mx-auto max-w-5xl pb-28 lg:pb-0">
-        <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">إضافة منتج جديد</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              ابدأ بالأساسيات، واحفظ كمسودة لرفع الصور والمتغيرات المتقدمة قبل النشر.
-            </p>
-          </div>
-          <Button asChild type="button" variant="outline" className="w-full md:w-auto">
-            <Link href="/admin/products">
-              <ArrowLeft className="ml-2 h-4 w-4" />
-              العودة للمنتجات
-            </Link>
-          </Button>
-        </div>
-
         {validationMessages.length > 0 && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
             <div className="flex items-start gap-3">
@@ -786,6 +771,42 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
           <form className="min-w-0 space-y-5" onSubmit={(event) => event.preventDefault()}>
+            <Card>
+              <SectionHeader
+                title="توليد المحتوى بالذكاء الاصطناعي"
+                description="اكتب اسم المنتج أو استخدم البيانات الحالية لتوليد وصف ومميزات وSEO."
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={isGeneratingAi || !name}
+                  onClick={() => handleGenerateAi({ replace: false })}
+                  className="gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {isGeneratingAi ? 'جاري التوليد...' : 'ولّد بالذكاء الاصطناعي'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingAi || !name}
+                  onClick={() => {
+                    const ok = window.confirm('هل تريد استبدال الحقول التسويقية وSEO والتصنيف بالمقترح؟');
+                    if (!ok) return;
+                    handleGenerateAi({ replace: true });
+                  }}
+                >
+                  استبدال بالمقترح
+                </Button>
+              </div>
+              {aiTaxonomyWarning && (
+                <p className="mt-2 text-xs text-amber-700 break-words whitespace-normal">{aiTaxonomyWarning}</p>
+              )}
+            </Card>
+
             <Card>
               <SectionHeader title="1. الأساسيات" description="الحقول التي لا يكتمل نشر المنتج بدونها." />
               <div className="grid gap-4 md:grid-cols-2">
