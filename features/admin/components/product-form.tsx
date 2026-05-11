@@ -153,6 +153,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const [tagsText, setTagsText] = useState('');
   const [slugTouched, setSlugTouched] = useState(mode === 'edit');
   const [hasAiSuggestedTaxonomy, setHasAiSuggestedTaxonomy] = useState(false);
+  const [aiTaxonomyWarning, setAiTaxonomyWarning] = useState<string | null>(null);
 
   const {
     register,
@@ -307,15 +308,24 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       const aiSuggestedCategoryId = typeof data?.category_id === 'string' ? data.category_id : null;
       const aiSuggestedSubcategoryId = typeof data?.subcategory_id === 'string' ? data.subcategory_id : null;
 
+      const categoryConfidence = (data?.category_confidence ?? 'low') as 'high' | 'medium' | 'low';
+      const subcategoryConfidence = (data?.subcategory_confidence ?? 'low') as 'high' | 'medium' | 'low';
+
       if (aiSuggestedCategoryId || aiSuggestedSubcategoryId) {
         setHasAiSuggestedTaxonomy(true);
       }
 
-      if (shouldSetCategory() && aiSuggestedCategoryId) {
+      if ((categoryConfidence === 'high' || categoryConfidence === 'medium') && aiSuggestedCategoryId && !aiSuggestedSubcategoryId) {
+        setAiTaxonomyWarning('تم اختيار القسم، لكن الفئة تحتاج مراجعة.');
+      } else {
+        setAiTaxonomyWarning(null);
+      }
+
+      if (shouldSetCategory() && (categoryConfidence === 'high' || categoryConfidence === 'medium') && aiSuggestedCategoryId) {
         setValue('category_id', aiSuggestedCategoryId, { shouldDirty: true, shouldValidate: true });
       }
 
-      if (shouldSetSubcategory() && aiSuggestedSubcategoryId) {
+      if (shouldSetSubcategory() && categoryConfidence === 'high' && subcategoryConfidence === 'high' && aiSuggestedSubcategoryId) {
         setValue('subcategory_id', aiSuggestedSubcategoryId, { shouldDirty: true });
       }
 
@@ -338,6 +348,14 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       (subcategory) => subcategory.category_id === selectedCategoryId
     );
   }, [formData, selectedCategoryId]);
+
+  useEffect(() => {
+    if (!selectedCategoryId) return;
+    if (selectedSubcategoryId) return;
+    if (filteredSubcategories.length === 1) {
+      setValue('subcategory_id', filteredSubcategories[0]!.id, { shouldDirty: true });
+    }
+  }, [filteredSubcategories, selectedCategoryId, selectedSubcategoryId, setValue]);
 
   // SEO helpers
   const getCharCountStatus = (count: number, min: number, max: number) => {
@@ -513,19 +531,19 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <div className="grid gap-6 lg:grid-cols-[1fr_300px] max-w-full overflow-x-hidden">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-full min-w-0">
         {/* Header */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0 max-w-full">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight min-w-0 break-words whitespace-normal">
               {mode === 'create' ? 'إضافة منتج جديد' : 'تعديل المنتج'}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               أدخل بيانات المنتج الأساسية، الأسعار، المخزون، والتسويق.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-row sm:justify-end min-w-0 max-w-full">
             <Button asChild type="button" variant="outline">
               <Link href="/admin/products">
                 <ArrowLeft className="ml-2 h-4 w-4" />
@@ -599,16 +617,16 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             title="معلومات المنتج الأساسية"
             description="أدخل البيانات التي تظهر للعميل في صفحة المنتج."
           />
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
+          <div className="grid gap-4 md:grid-cols-2 max-w-full">
+            <div className="min-w-0">
               <Label htmlFor="name">اسم المنتج *</Label>
-              <Input id="name" {...register('name')} placeholder="مثال: سجاد تنظيف احترافي" />
+              <Input id="name" {...register('name')} placeholder="مثال: سجاد تنظيف احترافي" className="w-full min-w-0" />
               <FieldError message={errors.name?.message} />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="slug">الرابط المختصر (Slug) *</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 min-w-0 max-w-full">
                 <Input
                   id="slug"
                   dir="ltr"
@@ -618,6 +636,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                     setValue('slug', normalizeSlug(event.target.value), { shouldDirty: true, shouldValidate: true });
                   }}
                   placeholder="professional-cleaning-carpet"
+                  className="w-full min-w-0"
                 />
                 <Button
                   type="button"
@@ -626,44 +645,46 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                     setSlugTouched(true);
                     setValue('slug', slugify(name), { shouldDirty: true, shouldValidate: true });
                   }}
+                  className="flex-shrink-0"
                 >
                   توليد
                 </Button>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
+              <p className="mt-1 text-xs text-muted-foreground break-words whitespace-normal" dir="ltr">
                 /product/{currentSlug || 'product-slug'}
               </p>
               <FieldError message={errors.slug?.message} />
             </div>
 
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 min-w-0">
               <Label htmlFor="short_description">وصف قصير</Label>
               <Input
                 id="short_description"
                 {...register('short_description')}
                 placeholder="وصف مختصر يظهر في صفحات القوائم (يُفضّل أقل من 100 حرف)"
+                className="w-full min-w-0"
               />
             </div>
 
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 min-w-0">
               <Label htmlFor="description">الوصف الكامل</Label>
               <textarea
                 id="description"
                 rows={5}
-                className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="mt-1 flex w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 {...register('description')}
                 placeholder="اكتب وصفًا تفصيليًا للمنتج يظهر في صفحة المنتج..."
               />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="sku">رمز المنتج (SKU)</Label>
-              <Input id="sku" dir="ltr" {...register('sku')} placeholder="مثال: BUR-12345" />
+              <Input id="sku" dir="ltr" {...register('sku')} placeholder="مثال: BUR-12345" className="w-full min-w-0" />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="brand">العلامة التجارية</Label>
-              <Input id="brand" {...register('brand')} placeholder="مثال: البرج" />
+              <Input id="brand" {...register('brand')} placeholder="مثال: البرج" className="w-full min-w-0" />
             </div>
           </div>
         </Card>
@@ -674,8 +695,8 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             title="التصنيف"
             description="حدد القسم والفئة المناسبين للمنتج."
           />
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
+          <div className="grid gap-4 md:grid-cols-2 max-w-full">
+            <div className="min-w-0">
               <Label>القسم الرئيسي *</Label>
               <Select
                 value={selectedCategoryId || 'none'}
@@ -684,7 +705,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                   setValue('subcategory_id', null);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue placeholder="اختر القسم" />
                 </SelectTrigger>
                 <SelectContent>
@@ -699,13 +720,13 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
               <FieldError message={errors.category_id?.message} />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <Label>الفئة الفرعية</Label>
               <Select
                 value={selectedSubcategoryId || 'none'}
                 onValueChange={(value) => setValue('subcategory_id', value === 'none' ? null : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue placeholder="اختر الفئة (اختياري)" />
                 </SelectTrigger>
                 <SelectContent>
@@ -717,10 +738,20 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                   ))}
                 </SelectContent>
               </Select>
+              {!selectedSubcategoryId && Boolean(selectedCategoryId) && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  اختر الفئة الفرعية لتسهيل ظهور المنتج في المكان الصحيح.
+                </p>
+              )}
+              {aiTaxonomyWarning && (
+                <p className="mt-1 text-xs text-amber-700">
+                  {aiTaxonomyWarning}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 max-w-full">
             <Label className="mb-2 block">مناسب لـ (Intent Tags)</Label>
             <div className="flex flex-wrap gap-2">
               {INTENT_TAG_CONFIG.map((tag) => (
@@ -1002,7 +1033,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           </div>
 
           {/* Copy Buttons */}
-          <div className="mb-6 flex flex-wrap gap-2">
+          <div className="mb-6 flex flex-wrap gap-2 max-w-full">
             <Button
               type="button"
               variant="outline"
@@ -1024,17 +1055,17 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           </div>
 
           {/* Google Search Preview */}
-          <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+          <div className="mb-6 rounded-lg border bg-muted/30 p-4 max-w-full overflow-hidden">
             <h3 className="mb-3 text-sm font-semibold text-muted-foreground">معاينة Google</h3>
-            <div className="rounded-lg bg-white p-4 shadow-sm">
-              <div className="text-base font-medium text-blue-600 hover:underline">
+            <div className="rounded-lg bg-white p-4 shadow-sm max-w-full overflow-hidden">
+              <div className="text-base font-medium text-blue-600 hover:underline break-words whitespace-normal">
                 {displayTitle.slice(0, 60)}
                 {displayTitle.length > 60 ? '...' : ''}
               </div>
-              <div className="mt-0.5 text-sm text-green-700">
+              <div className="mt-0.5 text-sm text-green-700 break-words whitespace-normal" dir="ltr">
                 alburj-ecommerce.vercel.app/product/{displaySlug}
               </div>
-              <div className="mt-1 text-sm text-gray-600">
+              <div className="mt-1 text-sm text-gray-600 break-words whitespace-normal">
                 {displayDescription.slice(0, 155)}
                 {displayDescription.length > 155 ? '...' : ''}
               </div>
@@ -1042,9 +1073,9 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           </div>
 
           {/* Social Sharing Preview */}
-          <div className="rounded-lg border bg-muted/30 p-4">
+          <div className="rounded-lg border bg-muted/30 p-4 max-w-full overflow-hidden">
             <h3 className="mb-3 text-sm font-semibold text-muted-foreground">معاينة المشاركة</h3>
-            <div className="flex gap-3 rounded-lg bg-white p-3 shadow-sm">
+            <div className="flex gap-3 rounded-lg bg-white p-3 shadow-sm max-w-full overflow-hidden">
               <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-muted">
                 <div className="flex h-full w-full items-center justify-center text-muted-foreground">
                   <ImageIcon className="h-8 w-8" />
@@ -1071,7 +1102,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         </Card>
 
         {/* Save Button at bottom */}
-        <div className="flex justify-end pt-4 border-t">
+        <div className="flex justify-end pt-4 border-t max-w-full">
           <Button type="submit" disabled={isSubmitting} size="lg">
             <Save className="ml-2 h-4 w-4" />
             {isSubmitting ? 'جاري الحفظ...' : 'حفظ المنتج'}

@@ -39,6 +39,7 @@ export interface ProductCopyOutput {
   category_id: string | null;
   subcategory_id: string | null;
   category_confidence: 'high' | 'medium' | 'low';
+  subcategory_confidence: 'high' | 'medium' | 'low';
 }
 
 export interface ImageAltTextInput {
@@ -678,6 +679,7 @@ function normalizeString(value: unknown): string | null {
 
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
+
   return value
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter((item) => item.length > 0);
@@ -689,14 +691,16 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
 
   const name = normalizeString(obj.name);
   const short_description = normalizeString(obj.short_description);
-
-  const rawCategoryConfidence = normalizeString(obj.category_confidence);
-  const category_confidence: 'high' | 'medium' | 'low' =
-    rawCategoryConfidence === 'high' || rawCategoryConfidence === 'medium' || rawCategoryConfidence === 'low'
-      ? rawCategoryConfidence
-      : 'low';
-
   const marketing_tagline = normalizeString(obj.marketing_tagline);
+  const key_features = normalizeStringArray(obj.key_features).slice(0, 6);
+  const product_badges = normalizeStringArray(obj.product_badges)
+    .map((b) => b.toLowerCase())
+    .filter((b) => b.length > 0)
+    .slice(0, 5);
+  const intent_tags = normalizeStringArray(obj.intent_tags)
+    .map((t) => t.toLowerCase())
+    .filter((t) => t.length > 0)
+    .slice(0, 10);
   const description = normalizeString(obj.description);
   const meta_title = normalizeString(obj.meta_title);
   const meta_description = normalizeString(obj.meta_description);
@@ -704,17 +708,17 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
   const category_id = normalizeString(obj.category_id);
   const subcategory_id = normalizeString(obj.subcategory_id);
 
-  const key_features = normalizeStringArray(obj.key_features)
-    .slice(0, 6)
-    .map((f) => clampString(f, 80));
+  const rawCategoryConfidence = normalizeString(obj.category_confidence);
+  const category_confidence: 'high' | 'medium' | 'low' =
+    rawCategoryConfidence === 'high' || rawCategoryConfidence === 'medium' || rawCategoryConfidence === 'low'
+      ? rawCategoryConfidence
+      : 'low';
 
-  const product_badges = normalizeStringArray(obj.product_badges)
-    .filter((b): b is BadgeKey => (ALLOWED_BADGES as string[]).includes(b))
-    .slice(0, 5);
-
-  const intent_tags = normalizeStringArray(obj.intent_tags)
-    .filter((t): t is IntentKey => (ALLOWED_INTENTS as string[]).includes(t))
-    .slice(0, 10);
+  const rawSubcategoryConfidence = normalizeString(obj.subcategory_confidence);
+  const subcategory_confidence: 'high' | 'medium' | 'low' =
+    rawSubcategoryConfidence === 'high' || rawSubcategoryConfidence === 'medium' || rawSubcategoryConfidence === 'low'
+      ? rawSubcategoryConfidence
+      : 'low';
 
   return {
     name,
@@ -730,20 +734,8 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
     category_id: category_id || null,
     subcategory_id: subcategory_id || null,
     category_confidence,
+    subcategory_confidence,
   };
-}
-
-function normalizeAltTextResponse(raw: unknown): ImageAltTextOutput | null {
-  const obj = raw && typeof raw === 'object' ? (raw as any) : null;
-  if (!obj) return null;
-
-  const alt_text = normalizeString(obj.alt_text);
-  if (!alt_text) return null;
-
-  // Clamp alt text to reasonable length (max 150 chars)
-  const clampedAltText = alt_text.length > 150 ? alt_text.slice(0, 150) : alt_text;
-
-  return { alt_text: clampedAltText };
 }
 
 function buildProductCopyPrompts(input: ProductCopyInput): { base: string; retry: string } {
@@ -768,139 +760,78 @@ function buildProductCopyPrompts(input: ProductCopyInput): { base: string; retry
     metaDescription,
   } = input;
 
+  const categoriesText = categories.map((c) => `- ${c.id} | ${c.name}`).join('\n');
+  const subcategoriesText = subcategories
+    .map((s) => {
+      const parent = categories.find((c) => c.id === s.category_id);
+      return `- ${s.id} | ${s.name} | category_id: ${s.category_id} | category_name: ${parent?.name ?? s.category_id}`;
+    })
+    .join('\n');
+
   const basePrompt = `أنت كاتب محتوى عربي لمتجر "مؤسسة البرج" في الأردن.
 
-مهم جدًا: ممنوع اختراع أي معلومات غير موجودة صراحة في (اسم المنتج/القالب/الملاحظات).
-قواعد صارمة ضد الاختراع:
-- ممنوع اختراع بلد منشأ.
-- ممنوع اختراع ضمان.
-- ممنوع اختراع وزن/حجم/عدد قطع غير مذكور.
-- ممنوع اختراع رائحة غير مذكورة.
-- ممنوع اختراع خامة غير مذكورة.
-- ممنوع اختراع علامة تجارية غير مذكورة.
-- ممنوع ادعاءات طبية.
-- ممنوع "يزيل 99.9%" إلا إذا مذكور صراحة.
-- ممنوع "آمن للأطفال" أو "ضد الحساسية" إلا إذا مذكور صراحة.
+المطلوب: اقتراح محتوى منتج (وصف/مميزات/SEO) + اقتراح التصنيف من قاعدة البيانات فقط.
 
-سياق البراند:
-مؤسسة البرج متجر يبيع مستلزمات البيت والمحل، مثل المنظفات والورقيات، البلاستيكيات، التغليف، مستلزمات المطاعم والمحلات، الأدوات المنزلية، أدوات المطبخ، الأجهزة الكهربائية، المفروشات والبياضات.
-أسلوب الكتابة: عربي واضح، تسويقي، مختصر، موثوق، مناسب للسوق الأردني، بدون مبالغة كاذبة.
-
-معلومات المنتج:
+المدخلات:
 - الاسم: ${name}
-- القالب المختار (إن وجد): ${template ?? ''}
-- ملاحظات تساعد الذكاء الاصطناعي (إن وجدت): ${notes ?? ''}
-- SKU الحالي: ${sku ?? ''}
-- Meta title الحالي: ${metaTitle ?? ''}
-- Meta description الحالي: ${metaDescription ?? ''}
-- category_id الحالي: ${currentCategoryId ?? ''}
-- subcategory_id الحالي: ${currentSubcategoryId ?? ''}
+- ملاحظات إضافية (قد تكون null): ${notes ?? ''}
+- قالب/سياق إضافي (قد يكون null): ${template ?? ''}
 - السعر: ${price ?? ''}
-- قبل الخصم: ${comparePrice ?? ''}
+- السعر قبل الخصم: ${comparePrice ?? ''}
+- الوصف الحالي: ${existingDescription ?? ''}
+- الوصف المختصر الحالي: ${existingShortDescription ?? ''}
+- العبارة التسويقية الحالية: ${existingMarketingTagline ?? ''}
+- المميزات الحالية: ${(existingKeyFeatures || []).join(' | ')}
+- شارات المنتج الحالية: ${(existingProductBadges || []).join(' | ')}
+- intent tags الحالية: ${(existingIntentTags || []).join(' | ')}
+- SKU الحالي: ${sku ?? ''}
+- Meta Title الحالي: ${metaTitle ?? ''}
+- Meta Description الحالي: ${metaDescription ?? ''}
+- القسم الحالي (قد يكون فارغ): ${currentCategoryId ?? ''}
+- الفئة الحالية (قد تكون null): ${currentSubcategoryId ?? ''}
 
-محتوى موجود (قد يكون فارغًا):
-- وصف: ${existingDescription ?? ''}
-- وصف مختصر: ${existingShortDescription ?? ''}
-- عبارة تسويقية: ${existingMarketingTagline ?? ''}
-- مميزات: ${existingKeyFeatures.join(' | ')}
-- وسوم: ${existingProductBadges.join(' | ')}
-- مناسب لـ: ${existingIntentTags.join(' | ')}
+قائمة الأقسام المتاحة (اختر id فقط أو null):
+${categoriesText}
 
-قائمة الأقسام المتاحة (استخدم id فقط من هذه القائمة أو null):
-${categories.map((c) => `- ${c.id} | ${c.name} | ${c.slug}`).join('\n')}
+قائمة الفئات الفرعية المتاحة (اختر id فقط أو null):
+${subcategoriesText}
 
-قائمة الفئات المتاحة (استخدم id فقط من هذه القائمة أو null) — كل عنصر مرتبط بـ category_id:
-${subcategories.map((s) => `- ${s.id} | ${s.name} | ${s.slug} | category_id=${s.category_id}`).join('\n')}
-
-المطلوب:
-Return ONLY valid JSON. No markdown. No explanation. No code fences.
-أرجع JSON صالح فقط بدون Markdown أو شرح أو أسوار كود، وبالشكل التالي تمامًا (لا تضف حقول أخرى):
-{
-  "name": "Arabic product name (may refine input), or null if uncertain",
-  "short_description": "Arabic short description: EXACTLY 2 sentences. Sentence1: ما هو المنتج؟ Sentence2: لماذا يشتريه العميل؟ or null if uncertain",
-  "marketing_tagline": "string max 120 chars",
-  "key_features": ["max 6 items, each max 80 chars"],
-  "product_badges": ["bestselling" | "offer" | "new" | "wholesale" | "limited"],
-  "intent_tags": ["home" | "kitchen" | "plastics" | "restaurants" | "shops" | "cleaning" | "packaging" | "bulk" | "appliances" | "furnishings"],
-  "description": "Arabic product description, 2-4 lines",
-  "meta_title": "SEO title max 60 chars",
-  "meta_description": "SEO description max 155 chars",
-  "suggested_sku": "short uppercase SKU",
-  "category_id": "one id from provided categories only, or null",
-  "subcategory_id": "one id from provided subcategories only, or null",
-  "category_confidence": "high | medium | low"
-}
-
-ملاحظات:
-- short_description: جملتان فقط.
-- key_features: 4 إلى 6 نقاط عملية فقط.
-- Meta Title: حاول أن يكون بين 50 و 60 حرفًا قدر الإمكان.
-- Meta Description: حاول أن يكون بين 120 و 155 حرفًا قدر الإمكان.
-- اختر intent_tags بشكل منطقي للمنتج.
-- لا تستخدم ادعاءات طبية أو ضمانات غير حقيقية.
-- إذا كان المنتج مناسب لـ intent واحد أو اثنين فقط، لا تملأ القائمة بلا داع.
-- category_id يجب أن يكون من IDs الأقسام المرسلة فقط، أو null إذا غير متأكد.
-- subcategory_id يجب أن يكون من IDs الفئات المرسلة فقط، أو null إذا غير متأكد.
-- إذا اخترت subcategory_id يجب أن يتبع category_id المختار.
-- ممنوع اختراع قسم/فئة جديدة أو إرجاع الاسم بدل id.`;
-
-  const retryPrompt = `Return ONLY valid JSON. No markdown. No explanation. No code fences.
-اكتب JSON مختصر فقط لهذا المنتج:
-الاسم: ${name}
-السعر: ${price ?? ''}
-أرجع نفس الحقول تمامًا:
-name, short_description, marketing_tagline, key_features, product_badges, intent_tags, description, meta_title, meta_description, suggested_sku, category_id, subcategory_id, category_confidence
-تذكير: category_id/subcategory_id يجب أن تكون IDs من القوائم المرسلة فقط أو null.`;
-
-  return { base: basePrompt, retry: retryPrompt };
-}
-
-function buildAltTextPrompts(input: ImageAltTextInput): { base: string; retry: string } {
-  const { productName, categoryName, shortDescription, marketingTagline, keyFeatures } = input;
-
-  const basePrompt = `أنت كاتب محتوى عربي متخصص في SEO ومحركات البحث لمتجر "مؤسسة البرج" في الأردن.
-
-المطلوب: كتابة وصف قصير للصورة (alt text) يظهر عند عدم تحميل الصورة ويساعد في تحسين SEO.
-
-معلومات المنتج:
-- اسم المنتج: ${productName}
-- القسم: ${categoryName ?? 'غير محدد'}
-- الوصف المختصر: ${shortDescription ?? ''}
-- العبارة التسويقية: ${marketingTagline ?? ''}
-- المميزات: ${keyFeatures.join(' | ')}
-
-شروط alt text:
-- باللغة العربية الفصحى
-- قصير: 6 إلى 14 كلمة تقريبًا
-- يصف المنتج والصورة بوضوح
-- بدون مبالغة أو ادعاءات غير مثبتة
-- بدون أسعار أو كلمات مثل "أفضل" إذا غير مثبتة
-- مناسب لمحركات البحث
-
-مثال جيد: "شامبو تنظيف السجاد بفرشاة مدمجة من مؤسسة البرج"
-مثال جيد: "كيس قمامة أسود 120 لتر للمطاعم والمحلات"
+قواعد صارمة (STRICT):
+- ممنوع اختراع أي معلومة غير موجودة في الاسم/الملاحظات/القالب.
+- ممنوع اختراع category_id أو subcategory_id. اختر فقط IDs من القوائم أعلاه أو null.
+- إذا اخترت subcategory_id يجب أن تتبع category_id.
+- إذا كان الاسم غامض (مثل: "شامبو 1 لتر") لا تختار subcategory_id عشوائيًا.
 
 Return ONLY valid JSON. No markdown. No explanation. No code fences.
-أرجع JSON صالح فقط بالشكل التالي:
+أرجع JSON صالح فقط بالشكل التالي تمامًا (لا تضف حقول أخرى):
 {
-  "alt_text": "وصف الصورة هنا"
+  "name": "اسم المنتج بالعربية أو null",
+  "short_description": "وصف مختصر: جملتان فقط أو null",
+  "marketing_tagline": "عبارة تسويقية قصيرة أو null",
+  "key_features": ["ميزة 1", "ميزة 2", "ميزة 3", "ميزة 4"],
+  "product_badges": ["bestselling"],
+  "intent_tags": ["home"],
+  "description": "وصف تفصيلي 2-4 أسطر أو null",
+  "meta_title": "عنوان SEO (max 60 حرف) أو null",
+  "meta_description": "وصف SEO (max 155 حرف) أو null",
+  "suggested_sku": "SKU مقترح بالإنجليزية أو null",
+  "category_id": "id من قائمة الأقسام أو null",
+  "subcategory_id": "id من قائمة الفئات الفرعية أو null",
+  "category_confidence": "high | medium | low",
+  "subcategory_confidence": "high | medium | low"
 }`;
 
-  const retryPrompt = `Return ONLY valid JSON. No markdown. No explanation. No code fences.
-اكتب JSON مختصر فقط لوصف صورة المنتج:
-اسم المنتج: ${productName}
-أرجع JSON بالشكل: {"alt_text": "وصف قصير 6-14 كلمة"}`;
+  const retryPrompt = `Return ONLY valid JSON. No markdown. No code fences.
+أعد المحاولة مع الالتزام الصارم:
+- لا تخمن التصنيف.
+- category_id/subcategory_id IDs فقط من القوائم أو null.
+- إذا غير متأكد من الفئة الفرعية: subcategory_id=null و subcategory_confidence=low.
+أرجع نفس الحقول تمامًا.`;
 
   return { base: basePrompt, retry: retryPrompt };
 }
 
-/**
- * Generate product copy using the active AI provider
- */
-export async function generateProductCopy(
-  provider: AiProvider,
-  input: ProductCopyInput
-): Promise<ProductCopyOutput> {
+export async function generateProductCopy(provider: AiProvider, input: ProductCopyInput): Promise<ProductCopyOutput> {
   if (!isApiKeyConfigured(provider)) {
     throw new AiProviderError(getMissingApiKeyMessage(provider), provider, 'MISSING_API_KEY');
   }
@@ -909,106 +840,109 @@ export async function generateProductCopy(
 
   let rawText: string;
   try {
-    if (provider === 'gemini') {
-      rawText = await generateWithGemini(prompts.base, prompts.retry);
-    } else {
-      rawText = await generateWithOpenAI(prompts.base, prompts.retry);
-    }
+    rawText =
+      provider === 'gemini'
+        ? await generateWithGemini(prompts.base, prompts.retry)
+        : await generateWithOpenAI(prompts.base, prompts.retry);
   } catch (error) {
-    if (error instanceof AiProviderError) {
-      throw error;
-    }
-    throw new AiProviderError(
-      error instanceof Error ? error.message : 'Unknown error',
-      provider,
-      'API_ERROR'
-    );
+    if (error instanceof AiProviderError) throw error;
+    throw new AiProviderError(error instanceof Error ? error.message : 'Unknown error', provider, 'API_ERROR');
   }
 
   const parsed = extractJsonObject(rawText);
   const normalized = normalizeProductCopyResponse(parsed);
-
   if (!normalized) {
-    throw new AiProviderError('AI response was not valid JSON', provider, 'INVALID_RESPONSE');
+    throw new AiProviderError('AI response was empty or invalid', provider, 'INVALID_RESPONSE');
   }
 
-  // Validate category_id and subcategory_id against provided lists
   const categoryIds = new Set(input.categories.map((c) => c.id));
-  const subcategoryMap = new Map(input.subcategories.map((s) => [s.id, s] as const));
+  const subcategoryById = new Map(input.subcategories.map((s) => [s.id, s] as const));
 
-  const validCategoryId = normalized.category_id && categoryIds.has(normalized.category_id)
-    ? normalized.category_id
-    : null;
-
-  const validSubcategoryId = (() => {
-    if (!normalized.subcategory_id) return null;
-    const found = subcategoryMap.get(normalized.subcategory_id);
-    if (!found) return null;
-    if (!validCategoryId) return null;
-    return found.category_id === validCategoryId ? found.id : null;
-  })();
-
-  return {
-    ...normalized,
-    meta_title: normalized.meta_title ? clampString(normalized.meta_title, 60) : null,
-    meta_description: normalized.meta_description ? clampString(normalized.meta_description, 155) : null,
-    suggested_sku: normalized.suggested_sku ? sanitizeSku(normalized.suggested_sku) : null,
-    category_id: validCategoryId,
-    subcategory_id: validSubcategoryId,
-  };
-}
-
-/**
- * Generate image alt text using the active AI provider
- */
-export async function generateImageAltText(
-  provider: AiProvider,
-  input: ImageAltTextInput
-): Promise<ImageAltTextOutput> {
-  if (!isApiKeyConfigured(provider)) {
-    throw new AiProviderError(getMissingApiKeyMessage(provider), provider, 'MISSING_API_KEY');
+  // Validate category id
+  if (normalized.category_id && !categoryIds.has(normalized.category_id)) {
+    normalized.category_id = null;
+    normalized.category_confidence = 'low';
   }
 
-  const prompts = buildAltTextPrompts(input);
-
-  let rawText: string;
-  try {
-    if (provider === 'gemini') {
-      rawText = await generateWithGemini(prompts.base, prompts.retry);
-    } else {
-      rawText = await generateWithOpenAI(prompts.base, prompts.retry);
+  // Validate subcategory id + category match
+  if (normalized.subcategory_id) {
+    const sub = subcategoryById.get(normalized.subcategory_id);
+    const matchesCategory = Boolean(sub && normalized.category_id && sub.category_id === normalized.category_id);
+    if (!sub || !matchesCategory) {
+      normalized.subcategory_id = null;
+      normalized.subcategory_confidence = 'low';
     }
-  } catch (error) {
-    if (error instanceof AiProviderError) {
-      throw error;
-    }
-    throw new AiProviderError(
-      error instanceof Error ? error.message : 'Unknown error',
-      provider,
-      'API_ERROR'
-    );
-  }
-
-  const parsed = extractJsonObject(rawText);
-  const normalized = normalizeAltTextResponse(parsed);
-
-  if (!normalized) {
-    throw new AiProviderError('AI response was not valid JSON', provider, 'INVALID_RESPONSE');
   }
 
   return normalized;
 }
 
+export async function generateImageAltText(provider: AiProvider, input: ImageAltTextInput): Promise<ImageAltTextOutput> {
+  if (!isApiKeyConfigured(provider)) {
+    throw new AiProviderError(getMissingApiKeyMessage(provider), provider, 'MISSING_API_KEY');
+  }
+
+  const basePrompt = `Return ONLY valid JSON. No markdown. No explanation. No code fences.
+اكتب alt text عربي قصير وواضح للصورة (6-14 كلمة) يساعد في SEO بدون مبالغة.
+اعتمد فقط على هذه المعلومات:
+- اسم المنتج: ${input.productName}
+- القسم: ${input.categoryName ?? ''}
+- وصف مختصر: ${input.shortDescription ?? ''}
+- عبارة تسويقية: ${input.marketingTagline ?? ''}
+- مميزات: ${(input.keyFeatures || []).join(' | ')}
+
+JSON schema:
+{ "alt_text": "..." }`;
+
+  const retryPrompt = `Return ONLY valid JSON. No markdown. No code fences.
+{ "alt_text": "${input.productName}" }`;
+
+  const rawText =
+    provider === 'gemini'
+      ? await generateWithGemini(basePrompt, retryPrompt)
+      : await generateWithOpenAI(basePrompt, retryPrompt);
+
+  const parsed = extractJsonObject(rawText);
+  const obj = parsed && typeof parsed === 'object' ? (parsed as any) : null;
+  const altText = normalizeString(obj?.alt_text);
+  if (!altText) {
+    throw new AiProviderError('AI response was empty', provider, 'INVALID_RESPONSE');
+  }
+
+  return { alt_text: clampString(altText, 150) };
+}
+
+// ...
+
 function buildProductFromImagesPrompts(
   categories: { id: string; name: string }[],
   subcategories: { id: string; name: string; category_id: string }[]
 ): { base: string; retry: string } {
-  const basePrompt = `حلّل الصورة فقط ولا تخمّن. اعتمد على النص الظاهر على العبوة والشكل المرئي. إذا لم تستطع تحديد نوع المنتج بثقة، أرجع product_type = 'غير واضح' ولا تولّد وصفًا تسويقيًا مخترعًا. ممنوع تحويل المنتج إلى منظفات أو سائل جلي أو شامبو أو أي منتج آخر إلا إذا كان ذلك ظاهرًا بوضوح في الصورة.
+  // ...
 
-أنت محلل صور منتجات صارم. مهمتك هي تحليل الصور المرفقة وتحديد المنتج بدقة - لا تخمّن أبدًا.
+  const basePrompt = `أعد المحاولة مع الالتزام الصارم بالنقاط التالية:
+  // ...
 
-تعليمات صارمة - اقرأ بعناية:
-1. حلل الصور فقط، لا تستخدم معرفة مسبقة عن "مؤسسة البرج"
+  JSON schema المطلوب:
+  {
+    "detected_product_type": "نوع المنتج كما يظهر في الصورة - اكتب 'غير واضح' إذا غير واضح",
+    "visible_text": ["كل النصوص الظاهرة على العبوة/المنتج"],
+    "brand": "العلامة التجارية إن ظهرت بالضبط، وإلا null",
+    "confidence": "high | medium | low",
+    "uncertainty_reason": "سبب عدم التأكد إذا confidence ليست high، وإلا null",
+    "name": "اسم المنتج كما يظهر أو 'منتج غير محدد' إذا غير واضح",
+    "short_description": "وصف مختصر فقط إذا كانت الثقة high، وإلا null",
+    "description": "وصف تفصيلي فقط إذا كانت الثقة high، وإلا null",
+    "sku": "كود SKU مقترح بالإنجليزية أو null",
+    "key_features": ["الميزات المرئية فقط"],
+    "meta_title": "SEO title فقط إذا كانت الثقة high",
+    "meta_description": "SEO description فقط إذا كانت الثقة high",
+    "suggested_category_id": "id القسم أو null إذا غير واضح",
+    "suggested_subcategory_id": "id الفئة أو null إذا غير واضح",
+    "has_variants": false,
+    "variant_types": [],
+    "image_alt_texts": {
+      "image_1": "وصف الصورة 1"
 2. اعتمد فقط على ما يظهر بوضوح في الصور:
    - النص الظاهر على العبوة/المنتج
    - الشكل والألوان المرئية

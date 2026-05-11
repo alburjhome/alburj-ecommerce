@@ -70,13 +70,12 @@ interface AiProductSuggestion {
   has_variants: boolean;
   variant_types: string[];
   image_alt_texts: Record<string, string>;
-  // Analysis metadata
   detected_product_type: string | null;
   visible_text: string[];
   confidence: 'high' | 'medium' | 'low';
   uncertainty_reason: string | null;
-  // Name-based copy metadata
-  category_confidence?: 'high' | 'medium' | 'low';
+  category_confidence: 'high' | 'medium' | 'low';
+  subcategory_confidence?: 'high' | 'medium' | 'low';
 }
 
 type QuickTemplateKey =
@@ -129,6 +128,7 @@ export function QuickProductCreator() {
   const [subcategories, setSubcategories] = useState<SubcategoryOption[]>([]);
 
   const [aiSuggestion, setAiSuggestion] = useState<AiProductSuggestion | null>(null);
+  const [aiTaxonomyWarning, setAiTaxonomyWarning] = useState<string | null>(null);
   const [showVariantWarning, setShowVariantWarning] = useState(false);
   const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
   const [showImageAiSection, setShowImageAiSection] = useState(false);
@@ -172,13 +172,22 @@ export function QuickProductCreator() {
     return subcategories.filter((s) => s.category_id === formData.category_id);
   }, [formData.category_id, subcategories]);
 
+  useEffect(() => {
+    if (!formData.category_id) return;
+    if (formData.subcategory_id) return;
+    if (availableSubcategories.length === 1) {
+      setFormData((prev) => ({ ...prev, subcategory_id: availableSubcategories[0]!.id }));
+    }
+  }, [availableSubcategories, formData.category_id, formData.subcategory_id]);
+
   const ensureDraftProduct = useCallback(async (): Promise<{ id: string; slug: string } | null> => {
     if (productId && productSlug) return { id: productId, slug: productSlug };
 
     setIsCreatingDraft(true);
     try {
       const token = await getAccessToken();
-      const result = await createQuickDraftProduct(token);
+      const draftName = formData.name?.trim() || nameSeed.trim() || null;
+      const result = await createQuickDraftProduct(token, draftName);
 
       if (!result.success || !result.data) {
         throw new Error(result.error || 'تعذر إنشاء المنتج');
@@ -259,6 +268,7 @@ export function QuickProductCreator() {
       }
 
       const categoryConfidence = (data?.category_confidence ?? 'low') as 'high' | 'medium' | 'low';
+      const subcategoryConfidence = (data?.subcategory_confidence ?? 'low') as 'high' | 'medium' | 'low';
       const suggestedCategoryId = typeof data?.category_id === 'string' ? data.category_id : '';
       const suggestedSubcategoryId = typeof data?.subcategory_id === 'string' ? data.subcategory_id : '';
 
@@ -289,12 +299,20 @@ export function QuickProductCreator() {
         confidence: 'high',
         uncertainty_reason: null,
         category_confidence: categoryConfidence,
+        subcategory_confidence: subcategoryConfidence,
       });
+
+      if ((categoryConfidence === 'high' || categoryConfidence === 'medium') && suggestedCategoryId && !suggestedSubcategoryId) {
+        setAiTaxonomyWarning('تم اختيار القسم، لكن الفئة تحتاج مراجعة.');
+      } else {
+        setAiTaxonomyWarning(null);
+      }
 
       setFormData((prev) => {
         const nextCategoryId =
           categoryConfidence === 'high' || categoryConfidence === 'medium' ? suggestedCategoryId : '';
-        const nextSubcategoryId = categoryConfidence === 'high' ? suggestedSubcategoryId : '';
+        const nextSubcategoryId =
+          categoryConfidence === 'high' && subcategoryConfidence === 'high' ? suggestedSubcategoryId : '';
 
         return {
           ...prev,
@@ -328,7 +346,10 @@ export function QuickProductCreator() {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files || !files.length || !productId) return;
+    if (!files || !files.length) return;
+
+    const draft = await ensureDraftProduct();
+    if (!draft) return;
 
     const token = await getAccessToken();
 
@@ -339,7 +360,7 @@ export function QuickProductCreator() {
         formData.append('alt_text', '');
         formData.append('sort_order', '0');
 
-        const result = await uploadAdminProductImage(token, productId, formData);
+        const result = await uploadAdminProductImage(token, draft.id, formData);
         if (!result.success) {
           toast({
             title: 'تعذر رفع الصورة',
@@ -992,6 +1013,16 @@ export function QuickProductCreator() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {!formData.subcategory_id && Boolean(formData.category_id) && (
+                    <p className="mt-1 text-xs text-muted-foreground break-words whitespace-normal">
+                      اختر الفئة الفرعية لتسهيل ظهور المنتج في المكان الصحيح.
+                    </p>
+                  )}
+                  {aiTaxonomyWarning && (
+                    <p className="mt-1 text-xs text-amber-700 break-words whitespace-normal">
+                      {aiTaxonomyWarning}
+                    </p>
+                  )}
                 </div>
               )}
 

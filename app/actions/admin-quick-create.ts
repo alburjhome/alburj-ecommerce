@@ -32,15 +32,17 @@ async function uniqueProductSlug(baseSlug: string, accessToken: string | null | 
 
 export async function createQuickDraftProduct(
   accessToken: string | null
+  ,draftName?: string | null
 ): Promise<ActionResult<{ id: string; slug: string }>> {
   try {
     const adminClient = await createAdminActionClient(accessToken);
 
-    const baseSlug = createReadableSlug('منتج جديد', 'product');
+    const resolvedName = (draftName || '').trim() || 'منتج جديد';
+    const baseSlug = createReadableSlug(resolvedName, 'product');
     const slug = await uniqueProductSlug(baseSlug, accessToken);
 
     const payload = {
-      name: 'منتج جديد',
+      name: resolvedName,
       slug,
       description: null,
       short_description: null,
