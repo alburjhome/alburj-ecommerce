@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { AnalyticsScripts } from '@/components/analytics-scripts';
 import { createSupabaseServerClient } from '@/lib/supabase-ssr';
+import { absoluteUrl, getSiteUrl, SITE_NAME } from '@/lib/seo';
 
 const cairo = Cairo({
   subsets: ['arabic', 'latin'],
@@ -12,10 +13,16 @@ const cairo = Cairo({
   display: 'swap',
 });
 
+const baseUrl = getSiteUrl();
+
 export const metadata: Metadata = {
+  metadataBase: new URL(baseUrl),
   title: 'مؤسسة البرج - منتجات بلاستيكية وأدوات منزلية',
   description: 'مؤسسة البرج - وجهتك الأولى للمنتجات البلاستيكية، الأدوات المنزلية، والأجهزة الكهربائية في الأردن. توصيل سريع، أسعار مميزة، وخدمة ممتازة.',
   keywords: 'مؤسسة البرج, منتجات بلاستيكية, أدوات منزلية, أجهزة كهربائية, الأردن, تسوق اونلاين',
+  alternates: {
+    canonical: '/',
+  },
   icons: {
     icon: [
       { url: '/favicon.svg', type: 'image/svg+xml' },
@@ -26,8 +33,21 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'مؤسسة البرج - منتجات بلاستيكية وأدوات منزلية',
     description: 'وجهتك الأولى للمنتجات البلاستيكية، الأدوات المنزلية، والأجهزة الكهربائية في الأردن',
+    url: baseUrl,
+    siteName: SITE_NAME,
     type: 'website',
     locale: 'ar_JO',
+    images: [
+      {
+        url: absoluteUrl('/placeholder-banner.svg', baseUrl),
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'مؤسسة البرج - منتجات بلاستيكية وأدوات منزلية',
+    description: 'وجهتك الأولى للمنتجات البلاستيكية، الأدوات المنزلية، والأجهزة الكهربائية في الأردن',
+    images: [absoluteUrl('/placeholder-banner.svg', baseUrl)],
   },
 };
 

@@ -14,6 +14,7 @@ import {
   productMatchesIntent,
   type ProductIntentKey,
 } from '@/lib/product-intents';
+import { absoluteUrl, getSiteUrl, SITE_NAME } from '@/lib/seo';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -22,10 +23,35 @@ interface ProductsPageProps {
   searchParams?: { search?: string; intent?: string; sort?: string };
 }
 
+const baseUrl = getSiteUrl();
+
 export const metadata: Metadata = {
   title: 'منتجات مؤسسة البرج | مستلزمات البيت والمحل',
   description:
     'تصفح منتجات مؤسسة البرج من منظفات، بلاستيكيات، تغليف، أدوات منزلية، أدوات مطبخ، أجهزة كهربائية ومفروشات.',
+  alternates: {
+    canonical: `${baseUrl}/products`,
+  },
+  openGraph: {
+    title: 'منتجات مؤسسة البرج | مستلزمات البيت والمحل',
+    description:
+      'تصفح منتجات مؤسسة البرج من منظفات، بلاستيكيات، تغليف، أدوات منزلية، أدوات مطبخ، أجهزة كهربائية ومفروشات.',
+    url: `${baseUrl}/products`,
+    type: 'website',
+    siteName: SITE_NAME,
+    images: [
+      {
+        url: absoluteUrl('/placeholder-banner.svg', baseUrl),
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'منتجات مؤسسة البرج | مستلزمات البيت والمحل',
+    description:
+      'تصفح منتجات مؤسسة البرج من منظفات، بلاستيكيات، تغليف، أدوات منزلية، أدوات مطبخ، أجهزة كهربائية ومفروشات.',
+    images: [absoluteUrl('/placeholder-banner.svg', baseUrl)],
+  },
 };
 
 function normalizeSearchTerm(value: string) {

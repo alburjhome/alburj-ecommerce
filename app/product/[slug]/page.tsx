@@ -9,6 +9,14 @@ import { getWhatsAppLink } from '@/lib/store-settings';
 import { getPrimaryProductImage } from '@/lib/product-image';
 import { safeImageSrc, PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
 import { sortOptionValues, sortProductOptions, sortProductVariants } from '@/lib/product-variants';
+import {
+  buildProductJsonLd,
+  getProductSeoDescription,
+  getProductSeoImages,
+  getSiteUrl,
+  jsonLdScriptValue,
+  SITE_NAME,
+} from '@/lib/seo';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -176,21 +184,15 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     return { title: 'المنتج غير موجود' };
   }
 
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '');
+  const baseUrl = getSiteUrl();
   const canonical = `${baseUrl}/product/${product.slug}`;
 
-  const rawDescription =
-    product.meta_description || product.short_description || product.description || '';
-  const description = rawDescription
-    ? rawDescription.length > 180
-      ? `${rawDescription.slice(0, 177)}...`
-      : rawDescription
-    : undefined;
+  const description = getProductSeoDescription(product);
 
   const primaryImage = safeImageSrc(getPrimaryProductImage(product), PLACEHOLDER_PRODUCT);
   const ogImageUrl = primaryImage.startsWith('http') ? primaryImage : `${baseUrl}${primaryImage}`;
 
-  const title = product.meta_title || product.name;
+  const title = product.meta_title || `${product.name} | ${SITE_NAME}`;
 
   return {
     title,
@@ -203,19 +205,19 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
       description,
       url: canonical,
       type: 'website',
-      images: ogImageUrl
-        ? [
-            {
-              url: ogImageUrl,
-            },
-          ]
-        : undefined,
+      siteName: SITE_NAME,
+      images: [
+        {
+          url: ogImageUrl,
+          alt: product.name,
+        },
+      ],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description,
-      images: ogImageUrl ? [ogImageUrl] : undefined,
+      images: getProductSeoImages(product, baseUrl).slice(0, 4),
     },
   };
 }
@@ -235,9 +237,16 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const recommendedAddons = await getRecommendedAddons(product);
 
   const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
+  const productJsonLd = buildProductJsonLd(product);
 
   return (
     <div className="min-h-screen bg-background">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: jsonLdScriptValue(productJsonLd),
+        }}
+      />
       <Header whatsappUrl={whatsappUrl} />
       <main>
         <ProductDetail product={product} whatsappNumber={settings?.whatsapp_number} />

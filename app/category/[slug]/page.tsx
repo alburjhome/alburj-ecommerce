@@ -7,8 +7,8 @@ import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductCard } from '@/features/store/components/product-card';
 import { getWhatsAppLink } from '@/lib/store-settings';
-import { safeImageSrc, PLACEHOLDER_CATEGORY } from '@/lib/image-utils';
 import { TrackedWhatsAppLink } from '@/components/tracked-whatsapp-link';
+import { getCategorySeoDescription, getCategorySeoImage, getSiteUrl, SITE_NAME } from '@/lib/seo';
 import type { Category, ProductWithDetails, StoreSettings, Subcategory } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -113,15 +113,13 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   const data = await getCategoryData(params.slug);
   if (!data) return { title: 'القسم غير موجود' };
 
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '');
+  const baseUrl = getSiteUrl();
   const canonical = `${baseUrl}/category/${data.category.slug}`;
 
-  const title = `${data.category.name} | مؤسسة البرج`;
-  const rawDescription = data.category.description || `تصفح منتجات قسم ${data.category.name} من مؤسسة البرج.`;
-  const description = rawDescription.length > 180 ? `${rawDescription.slice(0, 177)}...` : rawDescription;
+  const title = `${data.category.name} في الأردن | ${SITE_NAME}`;
+  const description = getCategorySeoDescription(data.category);
 
-  const image = safeImageSrc((data.category as any).image_url, PLACEHOLDER_CATEGORY);
-  const ogImageUrl = image.startsWith('http') ? image : `${baseUrl}${image}`;
+  const ogImageUrl = getCategorySeoImage(data.category, baseUrl);
 
   return {
     title,
@@ -134,19 +132,19 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
       description,
       url: canonical,
       type: 'website',
-      images: ogImageUrl
-        ? [
-            {
-              url: ogImageUrl,
-            },
-          ]
-        : undefined,
+      siteName: SITE_NAME,
+      images: [
+        {
+          url: ogImageUrl,
+          alt: data.category.name,
+        },
+      ],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description,
-      images: ogImageUrl ? [ogImageUrl] : undefined,
+      images: [ogImageUrl],
     },
   };
 }
