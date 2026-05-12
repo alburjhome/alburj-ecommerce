@@ -9,7 +9,9 @@ import { PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
 import { getPrimaryProductImage } from '@/lib/product-image';
 import { calculateDiscountPercentage, formatPrice } from '@/lib/utils';
 import { isVariantInStock } from '@/lib/product-variants';
+import { useToast } from '@/hooks/use-toast';
 import useCartStore from '@/stores/cart';
+import { CartToastActions } from './cart-toast-actions';
 
 interface ProductCardProps {
   product: ProductWithDetails;
@@ -19,6 +21,7 @@ interface ProductCardProps {
 export function ProductCard({ product, priority = false }: ProductCardProps) {
   const addItem = useCartStore((state) => state.addItem);
   const openCart = useCartStore((state) => state.openCart);
+  const { toast } = useToast();
 
   const productHref = `/product/${product.slug}`;
   const imageSrc = getPrimaryProductImage(product);
@@ -48,7 +51,10 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
       sku: product.sku,
       stock_quantity: product.track_stock ? product.stock_quantity : 99,
     });
-    openCart();
+    toast({
+      title: 'تمت إضافة المنتج للسلة',
+      description: <CartToastActions onViewCart={openCart} />,
+    });
   }
 
   const marketingBadgeLabel = (badge: string) => {

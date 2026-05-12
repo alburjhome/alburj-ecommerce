@@ -9,7 +9,9 @@ import { PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
 import { getPrimaryProductImage } from '@/lib/product-image';
 import { formatPrice } from '@/lib/utils';
 import type { ProductWithDetails } from '@/types';
+import { useToast } from '@/hooks/use-toast';
 import useCartStore from '@/stores/cart';
+import { CartToastActions } from './cart-toast-actions';
 
 interface RecommendedAddonsProps {
   products: ProductWithDetails[];
@@ -21,6 +23,7 @@ export function RecommendedAddons({ products }: RecommendedAddonsProps) {
   const openCart = useCartStore((state) => state.openCart);
   const hasHydrated = useCartStore((state) => state.hasHydrated);
   const rehydrate = useCartStore((state) => state.rehydrate);
+  const { toast } = useToast();
 
   // Rehydrate only once when not hydrated
   useEffect(() => {
@@ -85,7 +88,10 @@ export function RecommendedAddons({ products }: RecommendedAddonsProps) {
                         image: imageSrc,
                         stock_quantity: product.stock_quantity,
                       });
-                      openCart();
+                      toast({
+                        title: 'تمت إضافة المنتج للسلة',
+                        description: <CartToastActions onViewCart={openCart} />,
+                      });
                     }}
                     disabled={!hasHydrated || (product.track_stock && (product.stock_quantity ?? 0) <= 0 && !product.allow_backorders)}
                   >

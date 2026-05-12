@@ -5,7 +5,6 @@ import {
   Boxes,
   Check,
   CreditCard,
-  HelpCircle,
   MessageCircle,
   Minus,
   Plus,
@@ -15,10 +14,19 @@ import {
 import { ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
 import { calculateDiscountPercentage, formatPrice } from '@/lib/utils';
 import useCartStore from '@/stores/cart';
 import { getWhatsAppLink } from '@/lib/store-settings';
+import { useToast } from '@/hooks/use-toast';
 import {
   getProductSuitableForTags,
   INTENT_TAG_CONFIG,
@@ -36,6 +44,7 @@ import {
   sortProductOptions,
   sortProductVariants,
 } from '@/lib/product-variants';
+import { CartToastActions } from './cart-toast-actions';
 
 interface ProductDetailProps {
   product: ProductWithDetails;
@@ -47,11 +56,13 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const openCart = useCartStore((state) => state.openCart);
   const hasHydrated = useCartStore((state) => state.hasHydrated);
   const rehydrate = useCartStore((state) => state.rehydrate);
+  const { toast } = useToast();
 
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [selectedOptionIds, setSelectedOptionIds] = useState<Record<string, string>>({});
   const [productUrl, setProductUrl] = useState('');
+  const [isVariantSheetOpen, setIsVariantSheetOpen] = useState(false);
 
   useEffect(() => {
     if (!hasHydrated && rehydrate) {
@@ -117,8 +128,10 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
     ? calculateDiscountPercentage(displayPrice, displayComparePrice || displayPrice)
     : 0;
 
-  const maxQuantity = selectedVariant
-    ? Math.min(getVariantCartStock(selectedVariant), 99)
+  const maxQuantity = hasVariants
+    ? selectedVariant
+      ? Math.min(getVariantCartStock(selectedVariant), 99)
+      : 99
     : product.track_stock && !product.allow_backorders
       ? product.stock_quantity
       : 99;
@@ -126,10 +139,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const isUnavailable = hasVariants
     ? Boolean(isSelectionComplete && (!selectedVariant || variantIsUnavailable))
     : Boolean(product.track_stock && !product.allow_backorders && product.stock_quantity <= 0);
-  const canAddToCart =
-    hasHydrated &&
-    (hasVariants ? Boolean(isSelectionComplete && selectedVariant && !variantIsUnavailable) : !isUnavailable) &&
-    maxQuantity > 0;
+  const canSubmitAddToCart = hasHydrated;
 
   useEffect(() => {
     setQuantity((value) => Math.min(Math.max(1, value), Math.max(1, maxQuantity)));
@@ -142,8 +152,64 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
     }));
   }
 
+  function getOptionValueState(optionId: string, valueId: string) {
+    const nextSelection = {
+      ...selectedOptionIds,
+      [optionId]: valueId,
+    };
+    const matchingVariants = activeVariants.filter((variant) => {
+      const values = new Map((variant.values || []).map((value) => [value.option_id, value.option_value_id]));
+      return Object.entries(nextSelection)
+        .filter(([, selectedValueId]) => Boolean(selectedValueId))
+        .every(([selectedOptionId, selectedValueId]) => values.get(selectedOptionId) === selectedValueId);
+    });
+
+    return {
+      hasMatchingVariant: matchingVariants.length > 0,
+      hasInStockVariant: matchingVariants.some((variant) => isVariantInStock(variant)),
+      isAvailable: isOptionValueAvailable(activeVariants, selectedOptionIds, optionId, valueId),
+    };
+  }
+
+  function getAddToCartBlockMessage() {
+    if (!hasHydrated) return 'يرجى الانتظار لحظة ثم حاول مرة أخرى.';
+
+    if (hasVariants && !isSelectionComplete) {
+      if (missingOptions.length === 1) {
+        return `يرجى اختيار ${missingOptions[0]} أولًا`;
+      }
+      return 'يرجى اختيار جميع الخيارات قبل إضافة المنتج للسلة';
+    }
+
+    if (hasVariants && (!selectedVariant || variantIsUnavailable)) {
+      return 'هذا الخيار غير متوفر حاليًا';
+    }
+
+    if (!hasVariants && isUnavailable) {
+      return 'هذا المنتج غير متوفر حاليًا';
+    }
+
+    if (maxQuantity <= 0) {
+      return 'هذا الخيار غير متوفر حاليًا';
+    }
+
+    return null;
+  }
+
   function handleAddToCart() {
-    if (!canAddToCart) return;
+    const blockMessage = getAddToCartBlockMessage();
+
+    if (blockMessage) {
+      if (hasVariants) {
+        setIsVariantSheetOpen(true);
+        return;
+      }
+      toast({
+        title: blockMessage,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     addItem({
       product_id: product.id,
@@ -158,7 +224,11 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
       sku: displaySku,
       stock_quantity: selectedVariant ? getVariantCartStock(selectedVariant) : maxQuantity,
     });
-    openCart();
+    setIsVariantSheetOpen(false);
+    toast({
+      title: 'تمت إضافة المنتج للسلة',
+      description: <CartToastActions onViewCart={openCart} />,
+    });
   }
 
   const variantLines = selectedVariantOptions
@@ -232,7 +302,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
 
   const stockLabel = (() => {
     if (hasVariants && !isSelectionComplete) {
-      return { tone: 'amber', text: `يرجى اختيار ${missingOptions.join(' و ')} أولًا` };
+      return { tone: 'amber', text: `حدد ${missingOptions.join(' و ')} لمعرفة التوفر` };
     }
     if (isUnavailable) {
       return { tone: 'red', text: 'غير متوفر حاليًا' };
@@ -240,8 +310,80 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
     if (!displayTrackStock) {
       return { tone: 'green', text: 'متوفر' };
     }
+    if (displayStockQuantity <= 5) {
+      return { tone: 'amber', text: `كمية محدودة (${displayStockQuantity} قطعة)` };
+    }
     return { tone: 'green', text: `متوفر في المخزون (${displayStockQuantity} قطعة)` };
   })();
+
+  const stockBadgeClass =
+    stockLabel.tone === 'green'
+      ? 'border-green-200 bg-green-50 text-green-700'
+      : stockLabel.tone === 'amber'
+        ? 'border-amber-200 bg-amber-50 text-amber-700'
+        : 'border-red-200 bg-red-50 text-red-700';
+
+  const stockDotClass =
+    stockLabel.tone === 'green'
+      ? 'bg-green-500'
+      : stockLabel.tone === 'amber'
+        ? 'bg-amber-500'
+        : 'bg-red-500';
+
+  function renderVariantOptions({ showMissingMessage = false } = {}) {
+    if (!hasVariants) return null;
+
+    return (
+      <div className="space-y-3">
+        {options.map((option) => (
+          <div key={option.id} className="space-y-2">
+            <div className="text-sm font-semibold">{option.name}</div>
+            <div className="flex flex-wrap gap-2">
+              {(option.values || []).map((value) => {
+                const isSelected = selectedOptionIds[option.id] === value.id;
+                const state = getOptionValueState(option.id, value.id);
+                const isDisabled =
+                  !isSelected && (!state.isAvailable || !state.hasMatchingVariant || !state.hasInStockVariant);
+                const isOutOfStock = state.hasMatchingVariant && !state.hasInStockVariant;
+
+                return (
+                  <button
+                    key={value.id}
+                    type="button"
+                    disabled={isDisabled}
+                    aria-pressed={isSelected}
+                    onClick={() => handleSelectOption(option.id, value.id)}
+                    className={[
+                      'min-w-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                      'disabled:cursor-not-allowed disabled:opacity-45',
+                      isSelected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'bg-background hover:border-primary/60',
+                    ].join(' ')}
+                  >
+                    <span className="block break-words">{value.value}</span>
+                    {isOutOfStock && (
+                      <span className="mt-0.5 block text-[11px] font-normal opacity-80">غير متوفر</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {showMissingMessage && !isSelectionComplete && (
+          <p className="text-sm text-amber-700">
+            {missingOptions.length === 1
+              ? `يرجى اختيار ${missingOptions[0]} قبل إضافة المنتج للسلة.`
+              : 'يرجى اختيار جميع الخيارات قبل إضافة المنتج للسلة.'}
+          </p>
+        )}
+        {isSelectionComplete && (!selectedVariant || variantIsUnavailable) && (
+          <p className="text-sm text-red-700">هذا الخيار غير متوفر حاليًا.</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <section className="container mx-auto px-4 py-8 pb-28 md:py-12 md:pb-12">
@@ -318,80 +460,24 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
             )}
           </div>
 
-          {displaySku && (
-            <div className="text-sm text-muted-foreground">
-              SKU: <span className="font-medium text-foreground">{displaySku}</span>
-            </div>
-          )}
-
           {hasVariants && (
-            <div className="space-y-4 rounded-lg border bg-card p-4">
-              <div>
-                <h2 className="text-base font-semibold">خيارات المنتج</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  اختر المتغير المطلوب قبل إضافة المنتج للسلة.
-                </p>
-              </div>
-              {options.map((option) => (
-                <div key={option.id} className="space-y-2">
-                  <div className="text-sm font-medium">{option.name}</div>
-                  <div className="flex flex-wrap gap-2">
-                    {(option.values || []).map((value) => {
-                      const isSelected = selectedOptionIds[option.id] === value.id;
-                      const isAvailable = isOptionValueAvailable(
-                        activeVariants,
-                        selectedOptionIds,
-                        option.id,
-                        value.id
-                      );
-                      return (
-                        <button
-                          key={value.id}
-                          type="button"
-                          disabled={!isAvailable}
-                          aria-pressed={isSelected}
-                          onClick={() => handleSelectOption(option.id, value.id)}
-                          className={[
-                            'min-w-0 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
-                            'disabled:cursor-not-allowed disabled:opacity-40',
-                            isSelected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'bg-background hover:border-primary/60',
-                          ].join(' ')}
-                        >
-                          <span className="break-words">{value.value}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-              {hasVariants && !isSelectionComplete && (
-                <p className="text-sm text-amber-700">يرجى اختيار كل الخيارات قبل الإضافة للسلة.</p>
-              )}
+            <div className="space-y-3 rounded-lg border border-primary/10 bg-primary/5 p-3">
+              <h2 className="text-sm font-semibold">
+                {options.length === 1 ? `اختر ${options[0].name}` : 'اختر خيارات المنتج'}
+              </h2>
+              {renderVariantOptions()}
             </div>
           )}
 
-          <div className="rounded-lg border bg-card p-3 text-sm">
-            {stockLabel.tone === 'green' ? (
-              <span className="inline-flex items-center gap-1.5 text-green-700">
-                <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                {stockLabel.text}
-              </span>
-            ) : stockLabel.tone === 'amber' ? (
-              <span className="inline-flex items-center gap-1.5 text-amber-700">
-                <HelpCircle className="h-4 w-4" />
-                {stockLabel.text}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-red-700">
-                <span className="h-2 w-2 rounded-full bg-red-500"></span>
-                {stockLabel.text}
-              </span>
-            )}
+          <div>
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${stockBadgeClass}`}>
+              <span className={`h-2 w-2 rounded-full ${stockDotClass}`} />
+              {stockLabel.text}
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-muted-foreground md:hidden">الكمية</span>
             <div className="flex h-11 items-center rounded-md border">
               <Button
                 type="button"
@@ -414,7 +500,12 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
               </Button>
             </div>
 
-            <Button type="button" className="h-11 flex-1" disabled={!canAddToCart} onClick={handleAddToCart}>
+            <Button
+              type="button"
+              className="hidden h-11 flex-1 md:inline-flex"
+              disabled={!canSubmitAddToCart}
+              onClick={handleAddToCart}
+            >
               <ShoppingCart className="ml-2 h-4 w-4" />
               أضف للسلة
             </Button>
@@ -561,6 +652,56 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
         </div>
       </div>
 
+      {hasVariants && (
+        <Sheet open={isVariantSheetOpen} onOpenChange={setIsVariantSheetOpen}>
+          <SheetContent
+            side="bottom"
+            className="max-h-[76vh] overflow-y-auto rounded-t-2xl p-4 sm:left-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:p-5"
+          >
+            <SheetHeader className="text-right">
+              <SheetTitle>اختر خيارات المنتج</SheetTitle>
+              <SheetDescription className="line-clamp-2">
+                {product.name}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted-foreground">السعر:</span>
+                <span className="text-lg font-bold text-primary">{formatPrice(displayPrice)}</span>
+                {hasDiscount && (
+                  <span className="text-sm text-muted-foreground line-through">
+                    {formatPrice(displayComparePrice || 0)}
+                  </span>
+                )}
+              </div>
+
+              {renderVariantOptions({ showMissingMessage: true })}
+            </div>
+
+            <SheetFooter className="mt-5 gap-2 sm:flex-row-reverse sm:justify-start sm:space-x-0">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                disabled={!canSubmitAddToCart}
+                onClick={handleAddToCart}
+              >
+                <ShoppingCart className="ml-2 h-4 w-4" />
+                إضافة للسلة
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => setIsVariantSheetOpen(false)}
+              >
+                إغلاق
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      )}
+
       <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
         <div
           className="mx-auto flex max-w-screen-sm items-center gap-3 px-4 py-3"
@@ -581,11 +722,11 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
           <Button
             type="button"
             className="h-11 flex-1"
-            disabled={!canAddToCart}
+            disabled={!canSubmitAddToCart}
             onClick={handleAddToCart}
           >
             <ShoppingCart className="ml-2 h-4 w-4" />
-            أضف للسلة
+            {hasVariants && !isSelectionComplete ? 'اختر الخيارات' : 'أضف للسلة'}
           </Button>
         </div>
       </div>
