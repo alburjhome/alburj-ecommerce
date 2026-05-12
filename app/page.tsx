@@ -1,7 +1,6 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import type { Category } from '@/types';
 import { HeroBanner } from '@/features/store/components/hero-banner';
 import { CategorySection } from '@/features/store/components/category-section';
 import { FeaturedProducts } from '@/features/store/components/featured-products';
@@ -11,6 +10,7 @@ import { Footer } from '@/features/store/components/footer';
 import { ArrowLeft, BadgePercent, CreditCard, Home, MessageCircle, Package, Shield, ShoppingBag, Sparkles, Store, Truck, UtensilsCrossed } from 'lucide-react';
 import { getWhatsAppLink } from '@/lib/store-settings';
 import { TrackedWhatsAppLink } from '@/components/tracked-whatsapp-link';
+import { getPublicCatalogTaxonomy, toPublicCategoryLinks } from '@/lib/public-catalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,33 +20,6 @@ export const metadata: Metadata = {
     'مؤسسة البرج توفر مستلزمات البيت والمحل من منظفات، ورقيات، بلاستيكيات، تغليف، أدوات منزلية ومطبخ، أجهزة كهربائية ومفروشات.',
 };
 
-async function getCategoriesWithProducts() {
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('*')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true });
-
-  if (!categories || categories.length === 0) {
-    return [];
-  }
-
-  // Filter to only include categories with active products
-  const categoriesWithProducts = await Promise.all(
-    categories.map(async (category: { id: string; [key: string]: unknown }) => {
-      const { count } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('category_id', category.id)
-        .eq('is_active', true);
-
-      return { category, hasProducts: (count || 0) > 0 };
-    })
-  );
-
-  return categoriesWithProducts.filter((item) => item.hasProducts).map((item) => item.category as unknown as Category);
-}
-
 async function getHomeData() {
   const [bannersResult, categoriesResult, featuredProductsResult, settingsResult] = await Promise.all([
     supabase
@@ -55,7 +28,7 @@ async function getHomeData() {
       .eq('is_active', true)
       .eq('position', 'home_hero')
       .order('sort_order', { ascending: true }),
-    getCategoriesWithProducts(),
+    getPublicCatalogTaxonomy(supabase),
     supabase
       .from('products')
       .select('*, images:product_images(*), variants:product_variants(*), category:categories(*)')
@@ -330,10 +303,11 @@ function ShopCTA({ whatsappUrl }: { whatsappUrl: string | null }) {
 export default async function HomePage() {
   const { banners, categories, featuredProducts, settings } = await getHomeData();
   const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
+  const categoryLinks = toPublicCategoryLinks(categories);
 
   return (
     <div className="min-h-screen bg-background">
-      <Header whatsappUrl={whatsappUrl} />
+      <Header whatsappUrl={whatsappUrl} categoryLinks={categoryLinks} />
       <main>
         <HeroBanner banners={banners} whatsappUrl={whatsappUrl} />
         <QuickTrustBar />

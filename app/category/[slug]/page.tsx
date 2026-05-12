@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
+import { MessageCircle, Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
 import { ProductCard } from '@/features/store/components/product-card';
 import { getWhatsAppLink } from '@/lib/store-settings';
 import { safeImageSrc, PLACEHOLDER_CATEGORY } from '@/lib/image-utils';
+import { TrackedWhatsAppLink } from '@/components/tracked-whatsapp-link';
 import type { Category, ProductWithDetails, StoreSettings, Subcategory } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -52,50 +54,45 @@ async function getCategoryData(slug: string, subcategorySlug?: string) {
   if (categoryError || !category) return null;
   const categoryRecord = category as Category;
 
+  const { data: products } = await (supabase.from('products') as any)
+    .select('*, images:product_images(*), variants:product_variants(*), category:categories(*), subcategory:subcategories(*)')
+    .eq('category_id', categoryRecord.id)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+
+  const productRecords = ((products || []) as ProductWithDetails[]).map((product) => ({
+    ...product,
+    variants: product.variants || [],
+    images: [...(product.images || [])].sort((a, b) => a.sort_order - b.sort_order),
+  }));
+
+  const visibleSubcategoryIds = new Set(
+    productRecords
+      .map((product) => product.subcategory_id)
+      .filter((id): id is string => Boolean(id))
+  );
+
   const { data: subcategories } = await (supabase.from('subcategories') as any)
     .select('*')
     .eq('category_id', categoryRecord.id)
     .eq('is_active', true)
     .order('sort_order', { ascending: true });
 
-  const subcategoryRecords = (subcategories || []) as Subcategory[];
+  const subcategoryRecords = ((subcategories || []) as Subcategory[]).filter((subcategory) =>
+    visibleSubcategoryIds.has(subcategory.id)
+  );
   const selectedSubcategory = subcategorySlug
     ? subcategoryRecords.find((item) => item.slug === subcategorySlug)
     : null;
-
-  let productsQuery = (supabase.from('products') as any)
-    .select('*, images:product_images(*), variants:product_variants(*), category:categories(*), subcategory:subcategories(*)')
-    .eq('category_id', categoryRecord.id)
-    .eq('is_active', true)
-    .order('created_at', { ascending: false });
-
-  if (subcategorySlug && selectedSubcategory) {
-    productsQuery = productsQuery.eq('subcategory_id', selectedSubcategory.id);
-  }
-
-  const { data: products } = await productsQuery;
-
-  // Debug: Log first product's image data (dev only)
-  if (process.env.NODE_ENV === 'development' && products && products.length > 0) {
-    const firstProduct = products[0];
-    console.log('[Category Debug] First product:', {
-      id: firstProduct.id,
-      name: firstProduct.name,
-      imagesCount: firstProduct.images?.length || 0,
-      hasImages: !!firstProduct.images,
-      imageKeys: firstProduct.images ? Object.keys(firstProduct.images) : 'none',
-    });
-  }
+  const visibleProducts = selectedSubcategory
+    ? productRecords.filter((product) => product.subcategory_id === selectedSubcategory.id)
+    : productRecords;
 
   return {
     category: categoryRecord,
     subcategories: subcategoryRecords,
     selectedSubcategory: selectedSubcategory as Subcategory | null,
-    products: ((products || []) as ProductWithDetails[]).map((product) => ({
-      ...product,
-      variants: product.variants || [],
-      images: [...(product.images || [])].sort((a, b) => a.sort_order - b.sort_order),
-    })),
+    products: visibleProducts,
   };
 }
 
@@ -237,8 +234,30 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             </div>
           ) : (
             <div className="rounded-lg border border-dashed px-4 py-16 text-center">
-              <h2 className="text-lg font-semibold">لا توجد منتجات حالياً</h2>
-              <p className="mt-2 text-sm text-muted-foreground">جرّب فئة أخرى أو ارجع لاحقاً.</p>
+              <h2 className="text-lg font-semibold">لا توجد منتجات متاحة حاليًا في هذا القسم</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                يمكنك تصفح كل المنتجات أو التواصل معنا إذا كنت تبحث عن منتج محدد.
+              </p>
+              <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                <Link
+                  href="/products"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  <Package className="h-4 w-4" />
+                  تصفح كل المنتجات
+                </Link>
+                {whatsappUrl && (
+                  <TrackedWhatsAppLink
+                    href={whatsappUrl}
+                    source="category_empty_whatsapp"
+                    metadata={{ category_slug: category.slug }}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    اسألنا عبر واتساب
+                  </TrackedWhatsAppLink>
+                )}
+              </div>
             </div>
           )}
         </section>

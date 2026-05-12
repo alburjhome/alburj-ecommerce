@@ -21,9 +21,10 @@ import { trackWhatsAppClick } from '@/lib/analytics';
 
 interface HeaderProps {
   whatsappUrl?: string | null;
+  categoryLinks?: Array<{ href: string; label: string }>;
 }
 
-export function Header({ whatsappUrl }: HeaderProps) {
+export function Header({ whatsappUrl, categoryLinks = [] }: HeaderProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   // Use selectors for stable references and granular re-renders
@@ -93,16 +94,6 @@ export function Header({ whatsappUrl }: HeaderProps) {
 
   const mobileQuickLinks = [
     { href: '/quick-order', label: 'جهّز طلبك خلال دقيقة', icon: MessageCircle },
-  ];
-
-  const categoryLinks = [
-    { href: '/category/cleaning-paper-personal-care', label: 'المنظفات والورقيات' },
-    { href: '/category/plastic-packaging', label: 'البلاستيك والتغليف' },
-    { href: '/category/restaurants-shops', label: 'مستلزمات المطاعم والمحلات' },
-    { href: '/category/home-kitchen', label: 'الأدوات المنزلية والمطبخ' },
-    { href: '/category/furnishings-linens', label: 'المفروشات والبياضات' },
-    { href: '/category/electrical-appliances', label: 'الأجهزة الكهربائية' },
-    { href: '/category/offers-bulk', label: 'العروض والكميات' },
   ];
 
   return (
@@ -224,25 +215,26 @@ export function Header({ whatsappUrl }: HeaderProps) {
                   </nav>
                 </div>
 
-                {/* Shop by category */}
-                <div className="px-3 py-2">
-                  <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    تسوق حسب القسم
+                {categoryLinks.length > 0 && (
+                  <div className="px-3 py-2">
+                    <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      تسوق حسب القسم
+                    </div>
+                    <nav className="flex flex-col gap-0.5">
+                      {categoryLinks.map((link) => (
+                        <SheetClose asChild key={link.href}>
+                          <Link
+                            href={link.href}
+                            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          >
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+                            {link.label}
+                          </Link>
+                        </SheetClose>
+                      ))}
+                    </nav>
                   </div>
-                  <nav className="flex flex-col gap-0.5">
-                    {categoryLinks.map((link) => (
-                      <SheetClose asChild key={link.href}>
-                        <Link
-                          href={link.href}
-                          className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        >
-                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
-                          {link.label}
-                        </Link>
-                      </SheetClose>
-                    ))}
-                  </nav>
-                </div>
+                )}
 
                 <div className="mt-auto border-t px-5 py-4">
                   {/* Trust points */}

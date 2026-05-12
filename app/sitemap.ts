@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase';
+import { getPublicCatalogTaxonomy } from '@/lib/public-catalog';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://alburj-ecommerce.vercel.app').replace(/\/$/, '');
@@ -83,12 +84,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  const [categoriesResult, productsResult] = await Promise.all([
-    supabase
-      .from('categories')
-      .select('slug, updated_at')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true }),
+  const [publicCategories, productsResult] = await Promise.all([
+    getPublicCatalogTaxonomy(supabase),
     (supabase.from('products') as any)
       .select('slug, updated_at')
       .eq('is_active', true)
@@ -96,9 +93,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .limit(5000),
   ]);
 
-  const categoryRoutes: MetadataRoute.Sitemap = (categoriesResult.data || [])
-    .filter((item: any) => item?.slug)
-    .map((item: any) => ({
+  const categoryRoutes: MetadataRoute.Sitemap = publicCategories
+    .filter((item) => item.slug)
+    .map((item) => ({
       url: `${baseUrl}/category/${item.slug}`,
       lastModified: item.updated_at ? new Date(item.updated_at) : undefined,
       changeFrequency: 'weekly',

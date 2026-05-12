@@ -8,7 +8,8 @@ import { SafeImage } from '@/components/ui/safe-image';
 import { TrackedWhatsAppLink } from '@/components/tracked-whatsapp-link';
 import { PLACEHOLDER_CATEGORY, safeImageSrc } from '@/lib/image-utils';
 import { getWhatsAppLink } from '@/lib/store-settings';
-import type { Category, StoreSettings } from '@/types';
+import { getPublicCatalogTaxonomy, toPublicCategoryLinks, type PublicCategory } from '@/lib/public-catalog';
+import type { StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,31 +70,7 @@ async function getSettings() {
 }
 
 async function getCategories() {
-  // Get categories that have at least one active product
-  const { data } = await supabase
-    .from('categories')
-    .select('*')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true });
-
-  if (!data || data.length === 0) {
-    return [];
-  }
-
-  // Filter to only include categories with active products
-  const categoriesWithProducts = await Promise.all(
-    (data as Category[]).map(async (category) => {
-      const { count } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('category_id', category.id)
-        .eq('is_active', true);
-
-      return { category, hasProducts: (count || 0) > 0 };
-    })
-  );
-
-  return categoriesWithProducts.filter((item) => item.hasProducts).map((item) => item.category);
+  return getPublicCatalogTaxonomy(supabase);
 }
 
 const shopByNeedItems = [
@@ -234,7 +211,7 @@ function ShopByNeedSection() {
   );
 }
 
-function MainCategoriesSection({ categories }: { categories: Category[] }) {
+function MainCategoriesSection({ categories }: { categories: PublicCategory[] }) {
   if (categories.length === 0) {
     return null;
   }
@@ -271,6 +248,18 @@ function MainCategoriesSection({ categories }: { categories: Category[] }) {
                 <h3 className="font-semibold">{category.name}</h3>
                 {category.description && (
                   <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{category.description}</p>
+                )}
+                {category.subcategories.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {category.subcategories.slice(0, 4).map((subcategory) => (
+                      <span
+                        key={subcategory.id}
+                        className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground"
+                      >
+                        {subcategory.name}
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
             </Link>
@@ -367,10 +356,11 @@ function HelpSection({ whatsappUrl }: { whatsappUrl: string | null }) {
 export default async function CategoriesPage() {
   const [categories, settings] = await Promise.all([getCategories(), getSettings()]);
   const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
+  const categoryLinks = toPublicCategoryLinks(categories);
 
   return (
     <div className="min-h-screen bg-background">
-      <Header whatsappUrl={whatsappUrl} />
+      <Header whatsappUrl={whatsappUrl} categoryLinks={categoryLinks} />
 
       <main>
         <HeroSection whatsappUrl={whatsappUrl} />
