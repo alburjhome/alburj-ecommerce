@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { MessageCircle, ShoppingBag } from 'lucide-react';
 import { Banner } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
@@ -8,6 +9,7 @@ import { PLACEHOLDER_BANNER, safeImageSrc } from '@/lib/image-utils';
 
 interface HeroBannerProps {
   banners: Banner[];
+  whatsappUrl?: string | null;
 }
 
 function normalizeBannerLink(value: string | null | undefined) {
@@ -25,21 +27,39 @@ function normalizeBannerLink(value: string | null | undefined) {
   return null;
 }
 
-export function HeroBanner({ banners }: HeroBannerProps) {
+export function HeroBanner({ banners, whatsappUrl }: HeroBannerProps) {
   if (!banners.length) {
     return (
-      <section className="relative h-[460px] md:h-[620px] bg-gradient-to-r from-primary/10 to-primary/5 flex items-center">
+      <section className="relative flex h-[340px] items-center bg-gradient-to-r from-primary/10 to-primary/5 sm:h-[400px] md:h-[620px]">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl">
-            <h1 className="text-3xl md:text-5xl font-bold mb-4 text-foreground">
-              مؤسسة البرج
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-primary shadow-sm">
+              <ShoppingBag className="h-3.5 w-3.5" />
+              جملة ومفرق للمنازل والمحلات
+            </div>
+            <h1 className="mb-3 text-3xl font-bold leading-tight text-foreground md:mb-4 md:text-5xl">
+              <span className="md:hidden">مستلزمات البيت والمحل والمطعم</span>
+              <span className="hidden md:inline">مؤسسة البرج</span>
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-6">
-              وجهتك الأولى للمنتجات البلاستيكية، الأدوات المنزلية، والأجهزة الكهربائية في الأردن
+            <p className="mb-5 max-w-lg text-base leading-7 text-muted-foreground md:mb-6 md:text-xl">
+              <span className="md:hidden">منظفات، تغليف، بلاستيك وأدوات منزلية — جملة ومفرق</span>
+              <span className="hidden md:inline">
+                وجهتك الأولى للمنتجات البلاستيكية، الأدوات المنزلية، والأجهزة الكهربائية في الأردن
+              </span>
             </p>
-            <Link href="/products">
-              <Button size="lg">تسوق الآن</Button>
-            </Link>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="w-full sm:w-auto">
+                <Link href="/products">تسوق الآن</Link>
+              </Button>
+              {whatsappUrl && (
+                <Button asChild size="lg" variant="outline" className="w-full bg-white/80 sm:w-auto">
+                  <a href={whatsappUrl} target="_blank" rel="noreferrer">
+                    <MessageCircle className="ml-2 h-4 w-4" />
+                    اطلب عبر واتساب
+                  </a>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -52,7 +72,7 @@ export function HeroBanner({ banners }: HeroBannerProps) {
   const bannerLink = normalizeBannerLink(banner.link_url);
 
   return (
-    <section className="relative h-[460px] md:h-[620px] hero-banner">
+    <section className="hero-banner relative h-[340px] sm:h-[400px] md:h-[620px]">
       {/* Mobile image */}
       <div className="absolute inset-0 md:hidden">
         <SafeImage
@@ -60,7 +80,7 @@ export function HeroBanner({ banners }: HeroBannerProps) {
           fallbackSrc={PLACEHOLDER_BANNER}
           alt={banner.title}
           fill
-          className="object-cover"
+          className="object-cover object-center"
           sizes="100vw"
           priority
         />
@@ -73,28 +93,49 @@ export function HeroBanner({ banners }: HeroBannerProps) {
           fallbackSrc={PLACEHOLDER_BANNER}
           alt={banner.title}
           fill
-          className="object-cover"
+          className="object-cover object-center"
           sizes="100vw"
-          priority={false}
+          priority
         />
       </div>
 
       {/* Overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent z-10" />
 
-      <div className="relative z-20 container mx-auto px-4 h-full flex items-end pb-12 md:pb-20">
+      <div className="container relative z-20 mx-auto flex h-full items-end px-4 pb-8 sm:pb-10 md:pb-20">
         <div className="max-w-2xl text-white">
-          <h1 className="text-3xl md:text-5xl font-bold mb-4">{banner.title}</h1>
-          {banner.subtitle && (
-            <p className="text-lg md:text-xl text-white/90 mb-6">{banner.subtitle}</p>
-          )}
-          {bannerLink && (
-            <Link href={bannerLink}>
-              <Button size="lg" className="bg-white text-primary hover:bg-white/90">
-                تسوق الآن
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/25 backdrop-blur">
+            <ShoppingBag className="h-3.5 w-3.5" />
+            جملة ومفرق للمنازل والمحلات
+          </div>
+          <h1 className="mb-3 text-3xl font-bold leading-tight md:mb-4 md:text-5xl">
+            <span className="md:hidden">مستلزمات البيت والمحل والمطعم</span>
+            <span className="hidden md:inline">{banner.title}</span>
+          </h1>
+          <p className="mb-5 max-w-lg text-base leading-7 text-white/90 md:mb-6 md:text-xl">
+            <span className="md:hidden">منظفات، تغليف، بلاستيك وأدوات منزلية — جملة ومفرق</span>
+            {banner.subtitle && <span className="hidden md:inline">{banner.subtitle}</span>}
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {bannerLink && (
+              <Button asChild size="lg" className="w-full bg-white text-primary hover:bg-white/90 sm:w-auto">
+                <Link href={bannerLink}>تسوق الآن</Link>
               </Button>
-            </Link>
-          )}
+            )}
+            {whatsappUrl && (
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="w-full border-white/80 bg-white/10 text-white hover:bg-white hover:text-primary sm:w-auto"
+              >
+                <a href={whatsappUrl} target="_blank" rel="noreferrer">
+                  <MessageCircle className="ml-2 h-4 w-4" />
+                  اطلب عبر واتساب
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </section>

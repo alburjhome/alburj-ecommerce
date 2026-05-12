@@ -8,7 +8,7 @@ import { FeaturedProducts } from '@/features/store/components/featured-products'
 import { TrustSection } from '@/features/store/components/trust-section';
 import { Header } from '@/features/store/components/header';
 import { Footer } from '@/features/store/components/footer';
-import { Truck, CreditCard, Shield, BadgePercent, Store, MessageCircle, Home, UtensilsCrossed, Package, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, BadgePercent, CreditCard, Home, MessageCircle, Package, Shield, ShoppingBag, Sparkles, Store, Truck, UtensilsCrossed } from 'lucide-react';
 import { getWhatsAppLink } from '@/lib/store-settings';
 import { TrackedWhatsAppLink } from '@/components/tracked-whatsapp-link';
 
@@ -81,21 +81,111 @@ async function getHomeData() {
 
 function QuickTrustBar() {
   const items = [
-    { icon: Truck, label: 'توصيل لجميع المحافظات' },
-    { icon: CreditCard, label: 'الدفع عند الاستلام' },
-    { icon: Shield, label: 'منتجات أصلية ومضمونة' },
-    { icon: BadgePercent, label: 'أسعار مناسبة للجملة والمفرق' },
+    { icon: Truck, label: 'توصيل للمحافظات', detail: 'طلبات البيت والمحل' },
+    { icon: CreditCard, label: 'الدفع عند الاستلام', detail: 'أسهل وأوضح' },
+    { icon: Shield, label: 'منتجات مختارة', detail: 'جودة مناسبة للاستخدام اليومي' },
+    { icon: BadgePercent, label: 'جملة ومفرق', detail: 'أسعار تناسب الكميات' },
   ];
   return (
-    <section className="border-b bg-muted/40 py-3 md:py-4">
+    <section className="border-b bg-white py-3 md:py-4">
       <div className="container mx-auto px-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
           {items.map((item) => (
-            <div key={item.label} className="flex items-center gap-2 justify-center text-xs md:text-sm text-muted-foreground">
-              <item.icon className="h-4 w-4 shrink-0 text-primary" />
-              <span>{item.label}</span>
+            <div key={item.label} className="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 md:justify-center">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <item.icon className="h-4 w-4" />
+              </div>
+              <span className="min-w-0">
+                <span className="block text-xs font-bold text-foreground md:text-sm">{item.label}</span>
+                <span className="hidden text-xs text-muted-foreground lg:block">{item.detail}</span>
+              </span>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ShopByNeedSection({ whatsappUrl }: { whatsappUrl: string | null }) {
+  const needs = [
+    {
+      icon: UtensilsCrossed,
+      title: 'للمطاعم والكافيهات',
+      description: 'تغليف، أكواب، ورقيات ومستلزمات تشغيل يومية.',
+      href: '/restaurants',
+      accent: 'bg-amber-50 text-amber-700 ring-amber-100',
+    },
+    {
+      icon: Sparkles,
+      title: 'للتنظيف والورقيات',
+      description: 'منظفات، رولات، مناديل وأساسيات البيت والمكتب.',
+      href: '/cleaning',
+      accent: 'bg-sky-50 text-sky-700 ring-sky-100',
+    },
+    {
+      icon: ShoppingBag,
+      title: 'للتغليف والبلاستيك',
+      description: 'أكياس، علب، صحون وكاسات للطلبات اليومية.',
+      href: '/packaging',
+      accent: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+    },
+    {
+      icon: Store,
+      title: 'للمحلات والجملة',
+      description: 'كميات مناسبة وخيارات عملية للتزويد المستمر.',
+      href: '/bulk',
+      accent: 'bg-indigo-50 text-indigo-700 ring-indigo-100',
+    },
+  ];
+
+  return (
+    <section className="bg-slate-50 py-8 md:py-12">
+      <div className="container mx-auto px-4">
+        <div className="mb-5 flex flex-col gap-2 md:mb-7 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="mb-2 inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-bold text-primary ring-1 ring-border">
+              ابدأ من احتياجك
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight md:text-3xl">تسوق حسب طريقة استخدامك</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground md:text-base">
+              اختصر الوقت واختر المسار الأقرب لطلبك، سواء للبيت أو المطعم أو المحل.
+            </p>
+          </div>
+          {whatsappUrl && (
+            <TrackedWhatsAppLink
+              href={whatsappUrl}
+              source="homepage_need_whatsapp"
+              metadata={{ cta_name: 'need_section' }}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+            >
+              <MessageCircle className="h-4 w-4" />
+              اسألنا عبر واتساب
+            </TrackedWhatsAppLink>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {needs.map((need) => {
+            const Icon = need.icon;
+            return (
+              <Link
+                key={need.href}
+                href={need.href}
+                className="group rounded-lg border bg-white p-4 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
+              >
+                <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-lg ring-1 ${need.accent}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="text-lg font-bold">{need.title}</h3>
+                <p className="mt-2 min-h-[52px] text-sm leading-6 text-muted-foreground">{need.description}</p>
+                <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-primary">
+                  تصفح الآن
+                  <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+                </span>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -131,11 +221,14 @@ function ReadyBundlesSection({ whatsappUrl }: { whatsappUrl: string | null }) {
   ];
 
   return (
-    <section className="py-8 md:py-10">
+    <section className="py-8 md:py-12">
       <div className="container mx-auto px-4">
-        <div className="mb-5 md:mb-6">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">باقات جاهزة لك</h2>
-          <p className="mt-2 text-sm md:text-base text-muted-foreground">
+        <div className="mb-5 max-w-2xl md:mb-7">
+          <div className="mb-2 inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+            طلبات أسرع
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">باقات جاهزة تختصر عليك الاختيار</h2>
+          <p className="mt-2 text-sm leading-7 text-muted-foreground md:text-base">
             اختصر وقتك واختر باقة مناسبة لاحتياجك اليومي أو لمحلك.
           </p>
         </div>
@@ -149,7 +242,7 @@ function ReadyBundlesSection({ whatsappUrl }: { whatsappUrl: string | null }) {
             const href = whatsappUrl ? `${whatsappUrl}?text=${encodeURIComponent(message)}` : null;
 
             return (
-              <div key={bundle.name} className="rounded-xl border bg-card p-5">
+              <div key={bundle.name} className="rounded-lg border bg-card p-5 shadow-sm">
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <Icon className="h-5 w-5" />
@@ -191,15 +284,20 @@ function ReadyBundlesSection({ whatsappUrl }: { whatsappUrl: string | null }) {
 
 function ShopCTA({ whatsappUrl }: { whatsappUrl: string | null }) {
   return (
-    <section className="py-8 md:py-10 bg-slate-50">
+    <section className="bg-slate-950 py-8 text-white md:py-12">
       <div className="container mx-auto px-4">
-        <div className="flex flex-col items-center gap-4 rounded-xl bg-gradient-to-r from-blue-50 to-slate-100 p-6 md:p-8 text-center">
-          <Store className="h-10 w-10 text-primary" />
-          <h3 className="text-xl md:text-2xl font-bold">تجهّز محل أو مطعم؟</h3>
-          <p className="max-w-xl text-sm md:text-base text-muted-foreground">
+        <div className="flex flex-col items-start gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="max-w-2xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/90 ring-1 ring-white/15">
+              <Store className="h-4 w-4" />
+              تجهيزات للمحلات والمطاعم
+            </div>
+            <h3 className="text-2xl font-bold md:text-3xl">تجهّز محل أو مطعم؟</h3>
+            <p className="mt-2 text-sm leading-7 text-white/70 md:text-base">
             نوفر لك مستلزمات التغليف، البلاستيك، الورقيات والمنظفات بكميات وأسعار مناسبة.
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
             {whatsappUrl ? (
               <TrackedWhatsAppLink
                 href={whatsappUrl}
@@ -218,7 +316,7 @@ function ShopCTA({ whatsappUrl }: { whatsappUrl: string | null }) {
 
             <Link
               href="/quick-order"
-              className="inline-flex items-center justify-center gap-2 rounded-lg border bg-white px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-white/90"
             >
               جهّز طلبك خلال دقيقة
             </Link>
@@ -237,8 +335,9 @@ export default async function HomePage() {
     <div className="min-h-screen bg-background">
       <Header whatsappUrl={whatsappUrl} />
       <main>
-        <HeroBanner banners={banners} />
+        <HeroBanner banners={banners} whatsappUrl={whatsappUrl} />
         <QuickTrustBar />
+        <ShopByNeedSection whatsappUrl={whatsappUrl} />
         <CategorySection categories={categories} />
         <FeaturedProducts products={featuredProducts} />
         <ReadyBundlesSection whatsappUrl={whatsappUrl} />

@@ -73,7 +73,7 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
     : null;
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border bg-card product-card">
+    <div className="group product-card relative overflow-hidden rounded-lg border bg-card shadow-sm transition-all hover:-translate-y-1 hover:shadow-md">
       <div className="absolute left-2 top-2 z-10 flex flex-col gap-1.5">
         {product.is_featured && (
           <span className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
