@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Boxes,
   Check,
@@ -63,6 +63,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const [selectedOptionIds, setSelectedOptionIds] = useState<Record<string, string>>({});
   const [productUrl, setProductUrl] = useState('');
   const [isVariantSheetOpen, setIsVariantSheetOpen] = useState(false);
+  const mobileGalleryRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!hasHydrated && rehydrate) {
@@ -116,13 +117,75 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const selectedVariantOptions = selectedVariant ? getVariantSelectedOptions(selectedVariant) : null;
   const selectedVariantLabel = selectedVariant ? getVariantLabel(selectedVariant) : null;
 
-  const currentImage = images[selectedImage] || images[0];
+  const galleryImages = useMemo(() => {
+    const variantImageUrl = selectedVariant?.image_url
+      ? safeImageSrc(selectedVariant.image_url, PLACEHOLDER_PRODUCT)
+      : null;
+
+    if (!variantImageUrl) return images;
+
+    const variantImageExists = images.some(
+      (image) => safeImageSrc(image.url, PLACEHOLDER_PRODUCT) === variantImageUrl,
+    );
+
+    if (variantImageExists) return images;
+
+    return [
+      {
+        id: `variant-${selectedVariant?.id || variantImageUrl}`,
+        product_id: product.id,
+        url: variantImageUrl,
+        alt_text: selectedVariantLabel ? `${product.name} - ${selectedVariantLabel}` : product.name,
+        sort_order: -1,
+        is_primary: false,
+        created_at: '',
+      },
+      ...images,
+    ];
+  }, [images, product.id, product.name, selectedVariant?.id, selectedVariant?.image_url, selectedVariantLabel]);
+
+  useEffect(() => {
+    setSelectedImage((index) => Math.min(index, Math.max(galleryImages.length - 1, 0)));
+  }, [galleryImages.length]);
+
+  useEffect(() => {
+    if (!selectedVariant?.image_url) return;
+    const variantImageUrl = safeImageSrc(selectedVariant.image_url, PLACEHOLDER_PRODUCT);
+    const variantImageIndex = galleryImages.findIndex(
+      (image) => safeImageSrc(image.url, PLACEHOLDER_PRODUCT) === variantImageUrl,
+    );
+
+    if (variantImageIndex >= 0) {
+      setSelectedImage(variantImageIndex);
+    }
+  }, [galleryImages, selectedVariant?.image_url]);
+
+  const scrollToImage = useCallback((index: number) => {
+    setSelectedImage(index);
+    const gallery = mobileGalleryRef.current;
+    if (!gallery) return;
+    gallery.scrollTo({
+      left: index * gallery.clientWidth,
+      behavior: 'smooth',
+    });
+  }, []);
+
+  const handleMobileGalleryScroll = useCallback(() => {
+    const gallery = mobileGalleryRef.current;
+    if (!gallery) return;
+
+    const nextIndex = Math.round(gallery.scrollLeft / Math.max(gallery.clientWidth, 1));
+    const boundedIndex = Math.min(Math.max(nextIndex, 0), Math.max(galleryImages.length - 1, 0));
+    setSelectedImage(boundedIndex);
+  }, [galleryImages.length]);
+
+  const currentImage = galleryImages[selectedImage] || galleryImages[0];
   const displayPrice = selectedVariant ? selectedVariant.price : product.price;
   const displayComparePrice = selectedVariant ? selectedVariant.compare_price : product.compare_price;
   const displayStockQuantity = selectedVariant ? selectedVariant.stock_quantity : product.stock_quantity;
   const displayTrackStock = selectedVariant ? selectedVariant.track_stock : product.track_stock;
   const displaySku = selectedVariant?.sku || product.sku;
-  const imageSrc = safeImageSrc(selectedVariant?.image_url || currentImage?.url, PLACEHOLDER_PRODUCT);
+  const imageSrc = safeImageSrc(currentImage?.url, PLACEHOLDER_PRODUCT);
   const hasDiscount = Boolean(displayComparePrice && displayComparePrice > displayPrice);
   const discount = hasDiscount
     ? calculateDiscountPercentage(displayPrice, displayComparePrice || displayPrice)
@@ -388,45 +451,110 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   return (
     <section className="container mx-auto px-4 py-8 pb-28 md:py-12 md:pb-12">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="space-y-4">
-          <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
-            <SafeImage
-              key={selectedVariant?.image_url || currentImage?.id || `img-${selectedImage}`}
-              src={imageSrc}
-              fallbackSrc={PLACEHOLDER_PRODUCT}
-              alt={currentImage?.alt_text || product.name}
-              fill
-              priority
-              className="object-cover"
-              sizes="(max-width: 1024px) 100vw, 55vw"
-            />
+        <div className="min-w-0 space-y-4">
+          <div className="space-y-3 md:hidden">
+            <div className="relative overflow-hidden rounded-lg border bg-muted">
+              <div
+                ref={mobileGalleryRef}
+                dir="ltr"
+                onScroll={handleMobileGalleryScroll}
+                className="flex aspect-square snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {galleryImages.map((image, index) => (
+                  <div key={image.id} className="relative h-full w-full shrink-0 snap-center bg-muted">
+                    <SafeImage
+                      src={safeImageSrc(image.url, PLACEHOLDER_PRODUCT)}
+                      fallbackSrc={PLACEHOLDER_PRODUCT}
+                      alt={image.alt_text || product.name}
+                      fill
+                      priority={index === 0}
+                      className="object-contain p-2"
+                      sizes="(max-width: 767px) calc(100vw - 2rem), 55vw"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {galleryImages.length > 1 && (
+                <div
+                  dir="ltr"
+                  className="absolute bottom-3 left-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur"
+                >
+                  {selectedImage + 1} / {galleryImages.length}
+                </div>
+              )}
+            </div>
+
+            {galleryImages.length > 1 && (
+              <div
+                dir="ltr"
+                className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {galleryImages.map((image, index) => (
+                  <button
+                    key={image.id}
+                    type="button"
+                    onClick={() => scrollToImage(index)}
+                    aria-label={`عرض الصورة ${index + 1}`}
+                    className={[
+                      'relative h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-muted transition-colors',
+                      index === selectedImage ? 'border-2 border-primary' : 'border-border',
+                    ].join(' ')}
+                  >
+                    <SafeImage
+                      src={safeImageSrc(image.url, PLACEHOLDER_PRODUCT)}
+                      fallbackSrc={PLACEHOLDER_PRODUCT}
+                      alt={image.alt_text || product.name}
+                      fill
+                      className="object-contain p-1"
+                      sizes="56px"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {images.length > 1 && (
-            <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
-              {images.map((image, index) => (
-                <button
-                  key={image.id}
-                  type="button"
-                  onClick={() => setSelectedImage(index)}
-                  className={
-                    index === selectedImage
-                      ? 'relative aspect-square overflow-hidden rounded-md border-2 border-primary bg-muted'
-                      : 'relative aspect-square overflow-hidden rounded-md border bg-muted'
-                  }
-                >
-                  <SafeImage
-                    src={safeImageSrc(image.url, PLACEHOLDER_PRODUCT)}
-                    fallbackSrc={PLACEHOLDER_PRODUCT}
-                    alt={image.alt_text || product.name}
-                    fill
-                    className="object-cover"
-                    sizes="96px"
-                  />
-                </button>
-              ))}
+          <div className="hidden space-y-4 md:block">
+            <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
+              <SafeImage
+                key={currentImage?.id || `img-${selectedImage}`}
+                src={imageSrc}
+                fallbackSrc={PLACEHOLDER_PRODUCT}
+                alt={currentImage?.alt_text || product.name}
+                fill
+                priority
+                className="object-contain p-3"
+                sizes="(max-width: 1024px) 55vw, 55vw"
+              />
             </div>
-          )}
+
+            {galleryImages.length > 1 && (
+              <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+                {galleryImages.map((image, index) => (
+                  <button
+                    key={image.id}
+                    type="button"
+                    onClick={() => setSelectedImage(index)}
+                    className={
+                      index === selectedImage
+                        ? 'relative aspect-square overflow-hidden rounded-md border-2 border-primary bg-muted'
+                        : 'relative aspect-square overflow-hidden rounded-md border bg-muted'
+                    }
+                  >
+                    <SafeImage
+                      src={safeImageSrc(image.url, PLACEHOLDER_PRODUCT)}
+                      fallbackSrc={PLACEHOLDER_PRODUCT}
+                      alt={image.alt_text || product.name}
+                      fill
+                      className="object-contain p-1"
+                      sizes="96px"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-5">
