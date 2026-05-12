@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ImageIcon, RefreshCw, Save, Star, Trash2, Upload, ArrowUp, ArrowDown, AlertCircle, CheckCircle2, Sparkles } from 'lucide-react';
+import { ImageIcon, RefreshCw, Save, Star, Trash2, Upload, ArrowUp, ArrowDown, AlertCircle, CheckCircle2, Sparkles, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,6 +39,19 @@ interface ImageDraft {
   sort_order: string;
 }
 
+interface UploadPreview {
+  file: File;
+  url: string;
+}
+
+interface UploadProgress {
+  current: number;
+  total: number;
+  success: number;
+  failed: number;
+  currentFile?: string;
+}
+
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 async function getAccessToken() {
@@ -61,14 +74,21 @@ function buildDrafts(images: ProductImageRecord[]) {
 
 function validateImageFile(file: File) {
   if (!file.type.startsWith('image/')) {
-    return 'اختر ملف صورة فقط';
+    return 'اختر ملفات صور فقط';
   }
 
   if (file.size > MAX_IMAGE_SIZE) {
-    return 'حجم الصورة يجب ألا يتجاوز 5MB';
+    return 'حجم الصورة أكبر من الحد المسموح 5MB';
   }
 
   return null;
+}
+
+function pluralizeImages(count: number) {
+  if (count === 1) return 'صورة واحدة';
+  if (count === 2) return 'صورتين';
+  if (count <= 10) return `${count} صور`;
+  return `${count} صورة`;
 }
 
 export function ProductImagesManager({
@@ -83,10 +103,11 @@ export function ProductImagesManager({
   const [drafts, setDrafts] = useState<Record<string, ImageDraft>>({});
   const [isLoading, setIsLoading] = useState(Boolean(productId));
   const [mutatingId, setMutatingId] = useState<string | null>(null);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadPreviews, setUploadPreviews] = useState<UploadPreview[]>([]);
   const [uploadAltText, setUploadAltText] = useState('');
   const [uploadSortOrder, setUploadSortOrder] = useState('');
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [generatingAltTextId, setGeneratingAltTextId] = useState<string | null>(null);
 
@@ -148,55 +169,99 @@ export function ProductImagesManager({
 
   useEffect(() => {
     return () => {
-      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+      uploadPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
     };
-  }, [uploadPreviewUrl]);
+  }, [uploadPreviews]);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] || null;
-    if (!file) {
-      setUploadFile(null);
+    const selectedFiles = Array.from(event.target.files || []);
+
+    if (!selectedFiles.length) {
+      clearSelectedFiles();
       return;
     }
 
-    const validationError = validateImageFile(file);
-    if (validationError) {
+    const seen = new Set<string>();
+    const validFiles: File[] = [];
+    const failedFiles: Array<{ name: string; reason: string }> = [];
+
+    for (const file of selectedFiles) {
+      const duplicateKey = `${file.name}:${file.size}:${file.lastModified}`;
+      if (seen.has(duplicateKey)) {
+        failedFiles.push({ name: file.name, reason: 'تم تجاهل نسخة مكررة من نفس الملف' });
+        continue;
+      }
+      seen.add(duplicateKey);
+
+      const validationError = validateImageFile(file);
+      if (validationError) {
+        failedFiles.push({ name: file.name, reason: validationError });
+        continue;
+      }
+
+      validFiles.push(file);
+    }
+
+    if (failedFiles.length) {
       toast({
-        title: 'ملف غير صالح',
-        description: validationError,
+        title: 'تم تجاهل بعض الصور',
+        description: failedFiles.map((file) => `${file.name}: ${file.reason}`).join(' • '),
         variant: 'destructive',
       });
-      setUploadFile(null);
+    }
+
+    uploadPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
+
+    if (!validFiles.length) {
+      setUploadFiles([]);
+      setUploadPreviews([]);
       setFileInputKey((key) => key + 1);
       return;
     }
 
-    if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
-    setUploadFile(file);
-    setUploadPreviewUrl(URL.createObjectURL(file));
+    setUploadFiles(validFiles);
+    setUploadPreviews(validFiles.map((file) => ({ file, url: URL.createObjectURL(file) })));
+    setUploadProgress(null);
+  }
+
+  function clearSelectedFiles() {
+    uploadPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
+    setUploadFiles([]);
+    setUploadPreviews([]);
+    setUploadProgress(null);
+    setFileInputKey((key) => key + 1);
   }
 
   async function handleUpload() {
-    if (!uploadFile) {
+    if (!uploadFiles.length) {
       toast({
-        title: 'اختر صورة',
-        description: 'اختر صورة قبل تنفيذ الرفع.',
+        title: 'اختر الصور',
+        description: 'اختر صورة واحدة أو أكثر قبل تنفيذ الرفع.',
         variant: 'destructive',
       });
       return;
     }
 
-    const validationError = validateImageFile(uploadFile);
-    if (validationError) {
-      toast({
-        title: 'ملف غير صالح',
-        description: validationError,
-        variant: 'destructive',
-      });
+    const invalidFile = uploadFiles
+      .map((file) => ({ file, error: validateImageFile(file) }))
+      .find((entry) => Boolean(entry.error));
+
+    if (invalidFile?.error) {
+      toast({ title: 'ملف غير صالح', description: `${invalidFile.file.name}: ${invalidFile.error}`, variant: 'destructive' });
       return;
     }
 
     setMutatingId('upload');
+    setUploadProgress({
+      current: 0,
+      total: uploadFiles.length,
+      success: 0,
+      failed: 0,
+    });
+
+    const failures: Array<{ name: string; error: string }> = [];
+    let successCount = 0;
+
     try {
       const effectiveProductId = productId || (ensureProductId ? await ensureProductId() : null);
       if (!effectiveProductId) {
@@ -204,34 +269,72 @@ export function ProductImagesManager({
       }
 
       const token = await getAccessToken();
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-      formData.append('alt_text', uploadAltText);
-      if (uploadSortOrder.trim()) {
-        formData.append('sort_order', uploadSortOrder);
+
+      for (let index = 0; index < uploadFiles.length; index += 1) {
+        const file = uploadFiles[index];
+        setUploadProgress({
+          current: index + 1,
+          total: uploadFiles.length,
+          success: successCount,
+          failed: failures.length,
+          currentFile: file.name,
+        });
+
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('alt_text', uploadAltText);
+
+          if (uploadSortOrder.trim()) {
+            const baseSortOrder = Number(uploadSortOrder);
+            if (!Number.isInteger(baseSortOrder) || baseSortOrder < 0) {
+              throw new Error('ترتيب الصورة يجب أن يكون رقماً صحيحاً لا يقل عن صفر');
+            }
+            formData.append('sort_order', String(baseSortOrder + index * 10));
+          }
+
+          const result = await uploadAdminProductImage(token, effectiveProductId, formData);
+          if (!result.success) {
+            throw new Error(result.error || 'تعذر رفع الصورة');
+          }
+
+          successCount += 1;
+        } catch (error) {
+          failures.push({
+            name: file.name,
+            error: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+          });
+        }
       }
 
-      const result = await uploadAdminProductImage(token, effectiveProductId, formData);
-      if (!result.success) {
-        throw new Error(result.error || 'تعذر رفع الصورة');
-      }
-
-      toast({
-        title: 'تم رفع الصورة',
-        description: uploadFile.name,
+      setUploadProgress({
+        current: uploadFiles.length,
+        total: uploadFiles.length,
+        success: successCount,
+        failed: failures.length,
       });
-      setUploadFile(null);
-      setUploadAltText('');
-      if (uploadPreviewUrl) {
-        URL.revokeObjectURL(uploadPreviewUrl);
-        setUploadPreviewUrl(null);
+
+      if (successCount > 0) {
+        toast({
+          title: successCount === uploadFiles.length ? 'تم رفع الصور' : 'تم رفع بعض الصور',
+          description:
+            failures.length > 0
+              ? `فشل رفع ${pluralizeImages(failures.length)}، وتم رفع باقي الصور. الملفات التي فشلت: ${failures.map((failure) => failure.name).join('، ')}`
+              : `تم رفع ${pluralizeImages(successCount)} بنجاح.`,
+        });
       }
-      setFileInputKey((key) => key + 1);
+
+      if (successCount === 0 && failures.length > 0) {
+        throw new Error(`فشل رفع الصور: ${failures.map((failure) => `${failure.name} (${failure.error})`).join('، ')}`);
+      }
+
+      clearSelectedFiles();
+      setUploadAltText('');
       await fetchImages(effectiveProductId);
       router.refresh();
     } catch (error) {
       toast({
-        title: 'تعذر رفع الصورة',
+        title: 'تعذر رفع الصور',
         description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
         variant: 'destructive',
       });
@@ -535,27 +638,57 @@ export function ProductImagesManager({
 
       {/* Upload Section */}
       <div className="mb-6 rounded-lg border bg-muted/30 p-5">
-        <h3 className="mb-4 font-semibold">رفع صورة جديدة</h3>
-        <div className="grid gap-4 lg:grid-cols-[140px_1fr_1fr_auto] lg:items-end">
+        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h3 className="font-semibold">رفع صور جديدة</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              يمكنك اختيار صورة واحدة أو عدة صور دفعة واحدة. إذا لم توجد صورة رئيسية، تصبح أول صورة مرفوعة رئيسية تلقائيًا.
+            </p>
+          </div>
+          {uploadFiles.length > 0 && (
+            <Button type="button" variant="ghost" size="sm" onClick={clearSelectedFiles} disabled={mutatingId === 'upload'}>
+              <X className="ml-1 h-4 w-4" />
+              إلغاء الاختيار
+            </Button>
+          )}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(160px,220px)_1fr_1fr_auto] lg:items-end">
           {/* Preview */}
-          <div className="relative aspect-square overflow-hidden rounded-lg border-2 border-dashed border-muted-foreground/25 bg-background">
-            {uploadPreviewUrl ? (
-              <img src={uploadPreviewUrl} alt="معاينة الصورة" className="h-full w-full object-cover" />
+          <div className="overflow-hidden rounded-lg border-2 border-dashed border-muted-foreground/25 bg-background p-2">
+            {uploadPreviews.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {uploadPreviews.slice(0, 4).map((preview, index) => (
+                  <div key={`${preview.file.name}-${preview.file.lastModified}`} className="relative aspect-square overflow-hidden rounded-md border bg-muted">
+                    <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
+                    {index === 0 && (
+                      <span className="absolute right-1 top-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                        الأولى
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {uploadPreviews.length > 4 && (
+                  <div className="flex aspect-square items-center justify-center rounded-md border bg-muted text-sm font-semibold text-muted-foreground">
+                    +{uploadPreviews.length - 4}
+                  </div>
+                )}
+              </div>
             ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+              <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 text-muted-foreground">
                 <ImageIcon className="h-8 w-8" />
-                <span className="text-xs">معاينة</span>
+                <span className="text-xs">معاينة الصور</span>
               </div>
             )}
           </div>
 
           {/* File Input */}
           <div>
-            <Label htmlFor="product-image-file">اختر ملف الصورة *</Label>
+            <Label htmlFor="product-image-file">اختر الصور *</Label>
             <Input
               key={fileInputKey}
               id="product-image-file"
               type="file"
+              multiple
               accept="image/jpeg,image/png,image/webp,image/gif"
               onChange={handleFileChange}
               className="cursor-pointer"
@@ -563,11 +696,16 @@ export function ProductImagesManager({
             <p className="mt-1 text-xs text-muted-foreground">
               JPG, PNG, WEBP, GIF - الحد الأقصى 5MB
             </p>
+            {uploadFiles.length > 0 && (
+              <p className="mt-1 text-xs font-medium text-primary">
+                تم اختيار {pluralizeImages(uploadFiles.length)}
+              </p>
+            )}
           </div>
 
           {/* Alt Text */}
           <div>
-            <Label htmlFor="product-image-alt">وصف الصورة (للمحركات)</Label>
+            <Label htmlFor="product-image-alt">وصف عام للصور (اختياري)</Label>
             <Input
               id="product-image-alt"
               value={uploadAltText}
@@ -580,9 +718,9 @@ export function ProductImagesManager({
           </div>
 
           {/* Sort Order & Upload Button */}
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <div className="flex-1">
-              <Label htmlFor="product-image-order">الترتيب</Label>
+              <Label htmlFor="product-image-order">ترتيب البداية</Label>
               <Input
                 id="product-image-order"
                 type="number"
@@ -591,18 +729,44 @@ export function ProductImagesManager({
                 onChange={(event) => setUploadSortOrder(event.target.value)}
                 placeholder={String(nextSortOrder)}
               />
+              <p className="mt-1 text-xs text-muted-foreground">اختياري. الصور التالية تزيد 10 تلقائيًا.</p>
             </div>
             <Button
               type="button"
               onClick={handleUpload}
-              disabled={mutatingId === 'upload' || !uploadFile}
+              disabled={mutatingId === 'upload' || uploadFiles.length === 0}
               className="self-end"
             >
-              <Upload className="ml-2 h-4 w-4" />
-              {mutatingId === 'upload' ? 'جاري الرفع...' : productId ? 'رفع' : 'إنشاء مسودة ورفع'}
+              {mutatingId === 'upload' ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Upload className="ml-2 h-4 w-4" />}
+              {mutatingId === 'upload'
+                ? 'جاري الرفع...'
+                : productId
+                  ? `رفع ${uploadFiles.length > 1 ? pluralizeImages(uploadFiles.length) : 'الصورة'}`
+                  : 'إنشاء مسودة ورفع'}
             </Button>
           </div>
         </div>
+        {uploadProgress && (
+          <div className="mt-4 rounded-lg border bg-background p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">
+                جاري رفع {uploadProgress.current || 0} من {uploadProgress.total}
+              </span>
+              <span className="text-muted-foreground">
+                نجح: {uploadProgress.success} - فشل: {uploadProgress.failed}
+              </span>
+            </div>
+            {uploadProgress.currentFile && (
+              <p className="mt-1 break-all text-xs text-muted-foreground">{uploadProgress.currentFile}</p>
+            )}
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${uploadProgress.total ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Images Grid */}
