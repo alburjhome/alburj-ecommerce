@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase-server';
+import { buildWhatsAppOrderMessage } from '@/lib/whatsapp-order-message';
 
 export interface CheckoutItem {
   product_id: string;
@@ -52,6 +53,7 @@ type ServerClient = ReturnType<typeof createServerClient>;
 interface ProductRow {
   id: string;
   name: string;
+  slug: string;
   sku: string | null;
   price: number;
   stock_quantity: number;
@@ -81,6 +83,7 @@ interface VariantRow {
 interface VerifiedOrderItem {
   product_id: string;
   product_name: string;
+  product_slug: string | null;
   product_sku: string | null;
   variant_id: string | null;
   variant_name: string | null;
@@ -178,6 +181,15 @@ function quantityKey(item: CheckoutItem) {
   return `${item.product_id}:${item.variant_id || 'default'}`;
 }
 
+function getAppBaseUrl() {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    'https://alburj-ecommerce.vercel.app';
+
+  return configuredUrl.replace(/\/$/, '');
+}
+
 export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
   try {
     let serverClient: ServerClient;
@@ -229,7 +241,7 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
 
     const { data: products, error: productsError } = await serverClient
       .from('products')
-      .select('id, name, sku, price, stock_quantity, track_stock, allow_backorders, is_active')
+      .select('id, name, slug, sku, price, stock_quantity, track_stock, allow_backorders, is_active')
       .in('id', productIds)
       .returns<ProductRow[]>();
 
@@ -361,6 +373,7 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       verifiedItems.push({
         product_id: item.product_id,
         product_name: product.name,
+        product_slug: product.slug,
         product_sku: product.sku,
         variant_id: selectedVariant?.id || null,
         variant_name: selectedVariant ? getVariantName(selectedVariant) : null,
@@ -449,7 +462,15 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       return { success: false, error: 'Failed to create order items' };
     }
 
-    const message = generateWhatsAppMessage(order.order_number, data, verifiedItems, subtotal, shippingCost, total);
+    const message = buildWhatsAppOrderMessage({
+      orderNumber: order.order_number,
+      customer: data,
+      items: verifiedItems,
+      subtotal,
+      shipping: shippingCost,
+      total,
+      baseUrl: getAppBaseUrl(),
+    });
     const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
 
     const { error: whatsappUrlError } = await (serverClient.from('orders') as any)
@@ -486,59 +507,4 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
     logCheckoutError('unexpected', error);
     return { success: false, error: 'An unexpected error occurred' };
   }
-}
-
-function generateWhatsAppMessage(
-  orderNumber: string,
-  data: CheckoutData,
-  items: VerifiedOrderItem[],
-  subtotal: number,
-  shipping: number,
-  total: number
-): string {
-  const formatCurrency = (price: number) => `${price.toFixed(2)} د.أ`;
-  const itemsText = items
-    .map((item, index) => {
-      const optionLines = item.variant_options
-        ? Object.entries(item.variant_options)
-            .map(([name, value]) => `   ${name}: ${value}`)
-            .join('\n')
-        : '';
-
-      return [
-        `${index + 1}. ${item.product_name}`,
-        optionLines,
-        `   الكمية: ${item.quantity}`,
-        `   السعر: ${formatCurrency(item.unit_price)}`,
-        `   الإجمالي: ${formatCurrency(item.total_price)}`,
-      ]
-        .filter(Boolean)
-        .join('\n');
-    })
-    .join('\n\n');
-
-  return `
-طلب جديد #${orderNumber}
-
-معلومات العميل:
-الاسم: ${data.customer_name}
-الهاتف: ${data.customer_phone}
-${data.customer_email ? `البريد: ${data.customer_email}` : ''}
-
-العنوان:
-المحافظة: ${data.governorate}
-المدينة: ${data.city}
-العنوان: ${data.address}
-${data.landmark ? `علامة مميزة: ${data.landmark}` : ''}
-
-المنتجات:
-${itemsText}
-
-المبالغ:
-المجموع الفرعي: ${formatCurrency(subtotal)}
-الشحن: ${formatCurrency(shipping)}
-الإجمالي: ${formatCurrency(total)}
-
-${data.notes ? `ملاحظات: ${data.notes}` : ''}
-  `.trim();
 }
