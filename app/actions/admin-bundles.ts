@@ -108,7 +108,7 @@ async function fetchBundleItems(adminClient: Awaited<ReturnType<typeof createAdm
   const { data, error } = await (adminClient.from('bundle_items') as any)
     .select(`
       *,
-      item_product:products(
+      item_product:products!bundle_items_item_product_id_fkey(
         id,
         name,
         slug,
@@ -138,7 +138,7 @@ async function fetchBundleItems(adminClient: Awaited<ReturnType<typeof createAdm
           )
         )
       ),
-      item_variant:product_variants(
+      item_variant:product_variants!bundle_items_item_variant_id_fkey(
         id,
         product_id,
         name,

@@ -69,13 +69,13 @@ async function getProduct(slug: string) {
         option_value:product_option_values(*)
       )
     ),
-    bundle_items:bundle_items(
+    bundle_items:bundle_items!bundle_items_bundle_product_id_fkey(
       *,
-      item_product:products(
+      item_product:products!bundle_items_item_product_id_fkey(
         *,
         images:product_images(*)
       ),
-      item_variant:product_variants(
+      item_variant:product_variants!bundle_items_item_variant_id_fkey(
         *,
         values:product_variant_values(
           *,

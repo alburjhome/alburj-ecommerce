@@ -365,7 +365,7 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
           item_variant_id,
           quantity,
           sort_order,
-          item_product:products(
+          item_product:products!bundle_items_item_product_id_fkey(
             id,
             product_type,
             name,
@@ -378,7 +378,7 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
             is_active,
             images:product_images(url, is_primary, sort_order)
           ),
-          item_variant:product_variants(
+          item_variant:product_variants!bundle_items_item_variant_id_fkey(
             id,
             product_id,
             name,
