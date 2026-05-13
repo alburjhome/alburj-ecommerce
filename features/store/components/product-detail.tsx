@@ -11,7 +11,7 @@ import {
   ShoppingCart,
   Truck,
 } from 'lucide-react';
-import { ProductWithDetails } from '@/types';
+import { BundleItemSnapshot, ProductWithDetails } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
 import {
@@ -64,6 +64,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const [productUrl, setProductUrl] = useState('');
   const [isVariantSheetOpen, setIsVariantSheetOpen] = useState(false);
   const mobileGalleryRef = useRef<HTMLDivElement | null>(null);
+  const isBundle = (product.product_type || 'single') === 'bundle';
 
   useEffect(() => {
     if (!hasHydrated && rehydrate) {
@@ -108,7 +109,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
     return sortProductVariants(product.variants || []).filter((variant) => variant.is_active);
   }, [product.variants]);
 
-  const hasVariants = options.length > 0 && activeVariants.length > 0;
+  const hasVariants = !isBundle && options.length > 0 && activeVariants.length > 0;
   const isSelectionComplete = !hasVariants || options.every((option) => Boolean(selectedOptionIds[option.id]));
   const selectedVariant =
     hasVariants && isSelectionComplete
@@ -204,6 +205,60 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
     : Boolean(product.track_stock && !product.allow_backorders && product.stock_quantity <= 0);
   const canSubmitAddToCart = hasHydrated;
 
+  const bundleItems = useMemo(() => {
+    if (!isBundle) return [];
+    return [...(product.bundle_items || [])].sort((a, b) => a.sort_order - b.sort_order);
+  }, [isBundle, product.bundle_items]);
+
+  const bundleRetailTotal = useMemo(() => {
+    return bundleItems.reduce((sum, item) => {
+      const unitPrice = item.item_variant?.price ?? item.item_product?.price ?? 0;
+      return sum + Number(unitPrice || 0) * item.quantity;
+    }, 0);
+  }, [bundleItems]);
+
+  const bundleSavings = bundleRetailTotal > 0 ? bundleRetailTotal - displayPrice : null;
+
+  function getBundleItemOptions(item: (typeof bundleItems)[number]) {
+    const options = item.item_variant?.options;
+    if (options && Object.keys(options).length > 0) return options;
+
+    const entries = (item.item_variant?.values || [])
+      .map((value) => {
+        const name = value.option?.name;
+        const optionValue = value.option_value?.value;
+        return name && optionValue ? [name, optionValue] : null;
+      })
+      .filter(Boolean) as Array<[string, string]>;
+
+    return entries.length ? Object.fromEntries(entries) : null;
+  }
+
+  const bundleCartSnapshot = useMemo<BundleItemSnapshot[] | null>(() => {
+    if (!isBundle || bundleItems.length === 0) return null;
+
+    return bundleItems.map((item) => {
+      const itemProduct = item.item_product;
+      const sortedImages = [...(itemProduct?.images || [])].sort((a, b) => {
+        if (a.is_primary && !b.is_primary) return -1;
+        if (!a.is_primary && b.is_primary) return 1;
+        return a.sort_order - b.sort_order;
+      });
+
+      return {
+        product_id: item.item_product_id,
+        product_name: itemProduct?.name || 'منتج داخل الباكج',
+        product_slug: itemProduct?.slug || null,
+        variant_id: item.item_variant_id,
+        variant_name: item.item_variant?.name || null,
+        variant_options: getBundleItemOptions(item),
+        quantity: item.quantity,
+        unit_price: item.item_variant?.price ?? itemProduct?.price ?? null,
+        image_url: safeImageSrc(sortedImages[0]?.url, PLACEHOLDER_PRODUCT),
+      };
+    });
+  }, [bundleItems, isBundle]);
+
   useEffect(() => {
     setQuantity((value) => Math.min(Math.max(1, value), Math.max(1, maxQuantity)));
   }, [maxQuantity]);
@@ -275,6 +330,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
     }
 
     addItem({
+      item_type: isBundle ? 'bundle' : 'product',
       product_id: product.id,
       variant_id: selectedVariant?.id || null,
       name: product.name,
@@ -286,6 +342,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
       selected_options: selectedVariantOptions,
       sku: displaySku,
       stock_quantity: selectedVariant ? getVariantCartStock(selectedVariant) : maxQuantity,
+      bundle_items: bundleCartSnapshot,
     });
     setIsVariantSheetOpen(false);
     toast({
@@ -560,6 +617,11 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
         <div className="space-y-5">
           <div>
             {product.category && <p className="text-sm text-muted-foreground">{product.category.name}</p>}
+            {isBundle && (
+              <span className="mt-2 inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                باكج توفير
+              </span>
+            )}
             <h1 className="mt-2 break-words text-3xl font-bold tracking-tight">{product.name}</h1>
             {product.marketing_tagline && (
               <p className="mt-2 text-sm font-medium text-muted-foreground">{product.marketing_tagline}</p>
@@ -638,6 +700,80 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
               أضف للسلة
             </Button>
           </div>
+
+          {isBundle && bundleItems.length > 0 && (
+            <div className="border-t pt-5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-semibold">محتويات الباكج</h2>
+                {bundleSavings !== null && bundleSavings > 0 && (
+                  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                    وفّرت {formatPrice(bundleSavings)}
+                  </span>
+                )}
+              </div>
+
+              {bundleRetailTotal > 0 && (
+                <div className="mb-3 grid gap-2 text-sm sm:grid-cols-3">
+                  <div className="rounded-md border bg-muted/40 p-2">
+                    <span className="block text-xs text-muted-foreground">قيمة المنتجات منفردة</span>
+                    <span className="font-semibold">{formatPrice(bundleRetailTotal)}</span>
+                  </div>
+                  <div className="rounded-md border bg-muted/40 p-2">
+                    <span className="block text-xs text-muted-foreground">سعر الباكج</span>
+                    <span className="font-semibold">{formatPrice(displayPrice)}</span>
+                  </div>
+                  {bundleSavings !== null && bundleSavings > 0 && (
+                    <div className="rounded-md border bg-green-50 p-2 text-green-700">
+                      <span className="block text-xs">وفّرت</span>
+                      <span className="font-semibold">{formatPrice(bundleSavings)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {bundleItems.map((item) => {
+                  const itemProduct = item.item_product;
+                  const sortedImages = [...(itemProduct?.images || [])].sort((a, b) => {
+                    if (a.is_primary && !b.is_primary) return -1;
+                    if (!a.is_primary && b.is_primary) return 1;
+                    return a.sort_order - b.sort_order;
+                  });
+                  const options = getBundleItemOptions(item);
+
+                  return (
+                    <div key={item.id} className="flex gap-3 rounded-lg border bg-muted/30 p-3">
+                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-background">
+                        <SafeImage
+                          src={safeImageSrc(sortedImages[0]?.url, PLACEHOLDER_PRODUCT)}
+                          fallbackSrc={PLACEHOLDER_PRODUCT}
+                          alt={itemProduct?.name || 'منتج داخل الباكج'}
+                          fill
+                          className="object-contain p-1"
+                          sizes="56px"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="break-words text-sm font-semibold">{itemProduct?.name || 'منتج داخل الباكج'}</div>
+                        {options && Object.keys(options).length > 0 && (
+                          <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                            {Object.entries(options).map(([name, value]) => (
+                              <div key={`${item.id}-${name}`}>
+                                <span className="font-medium text-foreground/80">{name}:</span> {value}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-1 text-xs text-primary">
+                          الكمية داخل الباكج: {item.quantity}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {product.key_features && product.key_features.length > 0 && (
             <div className="border-t pt-5">

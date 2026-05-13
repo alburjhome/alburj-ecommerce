@@ -5,6 +5,7 @@ import { createServerClient } from '@/lib/supabase-server';
 import { buildWhatsAppOrderMessage } from '@/lib/whatsapp-order-message';
 
 export interface CheckoutItem {
+  item_type?: 'product' | 'bundle';
   product_id: string;
   variant_id?: string | null;
   name: string;
@@ -13,6 +14,7 @@ export interface CheckoutItem {
   variant_name?: string | null;
   selected_options?: Record<string, string> | null;
   sku?: string | null;
+  bundle_items?: BundleSnapshotItem[] | null;
 }
 
 export interface CheckoutData {
@@ -52,6 +54,7 @@ type ServerClient = ReturnType<typeof createServerClient>;
 
 interface ProductRow {
   id: string;
+  product_type: 'single' | 'bundle';
   name: string;
   slug: string;
   sku: string | null;
@@ -60,6 +63,31 @@ interface ProductRow {
   track_stock: boolean;
   allow_backorders: boolean;
   is_active: boolean;
+}
+
+interface BundleSnapshotItem {
+  product_id: string;
+  product_name: string;
+  product_slug: string | null;
+  variant_id: string | null;
+  variant_name: string | null;
+  variant_options: Record<string, string> | null;
+  quantity: number;
+  unit_price: number | null;
+  image_url: string | null;
+}
+
+interface BundleItemRow {
+  id: string;
+  bundle_product_id: string;
+  item_product_id: string;
+  item_variant_id: string | null;
+  quantity: number;
+  sort_order: number;
+  item_product?: ProductRow & {
+    images?: Array<{ url: string; is_primary: boolean; sort_order: number }>;
+  };
+  item_variant?: VariantRow | null;
 }
 
 interface VariantValueRow {
@@ -81,6 +109,7 @@ interface VariantRow {
 }
 
 interface VerifiedOrderItem {
+  item_type: 'product' | 'bundle';
   product_id: string;
   product_name: string;
   product_slug: string | null;
@@ -92,6 +121,7 @@ interface VerifiedOrderItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  bundle_items_snapshot: BundleSnapshotItem[] | null;
 }
 
 function isServerConfigurationError(error: unknown) {
@@ -178,7 +208,7 @@ function getVariantName(variant: VariantRow) {
 }
 
 function quantityKey(item: CheckoutItem) {
-  return `${item.product_id}:${item.variant_id || 'default'}`;
+  return `${item.item_type || 'product'}:${item.product_id}:${item.variant_id || 'default'}`;
 }
 
 function getAppBaseUrl() {
@@ -215,8 +245,9 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       return { success: false, error: 'WhatsApp number is not configured' };
     }
 
-    const sanitizedItems = data.items.map((item) => ({
+    const sanitizedItems: CheckoutItem[] = data.items.map((item) => ({
       ...item,
+      item_type: item.item_type === 'bundle' ? 'bundle' : 'product',
       variant_id: item.variant_id || null,
       quantity: Number(item.quantity),
       price: Number(item.price),
@@ -239,11 +270,36 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       return acc;
     }, {});
 
-    const { data: products, error: productsError } = await serverClient
+    let { data: products, error: productsError } = await serverClient
       .from('products')
-      .select('id, name, slug, sku, price, stock_quantity, track_stock, allow_backorders, is_active')
+      .select('id, product_type, name, slug, sku, price, stock_quantity, track_stock, allow_backorders, is_active')
       .in('id', productIds)
       .returns<ProductRow[]>();
+
+    if (productsError) {
+      const productErrorMessage = String(productsError.message || productsError);
+      if (
+        productErrorMessage.includes('product_type') ||
+        productErrorMessage.includes('schema cache') ||
+        productErrorMessage.includes('column')
+      ) {
+        logCheckoutError('products-query-fallback', productsError);
+        const fallbackResult = await serverClient
+          .from('products')
+          .select('id, name, slug, sku, price, stock_quantity, track_stock, allow_backorders, is_active')
+          .in('id', productIds);
+
+        if (fallbackResult.error) {
+          return { success: false, error: 'Failed to fetch products' };
+        }
+
+        products = ((fallbackResult.data || []) as Omit<ProductRow, 'product_type'>[]).map((product) => ({
+          ...product,
+          product_type: 'single' as const,
+        }));
+        productsError = null;
+      }
+    }
 
     if (productsError) {
       if (isServerConfigurationError(productsError)) {
@@ -295,6 +351,66 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       return acc;
     }, {});
 
+    const bundleProductIds = products
+      ?.filter((product) => (product.product_type || 'single') === 'bundle')
+      .map((product) => product.id) || [];
+
+    let bundleItems: BundleItemRow[] = [];
+    if (bundleProductIds.length > 0) {
+      const { data: bundleItemsData, error: bundleItemsError } = await (serverClient.from('bundle_items') as any)
+        .select(`
+          id,
+          bundle_product_id,
+          item_product_id,
+          item_variant_id,
+          quantity,
+          sort_order,
+          item_product:products(
+            id,
+            product_type,
+            name,
+            slug,
+            sku,
+            price,
+            stock_quantity,
+            track_stock,
+            allow_backorders,
+            is_active,
+            images:product_images(url, is_primary, sort_order)
+          ),
+          item_variant:product_variants(
+            id,
+            product_id,
+            name,
+            sku,
+            price,
+            stock_quantity,
+            track_stock,
+            is_active,
+            options,
+            values:product_variant_values(
+              option:product_options(name),
+              option_value:product_option_values(value)
+            )
+          )
+        `)
+        .in('bundle_product_id', bundleProductIds)
+        .order('sort_order', { ascending: true });
+
+      if (bundleItemsError) {
+        logCheckoutError('bundle-items-query', bundleItemsError);
+        return { success: false, error: 'Failed to verify bundle items' };
+      }
+
+      bundleItems = (bundleItemsData || []) as BundleItemRow[];
+    }
+
+    const bundleItemsByProduct = bundleItems.reduce<Record<string, BundleItemRow[]>>((acc, item) => {
+      acc[item.bundle_product_id] = acc[item.bundle_product_id] || [];
+      acc[item.bundle_product_id].push(item);
+      return acc;
+    }, {});
+
     const priceDiscrepancies: Array<{ product_id: string; client_price: number; server_price: number }> = [];
     let subtotal = 0;
     const verifiedItems: VerifiedOrderItem[] = [];
@@ -316,6 +432,109 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
           error: `Product is no longer available: ${product.name}`,
           details: { items_verified: false } as any,
         };
+      }
+
+      const isBundle = (product.product_type || 'single') === 'bundle';
+
+      if (isBundle) {
+        const currentBundleItems = bundleItemsByProduct[item.product_id] || [];
+        if (currentBundleItems.length === 0) {
+          return {
+            success: false,
+            error: `Bundle is not configured: ${product.name}`,
+            details: { items_verified: false } as any,
+          };
+        }
+
+        const requestedBundleQuantity = quantitiesByKey[quantityKey(item)] || item.quantity;
+        const snapshot: BundleSnapshotItem[] = [];
+
+        for (const bundleItem of currentBundleItems) {
+          const component = bundleItem.item_product;
+          if (!component || !component.is_active) {
+            return {
+              success: false,
+              error: `Bundle item is no longer available: ${product.name}`,
+              details: { items_verified: false } as any,
+            };
+          }
+
+          const componentQuantity = bundleItem.quantity * requestedBundleQuantity;
+          const componentVariant = bundleItem.item_variant || null;
+
+          if (componentVariant) {
+            if (!componentVariant.is_active || componentVariant.product_id !== component.id) {
+              return {
+                success: false,
+                error: `Bundle variant is no longer available: ${component.name}`,
+                details: { items_verified: false } as any,
+              };
+            }
+
+            if (componentVariant.track_stock && componentVariant.stock_quantity < componentQuantity) {
+              return {
+                success: false,
+                error: `Insufficient stock for bundle item ${component.name}. Available: ${componentVariant.stock_quantity}`,
+                details: { items_verified: false } as any,
+              };
+            }
+          } else if (component.track_stock && !component.allow_backorders && component.stock_quantity < componentQuantity) {
+            return {
+              success: false,
+              error: `Insufficient stock for bundle item ${component.name}. Available: ${component.stock_quantity}`,
+              details: { items_verified: false } as any,
+            };
+          }
+
+          const sortedImages = [...(component.images || [])].sort((a, b) => {
+            if (a.is_primary && !b.is_primary) return -1;
+            if (!a.is_primary && b.is_primary) return 1;
+            return a.sort_order - b.sort_order;
+          });
+
+          snapshot.push({
+            product_id: component.id,
+            product_name: component.name,
+            product_slug: component.slug,
+            variant_id: componentVariant?.id || null,
+            variant_name: componentVariant ? getVariantName(componentVariant) : null,
+            variant_options: componentVariant ? getVariantOptions(componentVariant) : null,
+            quantity: bundleItem.quantity,
+            unit_price: componentVariant ? Number(componentVariant.price) : Number(component.price),
+            image_url: sortedImages[0]?.url || null,
+          });
+        }
+        // TODO: deduct stock for regular products and bundles in one unified inventory pass if stock deduction is introduced.
+
+        const serverPrice = Number(product.price);
+        if (Math.abs(serverPrice - item.price) > 0.001) {
+          priceDiscrepancies.push({
+            product_id: item.product_id,
+            client_price: item.price,
+            server_price: serverPrice,
+          });
+        }
+
+        const itemTotal = serverPrice * item.quantity;
+        subtotal += itemTotal;
+
+        verifiedItems.push({
+          item_type: 'bundle',
+          product_id: item.product_id,
+          product_name: product.name,
+          product_slug: product.slug,
+          product_sku: product.sku,
+          variant_id: null,
+          variant_name: null,
+          variant_options: null,
+          variant_sku: null,
+          quantity: item.quantity,
+          unit_price: serverPrice,
+          total_price: itemTotal,
+          bundle_items_snapshot: snapshot,
+        });
+
+        continue;
       }
 
       const productVariants = activeVariantsByProduct[item.product_id] || [];
@@ -371,6 +590,7 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       subtotal += itemTotal;
 
       verifiedItems.push({
+        item_type: 'product',
         product_id: item.product_id,
         product_name: product.name,
         product_slug: product.slug,
@@ -382,6 +602,7 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
         quantity: item.quantity,
         unit_price: serverPrice,
         total_price: itemTotal,
+        bundle_items_snapshot: null,
       });
     }
 
@@ -429,32 +650,55 @@ export async function createOrder(data: CheckoutData): Promise<CheckoutResult> {
       return { success: false, error: 'Failed to create order' };
     }
 
-    const shouldPersistVariantColumns = verifiedItems.some(
-      (item) => item.variant_id || item.variant_options || item.variant_sku
-    );
     const orderItems = verifiedItems.map((item) => {
-      const baseItem = {
+      return {
         order_id: order.id,
+        item_type: item.item_type,
         product_id: item.product_id,
         product_name: item.product_name,
         product_sku: item.product_sku,
+        variant_id: item.variant_id,
         variant_name: item.variant_name,
+        variant_options: item.variant_options,
+        variant_sku: item.variant_sku,
         quantity: item.quantity,
         unit_price: item.unit_price,
         total_price: item.total_price,
-      };
-
-      if (!shouldPersistVariantColumns) return baseItem;
-
-      return {
-        ...baseItem,
-        variant_id: item.variant_id,
-        variant_options: item.variant_options,
-        variant_sku: item.variant_sku,
+        bundle_items_snapshot: item.bundle_items_snapshot,
       };
     });
 
-    const { error: itemsError } = await serverClient.from('order_items').insert(orderItems as any);
+    let { error: itemsError } = await serverClient.from('order_items').insert(orderItems as any);
+
+    if (itemsError) {
+      const itemErrorMessage = String(itemsError.message || itemsError);
+      const hasBundleItems = verifiedItems.some((item) => item.item_type === 'bundle');
+      const missingBundleColumns =
+        itemErrorMessage.includes('item_type') ||
+        itemErrorMessage.includes('bundle_items_snapshot') ||
+        itemErrorMessage.includes('schema cache') ||
+        itemErrorMessage.includes('column');
+
+      if (!hasBundleItems && missingBundleColumns) {
+        logCheckoutError('order-items-create-fallback', itemsError);
+        const legacyOrderItems = verifiedItems.map((item) => ({
+          order_id: order.id,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          product_sku: item.product_sku,
+          variant_id: item.variant_id,
+          variant_name: item.variant_name,
+          variant_options: item.variant_options,
+          variant_sku: item.variant_sku,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price,
+        }));
+
+        const fallbackResult = await serverClient.from('order_items').insert(legacyOrderItems as any);
+        itemsError = fallbackResult.error;
+      }
+    }
 
     if (itemsError) {
       logCheckoutError('order-items-create', itemsError);

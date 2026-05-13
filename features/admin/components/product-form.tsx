@@ -26,6 +26,7 @@ import { INTENT_TAG_CONFIG } from '@/lib/product-intents';
 import { formatPrice } from '@/lib/utils';
 import { ProductVariantsManager, type ProductVariantsSummary } from './product-variants-manager';
 import { ProductImagesManager } from './product-images-manager';
+import { ProductBundleItemsManager, type ProductBundleSummary } from './product-bundle-items-manager';
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
@@ -33,6 +34,7 @@ interface ProductFormProps {
 }
 
 const emptyProduct: ProductFormInput = {
+  product_type: 'single',
   name: '',
   slug: '',
   slug_was_manual: false,
@@ -75,6 +77,12 @@ const emptyVariantsSummary: ProductVariantsSummary = {
   activeWithoutCompleteOptionsCount: 0,
 };
 
+const emptyBundleSummary: ProductBundleSummary = {
+  itemCount: 0,
+  retailTotal: 0,
+  hasInvalidItems: false,
+};
+
 async function getAccessToken() {
   const {
     data: { session },
@@ -92,6 +100,7 @@ function asFormValue(product: ProductFormRecord | null): ProductFormInput {
       : null;
 
   return {
+    product_type: product.product_type || 'single',
     name: product.name,
     slug: product.slug,
     slug_was_manual: true,
@@ -178,6 +187,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const [hasPublishedFromCreate, setHasPublishedFromCreate] = useState(false);
   const [aiNotes, setAiNotes] = useState('');
   const [variantsSummary, setVariantsSummary] = useState<ProductVariantsSummary>(emptyVariantsSummary);
+  const [bundleSummary, setBundleSummary] = useState<ProductBundleSummary>(emptyBundleSummary);
 
   const {
     register,
@@ -212,6 +222,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const metaDescription = watch('meta_description');
   const shortDescription = watch('short_description');
   const fullDescription = watch('description');
+  const productType = watch('product_type') || 'single';
   const focusTarget = searchParams.get('focus');
 
   const normalizeForSimilarity = (value: string) =>
@@ -617,7 +628,20 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       items.push({ field: 'stock_quantity', message: 'المخزون مطلوب ولا يمكن أن يكون أقل من صفر' });
     }
 
-    if (variantsSummary.isEnabled) {
+    if (values.product_type === 'bundle') {
+      if (bundleSummary.itemCount === 0) {
+        items.push({
+          field: 'bundle-items-section',
+          message: 'يجب إضافة منتج واحد على الأقل داخل الباكج',
+        });
+      }
+      if (bundleSummary.hasInvalidItems) {
+        items.push({
+          field: 'bundle-items-section',
+          message: 'يوجد عنصر غير مكتمل داخل محتويات الباكج',
+        });
+      }
+    } else if (variantsSummary.isEnabled) {
       if (variantsSummary.optionCount === 0 || variantsSummary.variantCount === 0) {
         items.push({
           field: 'variants-intent',
@@ -756,6 +780,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         setAiNotes('');
         setSlugTouched(false);
         setVariantsSummary(emptyVariantsSummary);
+        setBundleSummary(emptyBundleSummary);
         setValidationMessages([]);
         requestAnimationFrame(() => document.getElementById('name')?.focus());
       } else {
@@ -820,6 +845,16 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   }
 
   async function onSubmit(values: ProductFormInput) {
+    if (values.product_type === 'bundle' && values.is_active && bundleSummary.itemCount === 0) {
+      showValidationSummary([
+        {
+          field: 'bundle-items-section',
+          message: 'يجب إضافة منتج واحد على الأقل داخل الباكج قبل تفعيله للعملاء',
+        },
+      ]);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const token = await getAccessToken();
@@ -981,6 +1016,26 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
               <SectionHeader title="2. مراجعة أساسية" description="أهم حقول البيع والنشر، بدون تفاصيل غير ضرورية." />
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="md:col-span-2">
+                  <Label>نوع المنتج</Label>
+                  <Select
+                    value={productType}
+                    onValueChange={(value) => setValue('product_type', value as ProductFormInput['product_type'], { shouldDirty: true })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر نوع المنتج" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">منتج عادي</SelectItem>
+                      <SelectItem value="bundle">باكج</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {productType === 'bundle' && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      الباكج يظهر للعميل كمنتج واحد، وتُعرض محتوياته داخل صفحة المنتج والسلة ورسالة واتساب.
+                    </p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
                   <Label htmlFor="slug">الرابط المختصر *</Label>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
@@ -1130,18 +1185,31 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
               />
             </Card>
 
-            <Card id="variants-intent" className="scroll-mt-24">
-              <SectionHeader title="5. متغيرات المنتج" description="أنشئ النكهات أو الأحجام من نفس الصفحة، واحفظها قبل النشر إذا كان المنتج متعدد الخيارات." />
-              <ProductVariantsManager
-                productId={draftProductId || undefined}
-                ensureProductId={() => ensureDraftProduct()}
-                onStateChange={setVariantsSummary}
-                basePrice={Number(price) || 0}
-                baseComparePrice={comparePrice || null}
-                baseStockQuantity={Number(stockQuantity) || 0}
-                baseTrackStock={trackStock}
-              />
-            </Card>
+            {productType === 'bundle' ? (
+              <Card id="bundle-items-section" className="scroll-mt-24">
+                <SectionHeader title="5. محتويات الباكج" description="أضف المنتجات أو متغيرات المنتجات التي يحتويها الباكج. السعر النهائي يبقى سعر الباكج نفسه." />
+                <ProductBundleItemsManager
+                  productId={draftProductId || undefined}
+                  isBundle
+                  ensureProductId={() => ensureDraftProduct()}
+                  onStateChange={setBundleSummary}
+                  basePrice={Number(price) || 0}
+                />
+              </Card>
+            ) : (
+              <Card id="variants-intent" className="scroll-mt-24">
+                <SectionHeader title="5. متغيرات المنتج" description="أنشئ النكهات أو الأحجام من نفس الصفحة، واحفظها قبل النشر إذا كان المنتج متعدد الخيارات." />
+                <ProductVariantsManager
+                  productId={draftProductId || undefined}
+                  ensureProductId={() => ensureDraftProduct()}
+                  onStateChange={setVariantsSummary}
+                  basePrice={Number(price) || 0}
+                  baseComparePrice={comparePrice || null}
+                  baseStockQuantity={Number(stockQuantity) || 0}
+                  baseTrackStock={trackStock}
+                />
+              </Card>
+            )}
 
             <Card>
               <SectionHeader title="6. المحتوى والتسويق" description="نصوص تساعد العميل على فهم المنتج بسرعة." />
@@ -1403,6 +1471,26 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             description="أدخل البيانات التي تظهر للعميل في صفحة المنتج."
           />
           <div className="grid gap-4 md:grid-cols-2 max-w-full">
+            <div className="md:col-span-2 min-w-0">
+              <Label>نوع المنتج</Label>
+              <Select
+                value={productType}
+                onValueChange={(value) => setValue('product_type', value as ProductFormInput['product_type'], { shouldDirty: true })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر نوع المنتج" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="single">منتج عادي</SelectItem>
+                  <SelectItem value="bundle">باكج</SelectItem>
+                </SelectContent>
+              </Select>
+              {productType === 'bundle' && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  عند تحويل المنتج إلى منتج عادي ستبقى محتويات الباكج محفوظة لكنها لن تظهر للعملاء.
+                </p>
+              )}
+            </div>
             <div className="min-w-0">
               <Label htmlFor="name">اسم المنتج *</Label>
               <Input id="name" {...register('name')} placeholder="مثال: سجاد تنظيف احترافي" className="w-full min-w-0" />
@@ -1715,15 +1803,27 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           </div>
         </Card>
 
-        <div id="product-variants-section" className="scroll-mt-24">
-          <ProductVariantsManager
-            productId={productId}
-            basePrice={Number(price) || 0}
-            baseComparePrice={comparePrice ? Number(comparePrice) : null}
-            baseStockQuantity={Number(stockQuantity) || 0}
-            baseTrackStock={Boolean(trackStock)}
-          />
-        </div>
+        {productType === 'bundle' ? (
+          <Card id="bundle-items-section" className="scroll-mt-24">
+            <SectionHeader title="محتويات الباكج" description="أدر المنتجات والمتغيرات التي يحتويها هذا الباكج." />
+            <ProductBundleItemsManager
+              productId={productId}
+              isBundle
+              onStateChange={setBundleSummary}
+              basePrice={Number(price) || 0}
+            />
+          </Card>
+        ) : (
+          <div id="product-variants-section" className="scroll-mt-24">
+            <ProductVariantsManager
+              productId={productId}
+              basePrice={Number(price) || 0}
+              baseComparePrice={comparePrice ? Number(comparePrice) : null}
+              baseStockQuantity={Number(stockQuantity) || 0}
+              baseTrackStock={Boolean(trackStock)}
+            />
+          </div>
+        )}
 
         {/* Section 6: Additional Details */}
         <Card>

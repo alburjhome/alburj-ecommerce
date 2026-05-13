@@ -44,6 +44,7 @@ export interface OrderListRow {
 export interface OrderItemRecord {
   id: string;
   order_id: string;
+  item_type: 'product' | 'bundle';
   product_id: string | null;
   product_name: string;
   product_sku: string | null;
@@ -54,6 +55,11 @@ export interface OrderItemRecord {
   quantity: number;
   unit_price: number;
   total_price: number;
+  bundle_items_snapshot: Array<{
+    product_name: string;
+    variant_options?: Record<string, string> | null;
+    quantity: number;
+  }> | null;
   created_at: string;
 }
 

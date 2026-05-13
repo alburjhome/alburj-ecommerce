@@ -31,8 +31,12 @@ const useCartStore = create<CartState & CartActions>()(
       // Actions
       addItem: (item) => {
         const { items } = get();
+        const itemType = item.item_type || 'product';
         const existingItem = items.find(
-          (i) => i.product_id === item.product_id && i.variant_id === item.variant_id
+          (i) =>
+            i.product_id === item.product_id &&
+            i.variant_id === item.variant_id &&
+            (i.item_type || 'product') === itemType
         );
 
         if (existingItem) {
@@ -51,7 +55,8 @@ const useCartStore = create<CartState & CartActions>()(
           // Add new item
           const newItem: CartItem = {
             ...item,
-            id: `${item.product_id}-${item.variant_id || 'default'}`,
+            item_type: itemType,
+            id: `${itemType}-${item.product_id}-${item.variant_id || 'default'}`,
           };
           set({ items: [...items, newItem] });
         }

@@ -160,12 +160,14 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
         items: items.map(item => ({
           product_id: item.product_id,
           variant_id: item.variant_id,
+          item_type: item.item_type || 'product',
           name: item.name,
           quantity: item.quantity,
           price: item.price, // Client price for reference - server verifies
           variant_name: item.variant_name || null,
           selected_options: item.selected_options || null,
           sku: item.sku || null,
+          bundle_items: item.bundle_items || null,
         })),
       });
 

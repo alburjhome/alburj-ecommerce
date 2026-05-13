@@ -114,6 +114,7 @@ export interface Database {
       products: {
         Row: {
           id: string;
+          product_type: string;
           name: string;
           slug: string;
           description: string | null;
@@ -147,6 +148,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          product_type?: string;
           name: string;
           slug: string;
           description?: string | null;
@@ -180,6 +182,7 @@ export interface Database {
         };
         Update: {
           id?: string;
+          product_type?: string;
           name?: string;
           slug?: string;
           description?: string | null;
@@ -372,6 +375,41 @@ export interface Database {
           created_at?: string;
         };
       };
+      bundle_items: {
+        Row: {
+          id: string;
+          bundle_product_id: string;
+          item_product_id: string;
+          item_variant_id: string | null;
+          quantity: number;
+          sort_order: number;
+          is_required: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          bundle_product_id: string;
+          item_product_id: string;
+          item_variant_id?: string | null;
+          quantity?: number;
+          sort_order?: number;
+          is_required?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          bundle_product_id?: string;
+          item_product_id?: string;
+          item_variant_id?: string | null;
+          quantity?: number;
+          sort_order?: number;
+          is_required?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       shipping_rates: {
         Row: {
           id: string;
@@ -482,6 +520,7 @@ export interface Database {
         Row: {
           id: string;
           order_id: string;
+          item_type: string;
           product_id: string | null;
           product_name: string;
           product_sku: string | null;
@@ -492,11 +531,13 @@ export interface Database {
           quantity: number;
           unit_price: number;
           total_price: number;
+          bundle_items_snapshot: Json | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           order_id: string;
+          item_type?: string;
           product_id?: string | null;
           product_name: string;
           product_sku?: string | null;
@@ -507,11 +548,13 @@ export interface Database {
           quantity: number;
           unit_price: number;
           total_price: number;
+          bundle_items_snapshot?: Json | null;
           created_at?: string;
         };
         Update: {
           id?: string;
           order_id?: string;
+          item_type?: string;
           product_id?: string | null;
           product_name?: string;
           product_sku?: string | null;
@@ -522,6 +565,7 @@ export interface Database {
           quantity?: number;
           unit_price?: number;
           total_price?: number;
+          bundle_items_snapshot?: Json | null;
           created_at?: string;
         };
       };

@@ -68,6 +68,21 @@ async function getProduct(slug: string) {
         option:product_options(*),
         option_value:product_option_values(*)
       )
+    ),
+    bundle_items:bundle_items(
+      *,
+      item_product:products(
+        *,
+        images:product_images(*)
+      ),
+      item_variant:product_variants(
+        *,
+        values:product_variant_values(
+          *,
+          option:product_options(*),
+          option_value:product_option_values(*)
+        )
+      )
     )
   `;
 
@@ -85,8 +100,10 @@ async function getProduct(slug: string) {
 
     return {
       ...data,
+      product_type: data.product_type || 'single',
       options,
       variants: sortProductVariants(data.variants || []),
+      bundle_items: (data.bundle_items || []).sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order),
       images: (data.images || []).sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order),
     } as ProductWithDetails;
   }
@@ -100,8 +117,10 @@ async function getProduct(slug: string) {
   if (legacyError || !legacyData) return null;
   return {
     ...legacyData,
+    product_type: legacyData.product_type || 'single',
     options: [],
     variants: [],
+    bundle_items: [],
     images: (legacyData.images || []).sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order),
   } as ProductWithDetails;
 }

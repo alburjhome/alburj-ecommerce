@@ -10,12 +10,18 @@ export interface WhatsAppOrderCustomer {
 }
 
 export interface WhatsAppOrderItem {
+  item_type?: 'product' | 'bundle' | null;
   product_name: string;
   product_slug?: string | null;
   variant_options?: Record<string, string> | null;
   quantity: number;
   unit_price: number;
   total_price: number;
+  bundle_items_snapshot?: Array<{
+    product_name: string;
+    variant_options?: Record<string, string> | null;
+    quantity: number;
+  }> | null;
 }
 
 interface BuildWhatsAppOrderMessageInput {
@@ -58,6 +64,7 @@ function formatCustomerLines(customer: WhatsAppOrderCustomer) {
 }
 
 function formatOrderItem(item: WhatsAppOrderItem, index: number, baseUrl: string | null) {
+  const isBundle = item.item_type === 'bundle';
   const optionLines =
     item.variant_options && Object.keys(item.variant_options).length > 0
       ? [
@@ -66,13 +73,31 @@ function formatOrderItem(item: WhatsAppOrderItem, index: number, baseUrl: string
         ]
       : [];
   const productUrl = getProductUrl(baseUrl, item.product_slug);
+  const bundleLines =
+    isBundle && item.bundle_items_snapshot && item.bundle_items_snapshot.length > 0
+      ? [
+          '',
+          'محتويات الباكج:',
+          ...item.bundle_items_snapshot.map((bundleItem) => {
+            const options =
+              bundleItem.variant_options && Object.keys(bundleItem.variant_options).length > 0
+                ? ` (${Object.entries(bundleItem.variant_options)
+                    .map(([name, value]) => `${name}: ${value}`)
+                    .join('، ')})`
+                : '';
+            return `- ${bundleItem.product_name}${options} × ${bundleItem.quantity}`;
+          }),
+        ]
+      : [];
 
   return [
     `${index + 1}. ${item.product_name}`,
+    isBundle ? 'النوع: باكج' : '',
     ...optionLines,
     `الكمية: ${item.quantity}`,
     `السعر: ${formatCurrency(item.unit_price)}`,
     `الإجمالي: ${formatCurrency(item.total_price)}`,
+    ...bundleLines,
     productUrl ? `رابط المنتج: ${productUrl}` : '',
   ]
     .filter(Boolean)

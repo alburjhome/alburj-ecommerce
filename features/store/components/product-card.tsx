@@ -25,12 +25,14 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
 
   const productHref = `/product/${product.slug}`;
   const imageSrc = getPrimaryProductImage(product);
+  const isBundle = (product.product_type || 'single') === 'bundle';
   const hasDiscount = Boolean(product.compare_price && product.compare_price > product.price);
   const discountPercentage = hasDiscount
     ? calculateDiscountPercentage(product.price, product.compare_price || product.price)
     : 0;
 
-  const hasActiveVariants = (product.variants || []).some((variant) => variant.is_active);
+  const hasActiveVariants = !isBundle && (product.variants || []).some((variant) => variant.is_active);
+  const requiresProductPage = hasActiveVariants || isBundle;
   const hasAvailableVariant = (product.variants || []).some(
     (variant) => variant.is_active && isVariantInStock(variant)
   );
@@ -39,9 +41,10 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
     : !product.track_stock || (product.stock_quantity ?? 0) > 0;
 
   function handleAddToCart() {
-    if (hasActiveVariants || !isAvailable) return;
+    if (requiresProductPage || !isAvailable) return;
 
     addItem({
+      item_type: isBundle ? 'bundle' : 'product',
       product_id: product.id,
       variant_id: null,
       name: product.name,
@@ -98,6 +101,11 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
             {firstMarketingBadge}
           </span>
         )}
+        {isBundle && (
+          <span className="inline-flex items-center rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
+            باكج توفير
+          </span>
+        )}
         {isAvailable && (
           <span className="inline-flex items-center gap-1 rounded-md bg-green-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
             متوفر
@@ -118,9 +126,9 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
           />
         </Link>
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-          {hasActiveVariants ? (
+          {requiresProductPage ? (
             <Button asChild variant="secondary" size="icon" className="pointer-events-auto rounded-full">
-              <Link href={productHref} aria-label="اختيار خيارات المنتج">
+              <Link href={productHref} aria-label={isBundle ? 'عرض الباكج' : 'اختيار خيارات المنتج'}>
                 <ShoppingCart className="h-4 w-4" />
               </Link>
             </Button>
@@ -163,11 +171,11 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
           </div>
         )}
 
-        {hasActiveVariants ? (
+        {requiresProductPage ? (
           <Button asChild className="mt-3 w-full md:hidden" size="sm">
             <Link href={productHref}>
               <ShoppingCart className="ml-2 h-4 w-4" />
-              اختيار الخيارات
+              {isBundle ? 'عرض الباكج' : 'اختيار الخيارات'}
             </Link>
           </Button>
         ) : (

@@ -141,13 +141,33 @@ function formatItemVariantOptions(item: {
   return item.variant_name || '';
 }
 
+function formatBundleSnapshot(item: {
+  bundle_items_snapshot?: OrderDetailsRecord['items'][number]['bundle_items_snapshot'];
+}) {
+  const snapshot = item.bundle_items_snapshot || [];
+  if (snapshot.length === 0) return '';
+
+  return snapshot
+    .map((bundleItem) => {
+      const options =
+        bundleItem.variant_options && Object.keys(bundleItem.variant_options).length > 0
+          ? ` (${Object.entries(bundleItem.variant_options).map(([name, value]) => `${name}: ${value}`).join('، ')})`
+          : '';
+      return `- ${bundleItem.product_name}${options} × ${bundleItem.quantity}`;
+    })
+    .join('\n');
+}
+
 function buildOrderSummary(order: OrderDetailsRecord) {
   const itemsWithOptions = order.items
     .map((item, idx) => {
       const options = formatItemVariantOptions(item);
+      const bundleSnapshot = formatBundleSnapshot(item);
       return [
         `${idx + 1}. ${item.product_name} × ${item.quantity} — ${formatPrice(Number(item.unit_price))}`,
+        (item.item_type || 'product') === 'bundle' ? 'النوع: باكج' : '',
         options,
+        bundleSnapshot ? `محتويات الباكج:\n${bundleSnapshot}` : '',
       ]
         .filter(Boolean)
         .join('\n');
@@ -733,6 +753,11 @@ export function OrdersClient() {
                             <tr key={item.id} className="border-b last:border-0">
                               <td className="py-3">
                                 <div className="font-medium">{item.product_name}</div>
+                                {(item.item_type || 'product') === 'bundle' && (
+                                  <span className="mt-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                                    باكج
+                                  </span>
+                                )}
                                 {item.variant_options && Object.keys(item.variant_options).length > 0 && (
                                   <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                                     {Object.entries(item.variant_options).map(([name, value]) => (
@@ -747,6 +772,12 @@ export function OrdersClient() {
                                 )}
                                 {item.product_sku && (
                                   <div className="text-xs text-muted-foreground font-mono">SKU: {item.product_sku}</div>
+                                )}
+                                {(item.item_type || 'product') === 'bundle' && item.bundle_items_snapshot && item.bundle_items_snapshot.length > 0 && (
+                                  <div className="mt-2 rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+                                    <div className="font-medium text-foreground">محتويات الباكج</div>
+                                    <div className="mt-1 whitespace-pre-line">{formatBundleSnapshot(item)}</div>
+                                  </div>
                                 )}
                               </td>
                               <td className="py-3">{item.quantity}</td>
@@ -772,6 +803,11 @@ export function OrdersClient() {
                     selectedOrder.items.map((item) => (
                       <div key={item.id} className="rounded-lg border p-3">
                         <div className="font-medium mb-1">{item.product_name}</div>
+                        {(item.item_type || 'product') === 'bundle' && (
+                          <span className="mb-2 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                            باكج
+                          </span>
+                        )}
                         {item.variant_options && Object.keys(item.variant_options).length > 0 && (
                           <div className="mb-2 space-y-0.5 text-xs text-muted-foreground">
                             {Object.entries(item.variant_options).map(([name, value]) => (
@@ -783,6 +819,12 @@ export function OrdersClient() {
                         )}
                         {item.variant_name && (
                           <div className="text-xs text-muted-foreground mb-2">{item.variant_name}</div>
+                        )}
+                        {(item.item_type || 'product') === 'bundle' && item.bundle_items_snapshot && item.bundle_items_snapshot.length > 0 && (
+                          <div className="mb-2 rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+                            <div className="font-medium text-foreground">محتويات الباكج</div>
+                            <div className="mt-1 whitespace-pre-line">{formatBundleSnapshot(item)}</div>
+                          </div>
                         )}
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">{item.quantity} × {formatPrice(Number(item.unit_price))}</span>

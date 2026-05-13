@@ -112,6 +112,11 @@ export function CartDrawer() {
                   <div className="flex-1 min-w-0 flex flex-col justify-between">
                     <div>
                       <h4 className="font-medium text-sm line-clamp-2 leading-5">{item.name}</h4>
+                      {(item.item_type || 'product') === 'bundle' && (
+                        <span className="mt-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                          باكج
+                        </span>
+                      )}
                       {item.selected_options && Object.keys(item.selected_options).length > 0 && (
                         <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                           {Object.entries(item.selected_options).map(([name, value]) => (
@@ -123,6 +128,25 @@ export function CartDrawer() {
                       )}
                       {item.sku && (
                         <p className="mt-1 text-[11px] text-muted-foreground">SKU: {item.sku}</p>
+                      )}
+                      {(item.item_type || 'product') === 'bundle' && item.bundle_items && item.bundle_items.length > 0 && (
+                        <details className="mt-2 rounded-md border bg-background/70 p-2 text-xs">
+                          <summary className="cursor-pointer font-medium">محتويات الباكج</summary>
+                          <div className="mt-2 space-y-1 text-muted-foreground">
+                            {item.bundle_items.map((bundleItem, index) => (
+                              <div key={`${item.id}-bundle-${bundleItem.product_id}-${bundleItem.variant_id || index}`} className="break-words">
+                                - {bundleItem.product_name} × {bundleItem.quantity}
+                                {bundleItem.variant_options && Object.keys(bundleItem.variant_options).length > 0 && (
+                                  <span className="block pr-3">
+                                    {Object.entries(bundleItem.variant_options)
+                                      .map(([name, value]) => `${name}: ${value}`)
+                                      .join('، ')}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
                       )}
                       <p className="text-muted-foreground text-xs mt-0.5">
                         {formatPrice(item.price)} × {item.quantity}

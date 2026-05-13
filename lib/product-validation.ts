@@ -17,6 +17,7 @@ const optionalSlug = z
   );
 
 export const productSchema = z.object({
+  product_type: z.enum(['single', 'bundle']).optional().default('single'),
   name: z.string().trim().min(1, 'اسم المنتج مطلوب'),
   slug: optionalSlug,
   slug_was_manual: z.boolean().optional().default(false),

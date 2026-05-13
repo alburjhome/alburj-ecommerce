@@ -49,6 +49,8 @@ export interface CategoryWithSubcategories extends Category {
 // PRODUCT TYPES
 // ============================================
 
+export type ProductType = 'single' | 'bundle';
+
 export interface ProductImage {
   id: string;
   product_id: string;
@@ -110,6 +112,7 @@ export interface ProductVariant {
 
 export interface Product {
   id: string;
+  product_type?: ProductType | null;
   name: string;
   slug: string;
   description: string | null;
@@ -142,11 +145,38 @@ export interface Product {
   updated_at: string;
 }
 
+export interface BundleItemSnapshot {
+  product_id: string;
+  product_name: string;
+  product_slug: string | null;
+  variant_id: string | null;
+  variant_name: string | null;
+  variant_options: Record<string, string> | null;
+  quantity: number;
+  unit_price: number | null;
+  image_url: string | null;
+}
+
+export interface BundleItem {
+  id: string;
+  bundle_product_id: string;
+  item_product_id: string;
+  item_variant_id: string | null;
+  quantity: number;
+  sort_order: number;
+  is_required: boolean;
+  created_at: string;
+  updated_at: string;
+  item_product?: (Product & { images?: ProductImage[]; variants?: ProductVariant[] }) | null;
+  item_variant?: ProductVariant | null;
+}
+
 export interface ProductWithDetails extends Product {
   images: ProductImage[];
   options?: ProductOption[];
   variants: ProductVariant[];
   variantValues?: ProductVariantValue[];
+  bundle_items?: BundleItem[];
   category: Category | null;
   subcategory: Subcategory | null;
 }
@@ -157,6 +187,7 @@ export interface ProductWithDetails extends Product {
 
 export interface CartItem {
   id: string;
+  item_type?: 'product' | 'bundle';
   product_id: string;
   variant_id: string | null;
   name: string;
@@ -168,6 +199,7 @@ export interface CartItem {
   selected_options?: Record<string, string> | null;
   sku?: string | null;
   stock_quantity: number;
+  bundle_items?: BundleItemSnapshot[] | null;
 }
 
 export interface CartState {
@@ -186,6 +218,7 @@ export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
 export interface OrderItem {
   id: string;
   order_id: string;
+  item_type?: 'product' | 'bundle' | null;
   product_id: string | null;
   product_name: string;
   product_sku: string | null;
@@ -196,6 +229,7 @@ export interface OrderItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  bundle_items_snapshot: BundleItemSnapshot[] | null;
   created_at: string;
 }
 

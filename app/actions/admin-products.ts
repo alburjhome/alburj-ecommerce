@@ -20,6 +20,7 @@ export interface ProductListFilters {
   category?: string;
   status?: 'all' | 'active' | 'inactive';
   featured?: 'all' | 'featured' | 'not_featured';
+  productType?: 'all' | 'single' | 'bundle';
 }
 
 const PAGE_SIZE = 10;
@@ -47,6 +48,7 @@ export interface ProductImageOption {
 
 export interface ProductListRow {
   id: string;
+  product_type: 'single' | 'bundle';
   name: string;
   slug: string;
   price: number;
@@ -64,6 +66,7 @@ export interface ProductListRow {
 
 export interface ProductFormRecord {
   id: string;
+  product_type: 'single' | 'bundle';
   name: string;
   slug: string;
   description: string | null;
@@ -116,6 +119,7 @@ function normalizeProductInput(input: ProductFormInput) {
     dimensions?.length != null || dimensions?.width != null || dimensions?.height != null;
 
   return {
+    product_type: input.product_type || 'single',
     name: input.name.trim(),
     slug: input.slug.trim(),
     description: normalizeNullable(input.description),
@@ -280,6 +284,10 @@ export async function getAdminProducts(
       query = query.eq('is_featured', false);
     }
 
+    if (filters.productType === 'single' || filters.productType === 'bundle') {
+      query = query.eq('product_type', filters.productType);
+    }
+
     const { data, count, error } = await query;
 
     if (error) {
@@ -398,6 +406,7 @@ export async function createAdminProductDraft(
     const weight = Number(input.weight);
 
     const payload = {
+      product_type: input.product_type || 'single',
       name,
       slug,
       description: normalizeNullable(input.description),
@@ -468,6 +477,7 @@ export async function updateAdminProductDraft(
     await assertUniqueProductFields(slug, sku, productId, accessToken);
 
     const payload = {
+      product_type: input.product_type || 'single',
       name,
       slug,
       description: normalizeNullable(input.description),

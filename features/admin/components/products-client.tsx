@@ -463,6 +463,12 @@ export function ProductsClient() {
                                   مميز
                                 </span>
                               )}
+                              {product.product_type === 'bundle' && (
+                                <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700">
+                                  <Boxes className="h-3 w-3" />
+                                  باكج
+                                </span>
+                              )}
                               {isOnSale && (
                                 <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs bg-red-100 text-red-700">
                                   <Tag className="h-3 w-3" />
@@ -645,6 +651,11 @@ export function ProductsClient() {
                       {isOnSale && (
                         <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs bg-red-100 text-red-700">
                           عرض
+                        </span>
+                      )}
+                      {product.product_type === 'bundle' && (
+                        <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700">
+                          باكج
                         </span>
                       )}
                     </div>
