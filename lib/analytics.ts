@@ -1,3 +1,5 @@
+import { trackContact } from '@/lib/meta-pixel';
+
 export type AnalyticsMetadata = Record<string, string | number | boolean | null | undefined>;
 
 const MAX_ANALYTICS_PAYLOAD_BYTES = 8000;
@@ -61,7 +63,7 @@ export function trackWhatsAppClick(source: string, metadata?: AnalyticsMetadata)
 
   try {
     window.fbq?.('trackCustom', 'WhatsAppClick', { source, ...safeMetadata });
-    window.fbq?.('track', 'Contact', { source, ...safeMetadata });
+    trackContact(source, safeMetadata);
   } catch {
     // ignore
   }

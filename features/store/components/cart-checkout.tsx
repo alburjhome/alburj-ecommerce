@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { JORDAN_GOVERNORATES } from '@/types';
 import { createOrder } from '@/app/actions/checkout';
 import { Truck, CreditCard, MessageCircle } from 'lucide-react';
+import { trackContact, trackLead } from '@/lib/meta-pixel';
 
 interface CartCheckoutProps {
   onBack: () => void;
@@ -183,6 +184,16 @@ export function CartCheckout({ onBack }: CartCheckoutProps) {
         }
         return;
       }
+
+      trackLead({
+        orderId: result.order?.id || result.order?.order_number || null,
+        items,
+        value: result.details?.total ?? total,
+      });
+      trackContact('checkout_whatsapp', {
+        order_id: result.order?.id || result.order?.order_number || null,
+        value: result.details?.total ?? total,
+      });
 
       // Open WhatsApp with server-generated message
       if (result.whatsappUrl) {

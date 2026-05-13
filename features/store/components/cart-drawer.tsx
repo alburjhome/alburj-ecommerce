@@ -9,6 +9,7 @@ import useCartStore from '@/stores/cart';
 import { PLACEHOLDER_PRODUCT, safeImageSrc } from '@/lib/image-utils';
 import { formatPrice } from '@/lib/utils';
 import { CartCheckout } from './cart-checkout';
+import { trackInitiateCheckout } from '@/lib/meta-pixel';
 
 const getQuantityLimit = (stockQuantity: number) => {
   if (!Number.isFinite(stockQuantity) || stockQuantity <= 0) return 99;
@@ -213,7 +214,10 @@ export function CartDrawer() {
                 <Button
                   className="w-full"
                   size="lg"
-                  onClick={() => setShowCheckout(true)}
+                  onClick={() => {
+                    trackInitiateCheckout({ items: hydratedItems, value: total });
+                    setShowCheckout(true);
+                  }}
                 >
                   إكمال الطلب
                   <ArrowRight className="h-4 w-4 mr-2" />

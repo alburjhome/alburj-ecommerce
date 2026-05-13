@@ -6,6 +6,7 @@ import { Banner } from '@/types';
 import { Button } from '@/components/ui/button';
 import { SafeImage } from '@/components/ui/safe-image';
 import { PLACEHOLDER_BANNER, safeImageSrc } from '@/lib/image-utils';
+import { trackWhatsAppClick } from '@/lib/analytics';
 
 interface HeroBannerProps {
   banners: Banner[];
@@ -53,7 +54,12 @@ export function HeroBanner({ banners, whatsappUrl }: HeroBannerProps) {
               </Button>
               {whatsappUrl && (
                 <Button asChild size="lg" variant="outline" className="w-full bg-white/80 sm:w-auto">
-                  <a href={whatsappUrl} target="_blank" rel="noreferrer">
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => trackWhatsAppClick('hero_whatsapp')}
+                  >
                     <MessageCircle className="ml-2 h-4 w-4" />
                     اطلب عبر واتساب
                   </a>
@@ -129,7 +135,12 @@ export function HeroBanner({ banners, whatsappUrl }: HeroBannerProps) {
                 variant="outline"
                 className="w-full border-white/80 bg-white/10 text-white hover:bg-white hover:text-primary sm:w-auto"
               >
-                <a href={whatsappUrl} target="_blank" rel="noreferrer">
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => trackWhatsAppClick('hero_whatsapp')}
+                >
                   <MessageCircle className="ml-2 h-4 w-4" />
                   اطلب عبر واتساب
                 </a>

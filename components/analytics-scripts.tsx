@@ -1,4 +1,5 @@
 import Script from 'next/script';
+import { MetaPixelPageView } from '@/components/meta-pixel-page-view';
 
 function normalizeMetaPixelId(value: string | null | undefined) {
   const trimmed = value?.trim();
@@ -33,6 +34,7 @@ export function AnalyticsScripts({
               __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?\n  n.callMethod.apply(n,arguments):n.queue.push(arguments)};\n  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';\n  n.queue=[];t=b.createElement(e);t.async=!0;\n  t.src=v;s=b.getElementsByTagName(e)[0];\n  s.parentNode.insertBefore(t,s)}(window, document,'script',\n  'https://connect.facebook.net/en_US/fbevents.js');\n  fbq('init', '${metaId}');\n  fbq('track', 'PageView');`,
             }}
           />
+          <MetaPixelPageView enabled />
         </>
       )}
 

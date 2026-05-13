@@ -12,6 +12,7 @@ import type { ProductWithDetails } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import useCartStore from '@/stores/cart';
 import { CartToastActions } from './cart-toast-actions';
+import { trackAddToCart } from '@/lib/meta-pixel';
 
 interface RecommendedAddonsProps {
   products: ProductWithDetails[];
@@ -87,6 +88,13 @@ export function RecommendedAddons({ products }: RecommendedAddonsProps) {
                         quantity: 1,
                         image: imageSrc,
                         stock_quantity: product.stock_quantity,
+                      });
+                      trackAddToCart({
+                        productId: product.id,
+                        productName: product.name,
+                        value: product.price,
+                        quantity: 1,
+                        productType: product.product_type || 'single',
                       });
                       toast({
                         title: 'تمت إضافة المنتج للسلة',

@@ -59,14 +59,14 @@ export default async function RootLayout({
   const supabase = createSupabaseServerClient();
   const { data } = await supabase
     .from('store_settings')
-    .select('meta_pixel_id, ga4_measurement_id')
+    .select('ga4_measurement_id')
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
 
-  const settings = data as { meta_pixel_id: string | null; ga4_measurement_id: string | null } | null;
+  const settings = data as { ga4_measurement_id: string | null } | null;
 
-  const metaPixelId = settings?.meta_pixel_id ?? null;
+  const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? null;
   const ga4MeasurementId = settings?.ga4_measurement_id ?? null;
 
   return (

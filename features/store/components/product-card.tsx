@@ -12,6 +12,7 @@ import { isVariantInStock } from '@/lib/product-variants';
 import { useToast } from '@/hooks/use-toast';
 import useCartStore from '@/stores/cart';
 import { CartToastActions } from './cart-toast-actions';
+import { trackAddToCart } from '@/lib/meta-pixel';
 
 interface ProductCardProps {
   product: ProductWithDetails;
@@ -53,6 +54,13 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
       image: imageSrc,
       sku: product.sku,
       stock_quantity: product.track_stock ? product.stock_quantity : 99,
+    });
+    trackAddToCart({
+      productId: product.id,
+      productName: product.name,
+      value: product.price,
+      quantity: 1,
+      productType: isBundle ? 'bundle' : 'single',
     });
     toast({
       title: 'تمت إضافة المنتج للسلة',

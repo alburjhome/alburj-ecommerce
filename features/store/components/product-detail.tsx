@@ -33,6 +33,7 @@ import {
   type ProductIntentKey,
 } from '@/lib/product-intents';
 import { trackWhatsAppClick } from '@/lib/analytics';
+import { trackAddToCart, trackViewContent } from '@/lib/meta-pixel';
 import {
   findMatchingVariant,
   getVariantCartStock,
@@ -64,6 +65,7 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const [productUrl, setProductUrl] = useState('');
   const [isVariantSheetOpen, setIsVariantSheetOpen] = useState(false);
   const mobileGalleryRef = useRef<HTMLDivElement | null>(null);
+  const trackedViewContentProductId = useRef<string | null>(null);
   const isBundle = (product.product_type || 'single') === 'bundle';
 
   useEffect(() => {
@@ -191,6 +193,12 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
   const discount = hasDiscount
     ? calculateDiscountPercentage(displayPrice, displayComparePrice || displayPrice)
     : 0;
+
+  useEffect(() => {
+    if (trackedViewContentProductId.current === product.id) return;
+    trackedViewContentProductId.current = product.id;
+    trackViewContent(product);
+  }, [product]);
 
   const maxQuantity = hasVariants
     ? selectedVariant
@@ -343,6 +351,14 @@ export function ProductDetail({ product, whatsappNumber }: ProductDetailProps) {
       sku: displaySku,
       stock_quantity: selectedVariant ? getVariantCartStock(selectedVariant) : maxQuantity,
       bundle_items: bundleCartSnapshot,
+    });
+    trackAddToCart({
+      productId: product.id,
+      productName: product.name,
+      value: displayPrice * quantity,
+      quantity,
+      variantId: selectedVariant?.id || null,
+      productType: isBundle ? 'bundle' : 'single',
     });
     setIsVariantSheetOpen(false);
     toast({
