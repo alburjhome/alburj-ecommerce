@@ -1,3 +1,5 @@
+import { sanitizeIntentTags, type ProductIntentTag } from '@/lib/product-validation';
+
 export const INTENT_CONFIG = [
   { key: 'all' as const, label: 'الكل', title: 'جميع المنتجات', categorySlugs: [] as string[] },
   {
@@ -100,12 +102,11 @@ export function getProductCategorySlug(product: unknown): string | null {
   return category?.slug ?? null;
 }
 
-export function getProductIntentTags(product: unknown): string[] {
+export function getProductIntentTags(product: unknown): ProductIntentTag[] {
   if (!product || typeof product !== 'object') return [];
   const anyProduct = product as any;
   const tags = anyProduct.intent_tags;
-  if (!Array.isArray(tags)) return [];
-  return tags.filter((t) => typeof t === 'string');
+  return sanitizeIntentTags(tags);
 }
 
 const CATEGORY_TO_INTENTS: Record<string, ProductIntentKey[]> = {
@@ -122,9 +123,8 @@ export function getProductSuitableForTags(product: unknown): ProductIntentKey[] 
   // 1) Use explicit intent_tags when present
   const intentTags = getProductIntentTags(product);
   if (intentTags.length > 0) {
-    return intentTags
-      .filter((tag): tag is ProductIntentKey => INTENT_CONFIG.some((item) => item.key === tag))
-      .filter((tag) => tag !== 'all');
+    const keys = new Set(INTENT_CONFIG.map((item) => item.key));
+    return intentTags.filter((tag) => keys.has(tag as ProductIntentKey)) as ProductIntentKey[];
   }
 
   // 2) Fallback: category.slug mapping

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Save, Sparkles, AlertCircle, Package, Tag, CheckCircle2, EyeOff, ImageIcon } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, type FieldErrors } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,10 +22,18 @@ import type { ProductFormDataResult, ProductFormRecord } from '@/app/actions/adm
 import { supabase } from '@/lib/supabase';
 import { normalizeSlug } from '@/lib/slug';
 import {
+  flattenFormErrors,
+  formatServerFieldErrors,
+  summarizeValidationIssues,
+  type ValidationIssue,
+} from '@/lib/product-form-errors';
+import {
   ProductFormInput,
   parseSearchKeywords,
   parseTags,
   productSchema,
+  sanitizeIntentTags,
+  sanitizeProductBadges,
   searchKeywordsToString,
   slugify,
   tagsToString,
@@ -92,6 +100,31 @@ const emptyBundleSummary: ProductBundleSummary = {
   hasInvalidItems: false,
 };
 
+function devLog(message: string, details?: unknown) {
+  if (process.env.NODE_ENV !== 'development') return;
+  if (details !== undefined) {
+    console.info(`[product-form] ${message}`, details);
+  } else {
+    console.info(`[product-form] ${message}`);
+  }
+}
+
+function mergeValidationIssues(...groups: ValidationIssue[][]): ValidationIssue[] {
+  const seen = new Set<string>();
+  const merged: ValidationIssue[] = [];
+
+  for (const group of groups) {
+    for (const item of group) {
+      const key = `${item.field || 'form'}::${item.message}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+    }
+  }
+
+  return merged;
+}
+
 async function getAccessToken() {
   const {
     data: { session },
@@ -126,10 +159,10 @@ function asFormValue(product: ProductFormRecord | null): ProductFormInput {
     subcategory_id: product.subcategory_id,
     brand: product.brand,
     tags: product.tags || [],
-    intent_tags: (product.intent_tags || []) as ProductFormInput['intent_tags'],
+    intent_tags: sanitizeIntentTags(product.intent_tags),
     marketing_tagline: product.marketing_tagline,
     key_features: (product.key_features || []) as ProductFormInput['key_features'],
-    product_badges: (product.product_badges || []) as ProductFormInput['product_badges'],
+    product_badges: sanitizeProductBadges(product.product_badges),
     weight: product.weight === null ? null : Number(product.weight),
     dimensions: {
       length: dimensions?.length ?? null,
@@ -354,11 +387,11 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       }
 
       if (shouldSet('product_badges') && Array.isArray(data?.product_badges)) {
-        setValue('product_badges', data.product_badges, { shouldDirty: true });
+        setValue('product_badges', sanitizeProductBadges(data.product_badges), { shouldDirty: true });
       }
 
       if (shouldSet('intent_tags') && Array.isArray(data?.intent_tags)) {
-        setValue('intent_tags', data.intent_tags, { shouldDirty: true });
+        setValue('intent_tags', sanitizeIntentTags(data.intent_tags), { shouldDirty: true });
       }
 
       if (shouldSet('description') && data?.description) {
@@ -576,15 +609,31 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
     });
   }
 
-  function showValidationSummary(items: Array<{ field?: string; message: string }>) {
+  function applyServerFieldErrors(fieldErrors: Record<string, string[] | undefined>) {
+    for (const [key, messages] of Object.entries(fieldErrors)) {
+      const message = messages?.[0];
+      if (!message) continue;
+      setError(key as keyof ProductFormInput, { type: 'server', message });
+    }
+  }
+
+  function showValidationSummary(items: ValidationIssue[]) {
     const messages = items.map((item) => item.message);
     setValidationMessages(messages);
     toast({
       title: 'لم يتم حفظ المنتج، يرجى إكمال الحقول المطلوبة.',
-      description: messages[0],
+      description: summarizeValidationIssues(items),
       variant: 'destructive',
     });
     scrollToField(items[0]?.field);
+  }
+
+  function handleFormInvalid(formErrors: FieldErrors<ProductFormInput>) {
+    devLog('validation failed (zod)', formErrors);
+    const issues = flattenFormErrors(formErrors);
+    showValidationSummary(
+      issues.length > 0 ? issues : [{ message: 'يرجى مراجعة الحقول المطلوبة قبل الحفظ' }]
+    );
   }
 
   function buildProductPayload(values: ProductFormInput, isActiveOverride?: boolean): ProductFormInput {
@@ -599,10 +648,10 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       subcategory_id: values.subcategory_id || null,
       brand: values.brand || null,
       tags: parseTags(tagsText),
-      intent_tags: values.intent_tags,
+      intent_tags: sanitizeIntentTags(values.intent_tags),
       marketing_tagline: values.marketing_tagline || null,
       key_features: values.key_features,
-      product_badges: values.product_badges,
+      product_badges: sanitizeProductBadges(values.product_badges),
       weight: values.weight ?? null,
       dimensions: values.dimensions || { length: null, width: null, height: null },
       is_active: isActiveOverride ?? values.is_active,
@@ -612,9 +661,9 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
     };
   }
 
-  function validatePublishValues(values: ProductFormInput) {
+  function validatePublishValues(values: ProductFormInput): ValidationIssue[] {
     clearErrors();
-    const items: Array<{ field?: string; message: string }> = [];
+    const items: ValidationIssue[] = [];
     const priceValue = Number(values.price);
     const stockValue = Number(values.stock_quantity);
 
@@ -701,28 +750,14 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
     return items;
   }
 
-  function handlePublishInvalid(formErrors: typeof errors) {
+  function handlePublishInvalid(formErrors: FieldErrors<ProductFormInput>) {
+    devLog('publish validation failed', formErrors);
+    const zodIssues = flattenFormErrors(formErrors);
     const manualItems = validatePublishValues(getValues());
-    if (manualItems.length > 0) {
-      showValidationSummary(manualItems);
-      return;
-    }
-
-    const items: Array<{ field?: string; message: string }> = [];
-    if (formErrors.name) items.push({ field: 'name', message: 'اسم المنتج مطلوب' });
-    if (formErrors.price) items.push({ field: 'price', message: 'السعر مطلوب ويجب أن يكون أكبر من 0' });
-    if (formErrors.category_id) items.push({ field: 'category_id', message: 'يرجى اختيار القسم الرئيسي' });
-    if (formErrors.subcategory_id) {
-      items.push({
-        field: 'subcategory_id',
-        message: 'يرجى اختيار الفئة الفرعية حتى يظهر المنتج في المكان الصحيح',
-      });
-    }
-    if (formErrors.stock_quantity) {
-      items.push({ field: 'stock_quantity', message: 'المخزون مطلوب ولا يمكن أن يكون أقل من صفر' });
-    }
-
-    showValidationSummary(items.length ? items : [{ message: 'يرجى مراجعة البيانات التالية قبل الحفظ' }]);
+    const merged = mergeValidationIssues(zodIssues, manualItems);
+    showValidationSummary(
+      merged.length > 0 ? merged : [{ message: 'يرجى مراجعة البيانات التالية قبل الحفظ' }]
+    );
   }
 
   async function ensureDraftProduct({ silent = false }: { silent?: boolean } = {}) {
@@ -770,13 +805,23 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       setIsSubmitting(true);
     }
     try {
+      devLog('publish submit started');
       const token = await getAccessToken();
+      if (!token) {
+        throw new Error('يجب تسجيل الدخول أولًا. أعد تحميل الصفحة وحاول مرة أخرى.');
+      }
+
       const payload = buildProductPayload(values, true);
       const result = draftProductId
         ? await updateAdminProduct(token, draftProductId, payload)
         : await createAdminProduct(token, payload);
 
       if (!result.success) {
+        if (result.fieldErrors) {
+          applyServerFieldErrors(result.fieldErrors);
+          showValidationSummary(formatServerFieldErrors(result.fieldErrors));
+          return;
+        }
         throw new Error(result.error || 'فشل حفظ المنتج');
       }
 
@@ -788,9 +833,10 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       }
 
       toast({
-        title: options.resetAfter ? 'تم نشر المنتج، يمكنك إضافة منتج جديد الآن.' : 'تم نشر المنتج بنجاح.',
+        title: options.resetAfter ? 'تم نشر المنتج، يمكنك إضافة منتج جديد الآن.' : 'تم نشر المنتج بنجاح',
         description: 'يفضل إضافة صورة رئيسية قبل الاعتماد النهائي للمنتج.',
       });
+      devLog('publish submit finished');
       router.refresh();
       if (options.resetAfter) {
         reset(emptyProduct);
@@ -867,6 +913,8 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   }
 
   async function onSubmit(values: ProductFormInput) {
+    devLog('submit started', { mode, productId });
+
     if (values.product_type === 'bundle' && values.is_active && bundleSummary.itemCount === 0) {
       showValidationSummary([
         {
@@ -877,30 +925,15 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       return;
     }
 
+    setValidationMessages([]);
     setIsSubmitting(true);
     try {
       const token = await getAccessToken();
-      const payload: ProductFormInput = {
-        ...values,
-        slug_was_manual: slugTouched,
-        description: values.description || null,
-        short_description: values.short_description || null,
-        compare_price: values.compare_price ?? null,
-        sku: values.sku || null,
-        barcode: values.barcode || null,
-        subcategory_id: values.subcategory_id || null,
-        brand: values.brand || null,
-        tags: parseTags(tagsText),
-        intent_tags: values.intent_tags,
-        marketing_tagline: values.marketing_tagline || null,
-        key_features: values.key_features,
-        product_badges: values.product_badges,
-        weight: values.weight ?? null,
-        dimensions: values.dimensions || { length: null, width: null, height: null },
-        meta_title: values.meta_title || null,
-        meta_description: values.meta_description || null,
-        search_keywords: parseSearchKeywords(searchKeywords),
-      };
+      if (!token) {
+        throw new Error('يجب تسجيل الدخول أولًا. أعد تحميل الصفحة وحاول مرة أخرى.');
+      }
+
+      const payload = buildProductPayload(values);
 
       const result =
         mode === 'create'
@@ -908,6 +941,11 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
           : await updateAdminProduct(token, productId!, payload);
 
       if (!result.success) {
+        if (result.fieldErrors) {
+          applyServerFieldErrors(result.fieldErrors);
+          showValidationSummary(formatServerFieldErrors(result.fieldErrors));
+          return;
+        }
         throw new Error(result.error || 'تعذر حفظ المنتج');
       }
 
@@ -918,20 +956,22 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         }
 
         toast({
-          title: 'تم إنشاء المنتج، يمكنك الآن رفع الصور.',
-          description: values.name,
+          title: 'تم حفظ المنتج بنجاح',
+          description: 'يمكنك الآن رفع الصور ومتابعة التعديل.',
         });
         router.refresh();
         router.replace(`/admin/products/${created.id}/edit?focus=images`);
       } else {
         toast({
-          title: 'تم حفظ التعديلات',
+          title: 'تم حفظ المنتج بنجاح',
           description: values.name,
         });
         router.refresh();
         router.replace('/admin/products');
       }
+      devLog('submit finished');
     } catch (error) {
+      devLog('submit failed', error);
       toast({
         title: 'تعذر حفظ المنتج',
         description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
@@ -1431,7 +1471,23 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_300px] max-w-full overflow-x-hidden">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-full min-w-0">
+      <form onSubmit={handleSubmit(onSubmit, handleFormInvalid)} className="space-y-6 max-w-full min-w-0">
+        {validationMessages.length > 0 && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <h2 className="font-semibold">يرجى مراجعة الحقول التالية قبل الحفظ</h2>
+                <ul className="mt-2 list-disc space-y-1 pr-5 text-sm">
+                  {validationMessages.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0 max-w-full">
           <div className="min-w-0">

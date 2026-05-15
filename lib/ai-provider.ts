@@ -1,6 +1,7 @@
 // import 'server-only';
 
 import { createServerClient } from '@/lib/supabase-server';
+import { sanitizeIntentTags, sanitizeProductBadges } from '@/lib/product-validation';
 
 export type AiProvider = 'gemini' | 'openai';
 
@@ -694,14 +695,8 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
   const short_description = normalizeString(obj.short_description);
   const marketing_tagline = normalizeString(obj.marketing_tagline);
   const key_features = normalizeStringArray(obj.key_features).slice(0, 6);
-  const product_badges = normalizeStringArray(obj.product_badges)
-    .map((b) => b.toLowerCase())
-    .filter((b) => b.length > 0)
-    .slice(0, 5);
-  const intent_tags = normalizeStringArray(obj.intent_tags)
-    .map((t) => t.toLowerCase())
-    .filter((t) => t.length > 0)
-    .slice(0, 10);
+  const product_badges = sanitizeProductBadges(normalizeStringArray(obj.product_badges)).slice(0, 5);
+  const intent_tags = sanitizeIntentTags(normalizeStringArray(obj.intent_tags)).slice(0, 10);
   const description = normalizeString(obj.description);
   const meta_title = normalizeString(obj.meta_title);
   const meta_description = normalizeString(obj.meta_description);
@@ -829,6 +824,12 @@ ${subcategoriesText}
 - ممنوع أن يكون short_description و description متطابقين أو شبه متطابقين.
 - search_keywords: من 10 إلى 25 كلمة/عبارة قصيرة للبحث (عربي فصيح + عامي أردني + إنجليزي). استخدم فقط ما يظهر من الاسم والملاحظات والقالب. ممنوع اختراع مقاسات أو أونصات أو أرقام عبوة أو ماركات غير مذكورة. ممنوع أسماء منافسين.
 
+قواعد intent_tags (صارمة):
+- intent_tags must be ONLY from this exact list (English keys): home, kitchen, plastics, restaurants, shops, packaging, cleaning, bulk, appliances, furnishings
+- Do NOT return: hygiene, personal_care, paper, cafe, restaurant, disposable, plastic (use plastics), shop (use shops), package (use packaging)
+- Map mentally before output: hygiene/personal_care/paper → cleaning; cafe/restaurant → restaurants; disposable/plastic → plastics; shop/store → shops; package → packaging; electric/appliance → appliances; furniture/bedding → furnishings
+- اختر من 0 إلى 3 قيم مناسبة فقط للمنتج
+
 Return ONLY valid JSON. No markdown. No explanation. No code fences.
 أرجع JSON صالح فقط بالشكل التالي تمامًا (لا تضف حقول أخرى):
 {
@@ -837,7 +838,7 @@ Return ONLY valid JSON. No markdown. No explanation. No code fences.
   "marketing_tagline": "عبارة تسويقية قصيرة جدًا (3-7 كلمات) أو null",
   "key_features": ["ميزة 1", "ميزة 2", "ميزة 3", "ميزة 4"],
   "product_badges": ["bestselling"],
-  "intent_tags": ["home"],
+  "intent_tags": ["cleaning"],
   "description": "تفاصيل إضافية غير مكررة (قد تكون null)",
   "meta_title": "عنوان SEO (max 60 حرف) أو null",
   "meta_description": "وصف SEO (max 155 حرف) أو null",

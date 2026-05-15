@@ -2,7 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import { createAdminActionClient } from '@/lib/admin-auth';
-import { ProductFormInput, productSchema } from '@/lib/product-validation';
+import {
+  ProductFormInput,
+  productSchema,
+  sanitizeIntentTags,
+  sanitizeProductBadges,
+} from '@/lib/product-validation';
+import { formatServerFieldErrors, summarizeValidationIssues } from '@/lib/product-form-errors';
 import { buildProductSearchFields } from '@/lib/product-search-fields';
 import { createReadableSlug, isValidSlug, normalizeSlug } from '@/lib/slug';
 import { getProductSurfaceRecord, revalidateProductSurfaces } from '@/lib/revalidate-product-surfaces';
@@ -120,6 +126,8 @@ function normalizeProductInput(input: ProductFormInput) {
   const dimensions = input.dimensions;
   const hasDimensions =
     dimensions?.length != null || dimensions?.width != null || dimensions?.height != null;
+  const intent_tags = sanitizeIntentTags(input.intent_tags);
+  const product_badges = sanitizeProductBadges(input.product_badges);
 
   const { search_keywords, normalized_search_text } = buildProductSearchFields({
     name: input.name.trim(),
@@ -151,10 +159,10 @@ function normalizeProductInput(input: ProductFormInput) {
     subcategory_id: input.subcategory_id,
     brand: normalizeNullable(input.brand),
     tags: input.tags.length ? input.tags : null,
-    intent_tags: input.intent_tags.length ? input.intent_tags : null,
+    intent_tags: intent_tags.length ? intent_tags : null,
     marketing_tagline: normalizeNullable(input.marketing_tagline),
     key_features: input.key_features.length ? input.key_features : null,
-    product_badges: input.product_badges.length ? input.product_badges : null,
+    product_badges: product_badges.length ? product_badges : null,
     weight: input.weight,
     dimensions: hasDimensions ? dimensions : null,
     is_active: input.is_active,
@@ -166,12 +174,23 @@ function normalizeProductInput(input: ProductFormInput) {
   };
 }
 
+function formatValidationErrorMessage(fieldErrors: Record<string, string[] | undefined>) {
+  return summarizeValidationIssues(formatServerFieldErrors(fieldErrors));
+}
+
 function friendlyError(error: unknown) {
   if (error instanceof Error) {
     if (error.message === 'UNAUTHORIZED') return 'يجب تسجيل الدخول أولًا';
     if (error.message === 'FORBIDDEN') return 'ليس لديك صلاحية تنفيذ هذه العملية';
     if (error.message.includes('duplicate key') || error.message.includes('unique')) {
       return 'يوجد منتج بنفس الرابط المختصر أو SKU';
+    }
+    if (
+      error.message.includes('search_keywords') ||
+      error.message.includes('normalized_search_text') ||
+      error.message.includes("Could not find the")
+    ) {
+      return 'حقول البحث غير موجودة في قاعدة البيانات. طبّق migration 14 أولًا.';
     }
     return error.message;
   }
@@ -372,10 +391,11 @@ export async function createAdminProduct(
     const parsed = productSchema.safeParse(input);
 
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
       return {
         success: false,
-        error: 'تحقق من الحقول المطلوبة',
-        fieldErrors: parsed.error.flatten().fieldErrors,
+        error: formatValidationErrorMessage(fieldErrors),
+        fieldErrors,
       };
     }
 
@@ -440,10 +460,16 @@ export async function createAdminProductDraft(
       subcategory_id: input.subcategory_id || null,
       brand: normalizeNullable(input.brand),
       tags: input.tags?.length ? input.tags : null,
-      intent_tags: input.intent_tags?.length ? input.intent_tags : null,
+      intent_tags: (() => {
+        const tags = sanitizeIntentTags(input.intent_tags);
+        return tags.length ? tags : null;
+      })(),
       marketing_tagline: normalizeNullable(input.marketing_tagline),
       key_features: input.key_features?.length ? input.key_features : null,
-      product_badges: input.product_badges?.length ? input.product_badges : null,
+      product_badges: (() => {
+        const badges = sanitizeProductBadges(input.product_badges);
+        return badges.length ? badges : null;
+      })(),
       weight: Number.isFinite(weight) && weight > 0 ? weight : null,
       dimensions: hasDimensions ? dimensions : null,
       is_active: false,
@@ -511,10 +537,16 @@ export async function updateAdminProductDraft(
       subcategory_id: input.subcategory_id || null,
       brand: normalizeNullable(input.brand),
       tags: input.tags?.length ? input.tags : null,
-      intent_tags: input.intent_tags?.length ? input.intent_tags : null,
+      intent_tags: (() => {
+        const tags = sanitizeIntentTags(input.intent_tags);
+        return tags.length ? tags : null;
+      })(),
       marketing_tagline: normalizeNullable(input.marketing_tagline),
       key_features: input.key_features?.length ? input.key_features : null,
-      product_badges: input.product_badges?.length ? input.product_badges : null,
+      product_badges: (() => {
+        const badges = sanitizeProductBadges(input.product_badges);
+        return badges.length ? badges : null;
+      })(),
       weight: Number.isFinite(weight) && weight > 0 ? weight : null,
       dimensions: hasDimensions ? dimensions : null,
       is_active: false,
@@ -554,10 +586,11 @@ export async function updateAdminProduct(
     const parsed = productSchema.safeParse(input);
 
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
       return {
         success: false,
-        error: 'تحقق من الحقول المطلوبة',
-        fieldErrors: parsed.error.flatten().fieldErrors,
+        error: formatValidationErrorMessage(fieldErrors),
+        fieldErrors,
       };
     }
 
