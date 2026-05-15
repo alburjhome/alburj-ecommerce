@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createAdminActionClient } from '@/lib/admin-auth';
 import { ProductFormInput, productSchema } from '@/lib/product-validation';
+import { buildProductSearchFields } from '@/lib/product-search-fields';
 import { createReadableSlug, isValidSlug, normalizeSlug } from '@/lib/slug';
 import { getProductSurfaceRecord, revalidateProductSurfaces } from '@/lib/revalidate-product-surfaces';
 import type { Json } from '@/types/supabase';
@@ -92,6 +93,8 @@ export interface ProductFormRecord {
   product_badges: string[] | null;
   meta_title: string | null;
   meta_description: string | null;
+  search_keywords: string[] | null;
+  normalized_search_text: string | null;
 }
 
 export interface ProductListResult {
@@ -117,6 +120,19 @@ function normalizeProductInput(input: ProductFormInput) {
   const dimensions = input.dimensions;
   const hasDimensions =
     dimensions?.length != null || dimensions?.width != null || dimensions?.height != null;
+
+  const { search_keywords, normalized_search_text } = buildProductSearchFields({
+    name: input.name.trim(),
+    description: normalizeNullable(input.description),
+    short_description: normalizeNullable(input.short_description),
+    marketing_tagline: normalizeNullable(input.marketing_tagline),
+    sku: normalizeNullable(input.sku),
+    brand: normalizeNullable(input.brand),
+    tags: input.tags,
+    search_keywords: input.search_keywords,
+    key_features: input.key_features,
+    product_type: input.product_type || 'single',
+  });
 
   return {
     product_type: input.product_type || 'single',
@@ -145,6 +161,8 @@ function normalizeProductInput(input: ProductFormInput) {
     is_featured: input.is_featured,
     meta_title: normalizeNullable(input.meta_title),
     meta_description: normalizeNullable(input.meta_description),
+    search_keywords,
+    normalized_search_text,
   };
 }
 

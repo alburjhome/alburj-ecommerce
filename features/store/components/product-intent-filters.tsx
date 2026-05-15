@@ -11,7 +11,7 @@ interface ProductIntentFiltersProps {
 
 function buildProductsHref(intent: ProductIntentKey, search: string | null) {
   const params = new URLSearchParams();
-  if (search) params.set('search', search);
+  if (search) params.set('q', search);
   if (intent !== 'all') params.set('intent', intent);
   const qs = params.toString();
   return qs ? `/products?${qs}` : '/products';
@@ -19,7 +19,7 @@ function buildProductsHref(intent: ProductIntentKey, search: string | null) {
 
 export function ProductIntentFilters({ selected }: ProductIntentFiltersProps) {
   const searchParams = useSearchParams();
-  const search = searchParams.get('search');
+  const search = searchParams.get('q') || searchParams.get('search');
 
   return (
     <section className="mb-3 md:mb-6">

@@ -21,7 +21,15 @@ import {
 import type { ProductFormDataResult, ProductFormRecord } from '@/app/actions/admin-products';
 import { supabase } from '@/lib/supabase';
 import { normalizeSlug } from '@/lib/slug';
-import { ProductFormInput, parseTags, productSchema, slugify, tagsToString } from '@/lib/product-validation';
+import {
+  ProductFormInput,
+  parseSearchKeywords,
+  parseTags,
+  productSchema,
+  searchKeywordsToString,
+  slugify,
+  tagsToString,
+} from '@/lib/product-validation';
 import { INTENT_TAG_CONFIG } from '@/lib/product-intents';
 import { formatPrice } from '@/lib/utils';
 import { ProductVariantsManager, type ProductVariantsSummary } from './product-variants-manager';
@@ -65,6 +73,7 @@ const emptyProduct: ProductFormInput = {
   is_featured: false,
   meta_title: null,
   meta_description: null,
+  search_keywords: [],
 };
 
 const emptyVariantsSummary: ProductVariantsSummary = {
@@ -131,6 +140,7 @@ function asFormValue(product: ProductFormRecord | null): ProductFormInput {
     is_featured: product.is_featured,
     meta_title: product.meta_title,
     meta_description: product.meta_description,
+    search_keywords: product.search_keywords || [],
   };
 }
 
@@ -188,6 +198,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
   const [aiNotes, setAiNotes] = useState('');
   const [variantsSummary, setVariantsSummary] = useState<ProductVariantsSummary>(emptyVariantsSummary);
   const [bundleSummary, setBundleSummary] = useState<ProductBundleSummary>(emptyBundleSummary);
+  const [searchKeywords, setSearchKeywords] = useState<string>('');
 
   const {
     register,
@@ -370,6 +381,14 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         setValue('sku', data.suggested_sku, { shouldDirty: true });
       }
 
+      if (Array.isArray(data?.search_keywords) && data.search_keywords.length > 0) {
+        const keywords = data.search_keywords as string[];
+        if (replace || !searchKeywords.trim()) {
+          setSearchKeywords(searchKeywordsToString(keywords));
+          setValue('search_keywords', keywords, { shouldDirty: true });
+        }
+      }
+
       const aiSuggestedCategoryId = typeof data?.category_id === 'string' ? data.category_id : null;
       const aiSuggestedSubcategoryId = typeof data?.subcategory_id === 'string' ? data.subcategory_id : null;
 
@@ -505,6 +524,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         const values = asFormValue(result.data.product);
         reset(values);
         setTagsText(tagsToString(values.tags));
+        setSearchKeywords(searchKeywordsToString(values.search_keywords));
       } catch (error) {
         toast({
           title: 'تعذر تحميل بيانات المنتج',
@@ -588,6 +608,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
       is_active: isActiveOverride ?? values.is_active,
       meta_title: values.meta_title || null,
       meta_description: values.meta_description || null,
+      search_keywords: parseSearchKeywords(searchKeywords),
     };
   }
 
@@ -781,6 +802,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         setSlugTouched(false);
         setVariantsSummary(emptyVariantsSummary);
         setBundleSummary(emptyBundleSummary);
+        setSearchKeywords('');
         setValidationMessages([]);
         requestAnimationFrame(() => document.getElementById('name')?.focus());
       } else {
@@ -877,6 +899,7 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
         dimensions: values.dimensions || { length: null, width: null, height: null },
         meta_title: values.meta_title || null,
         meta_description: values.meta_description || null,
+        search_keywords: parseSearchKeywords(searchKeywords),
       };
 
       const result =
@@ -1242,7 +1265,11 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                     rows={5}
                     value={(keyFeatures || []).join('\n')}
                     onChange={(event) => {
-                      const lines = event.target.value.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 6);
+                      const lines = event.target.value
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .slice(0, 6);
                       setValue('key_features', lines as ProductFormInput['key_features'], { shouldDirty: true });
                     }}
                     className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -1259,7 +1286,9 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
                           checked={productBadges?.includes(badge.key as any)}
                           onChange={(event) => {
                             const current = productBadges || [];
-                            const next = event.target.checked ? [...current, badge.key] : current.filter((item) => item !== badge.key);
+                            const next = event.target.checked
+                              ? [...current, badge.key]
+                              : current.filter((b) => b !== badge.key);
                             setValue('product_badges', next as ProductFormInput['product_badges'], { shouldDirty: true });
                           }}
                         />
@@ -1277,6 +1306,23 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             <details className="rounded-lg border bg-card p-5 shadow-sm">
               <summary className="cursor-pointer text-lg font-semibold">7. SEO المتقدم</summary>
               <div className="mt-4 space-y-4">
+                <div>
+                  <Label htmlFor="search_keywords_create">كلمات البحث والمرادفات</Label>
+                  <textarea
+                    id="search_keywords_create"
+                    rows={4}
+                    value={searchKeywords}
+                    onChange={(event) => {
+                      setSearchKeywords(event.target.value);
+                      setValue('search_keywords', parseSearchKeywords(event.target.value), { shouldDirty: true });
+                    }}
+                    className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    placeholder="كل كلمة في سطر أو مفصولة بفاصلة. مثال: كاسات، كبايات، paper cups"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    تساعد العملاء في إيجاد المنتج بالعربي والإنجليزي واللهجة. يمكن توليدها بالذكاء الاصطناعي.
+                  </p>
+                </div>
                 <Input id="meta_title" {...register('meta_title')} placeholder="Meta Title" />
                 <Input id="meta_description" {...register('meta_description')} placeholder="Meta Description" />
                 <div className="rounded-lg border bg-muted/30 p-4">
@@ -1876,6 +1922,24 @@ export function ProductForm({ mode, productId }: ProductFormProps) {
             title="SEO"
             description="تحسين الظهور في محركات البحث والمشاركات (اختياري)."
           />
+
+          <div className="mb-4">
+            <Label htmlFor="search_keywords">كلمات البحث والمرادفات</Label>
+            <textarea
+              id="search_keywords"
+              rows={5}
+              value={searchKeywords}
+              onChange={(event) => {
+                setSearchKeywords(event.target.value);
+                setValue('search_keywords', parseSearchKeywords(event.target.value), { shouldDirty: true });
+              }}
+              className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="كل كلمة في سطر أو مفصولة بفاصلة. مثال: كاسات، كبايات، paper cups"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              كلمات يبحث عنها العملاء (عربي، عامي، إنجليزي). يمكن توليدها من زر الذكاء الاصطناعي.
+            </p>
+          </div>
 
           {/* Meta Title */}
           <div className="mb-4">

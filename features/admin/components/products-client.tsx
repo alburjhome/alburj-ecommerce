@@ -34,6 +34,7 @@ import {
   getAdminProducts,
   toggleAdminProductActive,
 } from '@/app/actions/admin-products';
+import { regenerateAllProductSearchFields } from '@/app/actions/admin-search-backfill';
 import type { CategoryOption, ProductListFilters, ProductListRow } from '@/app/actions/admin-products';
 import { supabase } from '@/lib/supabase';
 import { PLACEHOLDER_PRODUCT } from '@/lib/image-utils';
@@ -143,6 +144,7 @@ export function ProductsClient() {
   const [status, setStatus] = useState<ProductListFilters['status']>('all');
   const [featured, setFeatured] = useState<ProductListFilters['featured']>('all');
   const [quickFilter, setQuickFilter] = useState<QuickFilterValue>('all');
+  const [isBackfillingSearch, setIsBackfillingSearch] = useState(false);
 
   const filters = useMemo<ProductListFilters>(
     () => ({
@@ -250,6 +252,42 @@ export function ProductsClient() {
     }
   }
 
+  async function handleRegenerateSearchFields() {
+    const confirmed = window.confirm(
+      'تحديث بيانات البحث لكل المنتجات؟\n\nسيتم تحديث كلمات البحث والنص المطبّع فقط، دون تغيير الأسعار أو الصور أو المخزون أو المتغيرات أو الباكجات.'
+    );
+    if (!confirmed) return;
+
+    setIsBackfillingSearch(true);
+    try {
+      const token = await getAccessToken();
+      const result = await regenerateAllProductSearchFields(token);
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'فشل تحديث بيانات البحث');
+      }
+
+      const { updated, total, failed } = result.data;
+      toast({
+        title: `تم تحديث ${updated} منتج بنجاح`,
+        description:
+          failed > 0
+            ? `من أصل ${total} منتج. فشل ${failed} منتج — راجع السجلات.`
+            : `من أصل ${total} منتج. يمكن للعملاء العثور على المنتجات القديمة في البحث الآن.`,
+      });
+      await loadProducts();
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: 'تعذر تحديث بيانات البحث',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsBackfillingSearch(false);
+    }
+  }
+
   async function handleDelete(product: ProductListRow) {
     const confirmed = window.confirm(
       `حذف المنتج "${product.name}" نهائيًا؟\n\nهذا الإجراء لا يمكن التراجع عنه. الخيار الأفضل عادة هو تعطيل المنتج فقط.`
@@ -288,12 +326,23 @@ export function ProductsClient() {
           <h1 className="text-2xl font-bold tracking-tight">المنتجات</h1>
           <p className="mt-1 text-sm text-muted-foreground">إدارة كتالوج المنتجات والأسعار والمخزون.</p>
         </div>
-        <Button asChild>
-          <Link href="/admin/products/new">
-            <Plus className="ml-2 h-4 w-4" />
-            إضافة منتج
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isBackfillingSearch || isLoading}
+            onClick={handleRegenerateSearchFields}
+          >
+            <RefreshCw className={`ml-2 h-4 w-4 ${isBackfillingSearch ? 'animate-spin' : ''}`} />
+            {isBackfillingSearch ? 'جاري التحديث...' : 'تحديث بيانات البحث للمنتجات'}
+          </Button>
+          <Button asChild>
+            <Link href="/admin/products/new">
+              <Plus className="ml-2 h-4 w-4" />
+              إضافة منتج
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}

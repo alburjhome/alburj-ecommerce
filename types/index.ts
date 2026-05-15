@@ -141,6 +141,8 @@ export interface Product {
   product_badges: string[] | null;
   meta_title: string | null;
   meta_description: string | null;
+  search_keywords?: string[] | null;
+  normalized_search_text?: string | null;
   created_at: string;
   updated_at: string;
 }

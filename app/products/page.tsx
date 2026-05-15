@@ -15,17 +15,23 @@ import {
   type ProductIntentKey,
 } from '@/lib/product-intents';
 import { absoluteUrl, getSiteUrl, SITE_NAME } from '@/lib/seo';
+import {
+  buildProductsSearchHref,
+  filterProductsBySearch,
+  getSearchQueryFromParams,
+} from '@/lib/product-search';
+import { logSearchQuery } from '@/lib/search-analytics';
 import type { ProductWithDetails, StoreSettings } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
 interface ProductsPageProps {
-  searchParams?: { search?: string; intent?: string; sort?: string };
+  searchParams?: { q?: string; search?: string; intent?: string; sort?: string };
 }
 
 const baseUrl = getSiteUrl();
 
-export const metadata: Metadata = {
+const defaultProductsMetadata: Metadata = {
   title: 'منتجات مؤسسة البرج | مستلزمات البيت والمحل',
   description:
     'تصفح منتجات مؤسسة البرج من منظفات، بلاستيكيات، تغليف، أدوات منزلية، أدوات مطبخ، أجهزة كهربائية ومفروشات.',
@@ -54,35 +60,20 @@ export const metadata: Metadata = {
   },
 };
 
-function normalizeSearchTerm(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function productMatchesSearch(product: ProductWithDetails, term: string) {
-  const q = normalizeSearchTerm(term);
-  if (!q) return true;
-
-  const candidates: string[] = [];
-  if (product.name) candidates.push(product.name);
-  if ((product as any).description) candidates.push((product as any).description);
-  if ((product as any).short_description) candidates.push((product as any).short_description);
-  if ((product as any).marketing_tagline) candidates.push((product as any).marketing_tagline);
-  if ((product as any).sku) candidates.push((product as any).sku);
-  if ((product as any).brand) candidates.push((product as any).brand);
-  if ((product as any).category?.name) candidates.push((product as any).category.name);
-  if ((product as any).subcategory?.name) candidates.push((product as any).subcategory.name);
-
-  const tags = ((product as any).tags as string[] | null | undefined) || [];
-  for (const tag of tags) {
-    if (tag) candidates.push(tag);
+export async function generateMetadata({ searchParams }: ProductsPageProps): Promise<Metadata> {
+  const searchTerm = getSearchQueryFromParams(searchParams);
+  if (!searchTerm) {
+    return defaultProductsMetadata;
   }
 
-  const haystack = candidates
-    .filter(Boolean)
-    .join(' \n ')
-    .toLowerCase();
-
-  return haystack.includes(q);
+  return {
+    title: `نتائج البحث عن "${searchTerm}" | ${SITE_NAME}`,
+    description: `نتائج البحث في متجر ${SITE_NAME} عن: ${searchTerm}`,
+    robots: {
+      index: false,
+      follow: true,
+    },
+  };
 }
 
 async function getSettings() {
@@ -112,22 +103,20 @@ async function getSettings() {
 }
 
 async function getProducts(search?: string) {
-  let query = (supabase.from('products') as any)
+  const { data } = await (supabase.from('products') as any)
     .select('*, images:product_images(*), variants:product_variants(*), category:categories(*), subcategory:subcategories(*)')
     .eq('is_active', true)
     .order('created_at', { ascending: false });
 
-  const term = search?.trim();
-
-  const { data } = await query;
   const products = ((data || []) as ProductWithDetails[]).map((product) => ({
     ...product,
     variants: product.variants || [],
     images: [...(product.images || [])].sort((a, b) => a.sort_order - b.sort_order),
   }));
 
+  const term = search?.trim();
   if (!term) return products;
-  return products.filter((product) => productMatchesSearch(product, term));
+  return filterProductsBySearch(products, term);
 }
 
 const quickShortcuts = [
@@ -148,12 +137,10 @@ const sortOptions = [
 ];
 
 function buildProductsHref(params: { search?: string; intent?: string; sort?: string }) {
-  const searchParams = new URLSearchParams();
-  if (params.search) searchParams.set('search', params.search);
-  if (params.intent && params.intent !== 'all') searchParams.set('intent', params.intent);
-  if (params.sort && params.sort !== 'newest') searchParams.set('sort', params.sort);
-  const qs = searchParams.toString();
-  return qs ? `/products?${qs}` : '/products';
+  return buildProductsSearchHref(params.search || '', {
+    intent: params.intent,
+    sort: params.sort,
+  });
 }
 
 function sortProducts(products: ProductWithDetails[], sort: string): ProductWithDetails[] {
@@ -314,6 +301,8 @@ function ResultsCount({ count }: { count: number }) {
   );
 }
 
+const noResultsSuggestions = ['كاسات', 'صحون', 'علب سوشي', 'منظفات', 'محارم', 'تغليف', 'paper cups', 'bags'];
+
 function EmptyState({
   searchTerm,
   hasIntent,
@@ -338,11 +327,24 @@ function EmptyState({
       <h2 className="text-lg font-semibold">لم نجد منتجات مطابقة</h2>
       <p className="mt-2 text-sm text-muted-foreground">
         {searchTerm
-          ? 'جرّب كلمة أبسط مثل: شامبو، تغليف، كراسي، مناديل.'
+          ? 'جرّب كلمة أبسط أو اختر اقتراحًا من الأسفل.'
           : hasIntent
             ? 'يمكنك تصفح كل المنتجات أو التواصل معنا لنساعدك.'
             : 'جرّب بحث مختلف أو تصفح الأقسام.'}
       </p>
+      {searchTerm && (
+        <div className="mt-4 flex max-w-lg flex-wrap justify-center gap-2 px-2">
+          {noResultsSuggestions.map((suggestion) => (
+            <Link
+              key={suggestion}
+              href={buildProductsSearchHref(suggestion)}
+              className="rounded-full border bg-card px-3 py-1 text-xs font-medium hover:bg-muted"
+            >
+              {suggestion}
+            </Link>
+          ))}
+        </div>
+      )}
       <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
         <Link
           href="/products"
@@ -411,12 +413,12 @@ function HelpSection({ whatsappUrl }: { whatsappUrl: string | null }) {
 }
 
 export default async function ProductsPage({ searchParams }: ProductsPageProps) {
-  const [products, settings] = await Promise.all([getProducts(searchParams?.search), getSettings()]);
+  const searchTerm = getSearchQueryFromParams(searchParams);
+  const [products, settings] = await Promise.all([getProducts(searchTerm), getSettings()]);
   const whatsappUrl = getWhatsAppLink(settings?.whatsapp_number);
 
   const selectedIntent = normalizeIntent(searchParams?.intent);
   const intentConfig = getIntentConfig(selectedIntent);
-  const searchTerm = searchParams?.search?.trim() || '';
   const currentSort = searchParams?.sort || 'newest';
 
   // Apply intent filter
@@ -434,6 +436,14 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   // Apply sort
   const sortedProducts = sortProducts(filteredProducts, currentSort);
 
+  if (searchTerm) {
+    await logSearchQuery({
+      query: searchTerm,
+      resultsCount: sortedProducts.length,
+      source: 'products_page',
+    });
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header whatsappUrl={whatsappUrl} />
@@ -448,7 +458,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
 
         <QuickShortcutsSection />
 
-        <section className="container mx-auto px-4 py-4" dir="rtl">
+        <section className="container mx-auto max-w-full overflow-x-hidden px-4 py-4" dir="rtl">
           <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <ProductIntentFilters selected={selectedIntent} />
           </div>

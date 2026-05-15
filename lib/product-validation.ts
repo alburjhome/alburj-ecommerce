@@ -55,6 +55,7 @@ export const productSchema = z.object({
     .default([]),
   meta_title: z.string().trim().nullable(),
   meta_description: z.string().trim().nullable(),
+  search_keywords: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
 });
 
 export type ProductFormInput = z.infer<typeof productSchema>;
@@ -72,4 +73,16 @@ export function parseTags(value: string) {
 
 export function tagsToString(tags: string[] | null | undefined) {
   return tags?.join(', ') || '';
+}
+
+export function parseSearchKeywords(value: string) {
+  return value
+    .split(/[\n,،]+/)
+    .map((keyword) => keyword.trim())
+    .filter(Boolean)
+    .slice(0, 30);
+}
+
+export function searchKeywordsToString(keywords: string[] | null | undefined) {
+  return keywords?.join('\n') || '';
 }

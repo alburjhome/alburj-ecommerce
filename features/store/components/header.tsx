@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Menu, Search, ShoppingCart, User, X, Phone, Home, Package, LayoutGrid, Tag, MessageCircle, Store, Box, Sofa, ChefHat, Sparkles, Boxes, Truck, CreditCard, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { HeaderSearch } from './header-search';
 import {
   Sheet,
   SheetClose,
@@ -26,7 +26,6 @@ interface HeaderProps {
 
 export function Header({ whatsappUrl, categoryLinks = [] }: HeaderProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   // Use selectors for stable references and granular re-renders
   const openCart = useCartStore((state) => state.openCart);
   const getTotalItems = useCartStore((state) => state.getTotalItems);
@@ -50,19 +49,11 @@ export function Header({ whatsappUrl, categoryLinks = [] }: HeaderProps) {
     'بلاستيكيات',
   ];
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      window.location.href = `/products?search=${encodeURIComponent(searchQuery)}`;
-    }
-  };
-
   const goToSearch = (keyword: string) => {
     const term = keyword.trim();
     if (!term) return;
     setIsSearchOpen(false);
-    setSearchQuery(term);
-    window.location.href = `/products?search=${encodeURIComponent(term)}`;
+    window.location.href = `/products?q=${encodeURIComponent(term)}`;
   };
 
   // Desktop navigation: essential links only
@@ -282,23 +273,7 @@ export function Header({ whatsappUrl, categoryLinks = [] }: HeaderProps) {
 
           <div className="flex shrink-0 items-center gap-2">
             <div className="hidden md:flex items-center">
-              <form onSubmit={handleSearch} className="relative">
-                <Input
-                  type="search"
-                  placeholder="ابحث عن منتج..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-48 lg:w-64"
-                />
-                <Button
-                  type="submit"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute left-0 top-0"
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-              </form>
+              <HeaderSearch className="w-48 lg:w-64" inputClassName="w-48 lg:w-64" />
             </div>
 
             <Button
@@ -329,17 +304,8 @@ export function Header({ whatsappUrl, categoryLinks = [] }: HeaderProps) {
 
         {isSearchOpen && (
           <div className="md:hidden pb-4" dir="rtl">
-            <form onSubmit={handleSearch} className="space-y-3">
-              <div className="relative">
-                <Input
-                  type="search"
-                  placeholder="ابحث عن منتج..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full text-base"
-                  autoFocus
-                />
-              </div>
+            <div className="space-y-3">
+              <HeaderSearch autoFocus onNavigate={() => setIsSearchOpen(false)} />
 
               <div className="flex flex-wrap gap-2">
                 {quickSearchSuggestions.map((keyword) => (
@@ -353,7 +319,7 @@ export function Header({ whatsappUrl, categoryLinks = [] }: HeaderProps) {
                   </button>
                 ))}
               </div>
-            </form>
+            </div>
           </div>
         )}
       </div>

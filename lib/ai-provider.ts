@@ -1,4 +1,4 @@
-import 'server-only';
+// import 'server-only';
 
 import { createServerClient } from '@/lib/supabase-server';
 
@@ -40,6 +40,7 @@ export interface ProductCopyOutput {
   subcategory_id: string | null;
   category_confidence: 'high' | 'medium' | 'low';
   subcategory_confidence: 'high' | 'medium' | 'low';
+  search_keywords?: string[];
 }
 
 export interface ImageAltTextInput {
@@ -720,6 +721,11 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
       ? rawSubcategoryConfidence
       : 'low';
 
+  const search_keywords = normalizeStringArray(obj.search_keywords)
+    .map((keyword) => keyword.slice(0, 60))
+    .filter((keyword) => keyword.length > 0)
+    .slice(0, 25);
+
   return {
     name,
     short_description: short_description ? clampString(short_description, 180) : null,
@@ -735,6 +741,7 @@ function normalizeProductCopyResponse(raw: unknown): ProductCopyOutput | null {
     subcategory_id: subcategory_id || null,
     category_confidence,
     subcategory_confidence,
+    search_keywords: search_keywords.length ? search_keywords : undefined,
   };
 }
 
@@ -820,6 +827,7 @@ ${subcategoriesText}
 - description: لا يبدأ بنفس نص short_description، ويضيف تفاصيل جديدة فقط. ممنوع تكرار نفس الجمل الموجودة في short_description أو key_features.
 - إذا لا توجد معلومات إضافية حقيقية: اجعل description مختصرًا جدًا أو null بدل التكرار.
 - ممنوع أن يكون short_description و description متطابقين أو شبه متطابقين.
+- search_keywords: من 10 إلى 25 كلمة/عبارة قصيرة للبحث (عربي فصيح + عامي أردني + إنجليزي). استخدم فقط ما يظهر من الاسم والملاحظات والقالب. ممنوع اختراع مقاسات أو أونصات أو أرقام عبوة أو ماركات غير مذكورة. ممنوع أسماء منافسين.
 
 Return ONLY valid JSON. No markdown. No explanation. No code fences.
 أرجع JSON صالح فقط بالشكل التالي تمامًا (لا تضف حقول أخرى):
@@ -837,7 +845,8 @@ Return ONLY valid JSON. No markdown. No explanation. No code fences.
   "category_id": "id من قائمة الأقسام أو null",
   "subcategory_id": "id من قائمة الفئات الفرعية أو null",
   "category_confidence": "high | medium | low",
-  "subcategory_confidence": "high | medium | low"
+  "subcategory_confidence": "high | medium | low",
+  "search_keywords": ["كلمة 1", "كلمة 2"]
 }`;
 
   const retryPrompt = `Return ONLY valid JSON. No markdown. No code fences.
@@ -1054,59 +1063,19 @@ function buildProductFromImagesPrompts(
     "variant_types": [],
     "image_alt_texts": {
       "image_1": "وصف الصورة 1"
-2. اعتمد فقط على ما يظهر بوضوح في الصور:
-   - النص الظاهر على العبوة/المنتج
-   - الشكل والألوان المرئية
-   - العلامة التجارية المرئية
-3. ممنوع التخمين - إذا لم تكن متأكدًا، قل ذلك صراحة
-
-قواعد منع الهلوسة (STRICT RULES):
-- ممنوع افتراض أن أي منتج هو "سائل جلي" أو "منظف" أو "شامبو" إلا إذا كانت هذه الكلمات ظاهرة بوضوح على العبوة
-- ممنوع توليد وصف عن منتج مختلف عما في الصورة
-- ممنوع استخدام fallback عام مثل "منتج منظف" أو "منتج عناية"
-- اكتب "غير واضح" في detected_product_type إذا لم تستطع التحديد
-
-قائمة الأقسام المتاحة (استخدم id فقط أو null):
-${categories.map((c) => `- ${c.id} | ${c.name}`).join('\n')}
-
-قائمة الفئات المتاحة (استخدم id فقط أو null):
-${subcategories.map((s) => `- ${s.id} | ${s.name}`).join('\n')}
-
-Return ONLY valid JSON. No markdown. No explanation. No code fences.
-
-JSON schema المطلوب:
-{
-  "detected_product_type": "نوع المنتج كما يظهر في الصورة - اكتب 'غير واضح' إذا غير واضح",
-  "visible_text": ["كل النصوص الظاهرة على العبوة/المنتج"],
-  "brand": "العلامة التجارية إن ظهرت بالضبط، وإلا null",
-  "confidence": "high | medium | low",
-  "uncertainty_reason": "سبب عدم التأكد إذا confidence ليست high، وإلا null",
-  "name": "اسم المنتج كما يظهر أو 'منتج غير محدد' إذا غير واضح",
-  "short_description": "وصف مختصر فقط إذا كانت الثقة high، وإلا null",
-  "description": "وصف تفصيلي فقط إذا كانت الثقة high، وإلا null",
-  "sku": "كود SKU مقترح بالإنجليزية أو null",
-  "key_features": ["الميزات المرئية فقط"],
-  "meta_title": "SEO title فقط إذا كانت الثقة high",
-  "meta_description": "SEO description فقط إذا كانت الثقة high",
-  "suggested_category_id": "id القسم أو null إذا غير واضح",
-  "suggested_subcategory_id": "id الفئة أو null إذا غير واضح",
-  "has_variants": false,
-  "variant_types": [],
-  "image_alt_texts": {
-    "image_1": "وصف الصورة 1"
+    }
   }
-}
 
-قواعد الثقة (confidence):
-- "high": النص واضح، العلامة التجارية واضحة، نوع المنتج مؤكد من العبوة
-- "medium": بعض النصوص واضحة لكن هناك غموض في نوع المنتج بالضبط
-- "low": الصورة غير واضحة أو لا يمكن قراءة النص
+  قواعد الثقة (confidence):
+  - "high": النص واضح، العلامة التجارية واضحة، نوع المنتج مؤكد من العبوة
+  - "medium": بعض النصوص واضحة لكن هناك غموض في نوع المنتج بالضبط
+  - "low": الصورة غير واضحة أو لا يمكن قراءة النص
 
-ممنوعات صارمة:
-- لا تكتب "سائل جلي" إلا إذا كانت هذه الكلمة ظاهرة على العبوة
-- لا تكتب "منظف" إلا إذا كانت هذه الكلمة ظاهرة
-- لا تكتب "شامبو" إلا إذا كانت هذه الكلمة ظاهرة
-- لا تضع منتجًا في قسم المنظفات إلا إذا كان المنظف واضحًا في الصورة`;
+  ممنوعات صارمة:
+  - لا تكتب "سائل جلي" إلا إذا كانت هذه الكلمة ظاهرة على العبوة
+  - لا تكتب "منظف" إلا إذا كانت هذه الكلمة ظاهرة
+  - لا تكتب "شامبو" إلا إذا كانت هذه الكلمة ظاهرة
+  - لا تضع منتجًا في قسم المنظفات إلا إذا كان المنظف واضحًا في الصورة`;
 
   const retryPrompt = `Return ONLY valid JSON. No markdown. No code fences.
 تحليل صارم للمنتج:
